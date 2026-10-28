@@ -5,6 +5,7 @@ package plex
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -326,7 +327,7 @@ func (c *Client) get(ctx context.Context, path string, q url.Values, dst any) er
 	if dst == nil {
 		return nil
 	}
-	if err := json.Unmarshal(body, dst); err != nil && err != io.EOF {
+	if err := json.Unmarshal(body, dst); err != nil && !errors.Is(err, io.EOF) {
 		return fmt.Errorf("plex: decode response: %w", err)
 	}
 	return nil

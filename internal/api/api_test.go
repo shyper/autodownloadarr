@@ -98,7 +98,17 @@ func (e *env) client(t *testing.T) *http.Client {
 	return &http.Client{Jar: jar}
 }
 
-func (e *env) do(t *testing.T, c *http.Client, method, path string, body any, headers ...string) (*http.Response, map[string]any) {
+// result is the part of a response the tests look at; the body is
+// already read and closed.
+type result struct {
+	StatusCode int
+	Header     http.Header
+	cookies    []*http.Cookie
+}
+
+func (r result) Cookies() []*http.Cookie { return r.cookies }
+
+func (e *env) do(t *testing.T, c *http.Client, method, path string, body any, headers ...string) (result, map[string]any) {
 	t.Helper()
 	var rd io.Reader
 	if body != nil {
@@ -117,11 +127,11 @@ func (e *env) do(t *testing.T, c *http.Client, method, path string, body any, he
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var out map[string]any
 	raw, _ := io.ReadAll(resp.Body)
 	_ = json.Unmarshal(raw, &out)
-	return resp, out
+	return result{StatusCode: resp.StatusCode, Header: resp.Header, cookies: resp.Cookies()}, out
 }
 
 func errorCode(body map[string]any) string {
@@ -292,14 +302,15 @@ func TestHealth(t *testing.T) {
 func TestStaticFiles(t *testing.T) {
 	e := newEnv(t)
 	c := e.client(t)
-	get := func(p string) (*http.Response, string) {
-		resp, err := c.Get(e.srv.URL + p)
+	get := func(p string) (result, string) {
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, e.srv.URL+p, nil)
+		resp, err := c.Do(req)
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		b, _ := io.ReadAll(resp.Body)
-		return resp, string(b)
+		return result{StatusCode: resp.StatusCode, Header: resp.Header}, string(b)
 	}
 
 	for _, p := range []string{"/", "/movies/42", "/index.html"} {
@@ -323,7 +334,7 @@ func TestEventStream(t *testing.T) {
 	e.completeSetup(t, c)
 
 	req, _ := http.NewRequestWithContext(context.Background(), "GET", e.srv.URL+"/api/v1/events", nil)
-	resp, err := c.Do(req)
+	resp, err := c.Do(req) //nolint:bodyclose // closed below; the linter loses track because a goroutine reads the body
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -59,11 +59,12 @@ func TestUsenetServers(t *testing.T) {
 	srv["password"] = ""
 	srv["connections"] = 30
 	e.do(t, c, "PUT", fmt.Sprintf("/api/v1/usenet-servers/%d", id), srv)
-	resp, err := c.Get(e.srv.URL + "/api/v1/usenet-servers")
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, e.srv.URL+"/api/v1/usenet-servers", nil)
+	resp, err := c.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	list, _ := e.store.UsenetServers(t.Context())
 	if len(list) != 1 || list[0].Password != "secret" || list[0].Connections != 30 {
 		t.Errorf("stored = %+v", list)
@@ -208,9 +209,9 @@ func TestMovieRequestFlow(t *testing.T) {
 		t.Fatalf("results = %v", results)
 	}
 
-	resp, body := e.do(t, c, "POST", "/api/v1/movies", map[string]any{"tmdbId": 5})
-	if resp.StatusCode != http.StatusCreated || body["state"] != store.MovieSearching || body["imdbId"] != "tt5" {
-		t.Fatalf("request: %d %v", resp.StatusCode, body)
+	res, body := e.do(t, c, "POST", "/api/v1/movies", map[string]any{"tmdbId": 5})
+	if res.StatusCode != http.StatusCreated || body["state"] != store.MovieSearching || body["imdbId"] != "tt5" {
+		t.Fatalf("request: %d %v", res.StatusCode, body)
 	}
 	if resp, _ := e.do(t, c, "POST", "/api/v1/movies", map[string]any{"tmdbId": 5}); resp.StatusCode != http.StatusOK {
 		t.Errorf("second request: %d", resp.StatusCode)

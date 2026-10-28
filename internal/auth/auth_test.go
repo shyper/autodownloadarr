@@ -216,7 +216,7 @@ func TestPurgeExpiredSessions(t *testing.T) {
 		t.Fatal(err)
 	}
 	var n int
-	_ = sqldb.QueryRow(`SELECT COUNT(*) FROM sessions`).Scan(&n)
+	_ = sqldb.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sessions`).Scan(&n)
 	if n != 0 {
 		t.Errorf("%d sessions left", n)
 	}

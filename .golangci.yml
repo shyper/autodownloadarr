@@ -9,6 +9,17 @@ linters:
     - noctx
     - sqlclosecheck
     - unconvert
+  settings:
+    errcheck:
+      exclude-functions:
+        # bufio.Writer keeps the first error and returns it from Flush.
+        - (*bufio.Writer).WriteByte
+        - (*bufio.Writer).WriteString
+        - (*bufio.Writer).Write
+  exclusions:
+    presets:
+      # Unchecked Close, Flush, fmt.Fprint* and the like (golangci-lint v1 default).
+      - std-error-handling
 
 formatters:
   enable:

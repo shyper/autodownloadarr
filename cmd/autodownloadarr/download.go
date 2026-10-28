@@ -47,7 +47,7 @@ func downloadNZB(args []string) int {
 	keep := fl.Bool("keep", false, "keep archives and PAR2 files after extracting")
 	verbose := fl.Bool("v", false, "verbose logging")
 	fl.Usage = func() {
-		fmt.Fprint(fl.Output(), downloadUsage)
+		_, _ = fmt.Fprint(fl.Output(), downloadUsage)
 		fl.PrintDefaults()
 	}
 	if err := fl.Parse(args); err != nil {
@@ -192,7 +192,7 @@ func extractWithPasswords(ctx context.Context, job *download.Job, first, dir str
 	var lastErr error
 	for _, pw := range candidates {
 		res, err := unpack.ExtractRARFS(ctx, job, first, dir, unpack.Options{Password: pw})
-		if err == nil || !(errors.Is(err, unpack.ErrPasswordRequired) || errors.Is(err, unpack.ErrWrongPassword)) {
+		if err == nil || !errors.Is(err, unpack.ErrPasswordRequired) && !errors.Is(err, unpack.ErrWrongPassword) {
 			return res, err
 		}
 		lastErr = err

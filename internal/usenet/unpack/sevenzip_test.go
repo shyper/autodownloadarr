@@ -23,7 +23,7 @@ func make7z(t *testing.T, dir, name, password string) {
 	if password != "" {
 		args = append(args, "-p"+password)
 	}
-	cmd := exec.Command(tool, args...)
+	cmd := exec.CommandContext(t.Context(), tool, args...)
 	cmd.Dir = src
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("7z a: %v\n%s", err, out)

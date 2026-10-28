@@ -63,10 +63,9 @@ type Manager struct {
 	now     func() time.Time
 	ctx     context.Context
 
-	mu       sync.Mutex
-	active   map[int64]*activeDownload // episode → running download
-	forced   map[int64]int64           // episode → release chosen by the user
-	lastPoll time.Time
+	mu     sync.Mutex
+	active map[int64]*activeDownload // episode → running download
+	forced map[int64]int64           // episode → release chosen by the user
 	// reconciling serialises window updates per series.
 	reconciling sync.Mutex
 }

@@ -56,7 +56,7 @@ func eventually(t *testing.T, cond func() bool) {
 func countTasks(t *testing.T, sqldb *sql.DB, where string, args ...any) int {
 	t.Helper()
 	var n int
-	if err := sqldb.QueryRow(`SELECT COUNT(*) FROM scheduled_tasks WHERE `+where, args...).Scan(&n); err != nil {
+	if err := sqldb.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM scheduled_tasks WHERE `+where, args...).Scan(&n); err != nil {
 		t.Fatalf("count: %v", err)
 	}
 	return n
@@ -118,7 +118,7 @@ func TestRetriesThenFails(t *testing.T) {
 		t.Errorf("handler called %d times, want 3", n)
 	}
 	var lastErr string
-	_ = sqldb.QueryRow(`SELECT last_error FROM scheduled_tasks WHERE id = ?`, id).Scan(&lastErr)
+	_ = sqldb.QueryRowContext(t.Context(), `SELECT last_error FROM scheduled_tasks WHERE id = ?`, id).Scan(&lastErr)
 	if lastErr != "indexer unreachable" {
 		t.Errorf("last_error = %q", lastErr)
 	}
@@ -173,7 +173,7 @@ func TestKeyReplacesAndCancels(t *testing.T) {
 		t.Errorf("same key produced two tasks: %d, %d", first, second)
 	}
 	var runAt int64
-	_ = sqldb.QueryRow(`SELECT run_at FROM scheduled_tasks WHERE id = ?`, first).Scan(&runAt)
+	_ = sqldb.QueryRowContext(t.Context(), `SELECT run_at FROM scheduled_tasks WHERE id = ?`, first).Scan(&runAt)
 	if runAt != later.Add(time.Hour).UnixMilli() {
 		t.Error("run_at not replaced")
 	}
@@ -196,7 +196,7 @@ func TestInterruptedTasksAreRecovered(t *testing.T) {
 	ctx := context.Background()
 	id, _ := s.Schedule(ctx, Spec{Type: "resume"})
 	// Simulate a crash while the task was running.
-	if _, err := sqldb.Exec(`UPDATE scheduled_tasks SET status = 'running', attempts = 1 WHERE id = ?`, id); err != nil {
+	if _, err := sqldb.ExecContext(t.Context(), `UPDATE scheduled_tasks SET status = 'running', attempts = 1 WHERE id = ?`, id); err != nil {
 		t.Fatal(err)
 	}
 

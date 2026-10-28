@@ -112,7 +112,7 @@ func cutPrefix(p, prefix string, foldCase bool) (string, bool) {
 		return "", false
 	}
 	head := p[:len(prefix)]
-	if !(head == prefix || (foldCase && strings.EqualFold(head, prefix))) {
+	if head != prefix && (!foldCase || !strings.EqualFold(head, prefix)) {
 		return "", false
 	}
 	rest := p[len(prefix):]

@@ -71,12 +71,12 @@ func Do(client *http.Client, req *http.Request, limit int64) ([]byte, http.Heade
 		return body, resp.Header, nil
 	}
 	se := &StatusError{Code: resp.StatusCode}
-	switch {
-	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
+	switch resp.StatusCode {
+	case http.StatusUnauthorized, http.StatusForbidden:
 		se.kind = ErrUnauthorized
-	case resp.StatusCode == http.StatusNotFound:
+	case http.StatusNotFound:
 		se.kind = ErrNotFound
-	case resp.StatusCode == http.StatusTooManyRequests:
+	case http.StatusTooManyRequests:
 		se.kind = ErrRateLimited
 		if s, err := strconv.Atoi(resp.Header.Get("Retry-After")); err == nil {
 			se.RetryAfter = time.Duration(s) * time.Second

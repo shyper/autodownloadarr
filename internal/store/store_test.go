@@ -41,7 +41,7 @@ func TestSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 	var raw string
-	_ = s.db.QueryRow(`SELECT value FROM settings WHERE key = 'tmdb'`).Scan(&raw)
+	_ = s.db.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = 'tmdb'`).Scan(&raw)
 	if raw == `"tmdb-key"` {
 		t.Error("TMDB key stored in plain text")
 	}

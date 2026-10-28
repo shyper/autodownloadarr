@@ -202,7 +202,7 @@ func (s *Services) Pool(ctx context.Context) (*nntp.Pool, error) {
 		}
 	}
 	if len(cfgs) == 0 {
-		return nil, fmt.Errorf("Usenet server: %w", ErrNotConfigured)
+		return nil, fmt.Errorf("usenet server: %w", ErrNotConfigured)
 	}
 	key := fmt.Sprintf("%+v", cfgs)
 

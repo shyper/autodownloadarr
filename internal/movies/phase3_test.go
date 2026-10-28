@@ -143,7 +143,7 @@ func requireTool(t *testing.T, name string) string {
 
 func run(t *testing.T, dir, tool string, args ...string) {
 	t.Helper()
-	cmd := exec.Command(tool, args...)
+	cmd := exec.CommandContext(t.Context(), tool, args...)
 	cmd.Dir = dir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("%s %v: %v\n%s", tool, args, err, out)

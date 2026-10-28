@@ -184,7 +184,9 @@ func runServer(cfg config.Config, log *slog.Logger) error {
 	select {
 	case err := <-serveErr:
 		stop()
-		<-schedDone
+		if err := <-schedDone; err != nil {
+			log.Warn("scheduler", "err", err)
+		}
 		return fmt.Errorf("http server: %w", err)
 	case <-ctx.Done():
 	}

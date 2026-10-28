@@ -29,7 +29,7 @@ func create(t *testing.T) (dir string, a, b []byte) {
 	}
 	_ = os.WriteFile(filepath.Join(dir, "movie.part1.rar"), a, 0o644)
 	_ = os.WriteFile(filepath.Join(dir, "movie.part2.rar"), b, 0o644)
-	cmd := exec.Command(tool, "create", "-q", "-q", "-s4000", "-r10", "-n3", "movie.par2", "movie.part1.rar", "movie.part2.rar")
+	cmd := exec.CommandContext(t.Context(), tool, "create", "-q", "-q", "-s4000", "-r10", "-n3", "movie.par2", "movie.part1.rar", "movie.part2.rar")
 	cmd.Dir = dir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("par2 create: %v\n%s", err, out)

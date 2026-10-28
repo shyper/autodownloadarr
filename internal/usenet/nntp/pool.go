@@ -114,7 +114,7 @@ func (p *Pool) Body(ctx context.Context, messageID string, h BodyHandler) error 
 // Stat checks whether any server has the article, without downloading it.
 // It returns nil, ErrNoSuchArticle or a connection error.
 func (p *Pool) Stat(ctx context.Context, messageID string) error {
-	var lastErr error = ErrNoServers
+	lastErr := ErrNoServers
 	for _, s := range p.servers {
 		if s.isDisabled() {
 			continue
@@ -136,7 +136,7 @@ func (p *Pool) Stat(ctx context.Context, messageID string) error {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return ctxErr
 		}
-		if lastErr == ErrNoServers || !errors.Is(lastErr, ErrNoSuchArticle) {
+		if errors.Is(lastErr, ErrNoServers) || !errors.Is(lastErr, ErrNoSuchArticle) {
 			lastErr = err
 		}
 	}

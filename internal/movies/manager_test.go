@@ -3,6 +3,7 @@ package movies
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -177,7 +178,7 @@ func TestMovieLifecycle(t *testing.T) {
 
 	mv, err := m.Request(ctx, 42, 0, 0)
 	must(t, err)
-	if _, err := m.Request(ctx, 42, 0, 0); err != ErrAlreadyRequested {
+	if _, err := m.Request(ctx, 42, 0, 0); !errors.Is(err, ErrAlreadyRequested) {
 		t.Errorf("second request: %v", err)
 	}
 

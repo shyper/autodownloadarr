@@ -5,6 +5,7 @@ package nntptest
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"net"
 	"strings"
 	"sync"
@@ -36,7 +37,7 @@ type Server struct {
 // New starts a server that is stopped when the test ends.
 func New(tb testing.TB) *Server {
 	tb.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		tb.Fatal(err)
 	}
