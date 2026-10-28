@@ -1,0 +1,19 @@
+# Copy to docker-compose.yml and adjust the paths.
+services:
+  autodownloadarr:
+    image: ghcr.io/shyper/autodownloadarr:latest
+    container_name: autodownloadarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Berlin
+      # - AUTODOWNLOADARR_LOG_LEVEL=debug
+      # - AUTODOWNLOADARR_TRUST_PROXY=true   # only behind a reverse proxy
+    volumes:
+      - ./config:/config
+      # Temporary libraries; add the same folders to Plex as separate libraries.
+      # - /mnt/hdd/temp/movies:/movies
+      # - /mnt/hdd/temp/series:/series
+    ports:
+      - "8686:8686"
+    restart: unless-stopped

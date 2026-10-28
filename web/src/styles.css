@@ -1,0 +1,67 @@
+@import 'tailwindcss';
+
+/* Semantic colour tokens; components use them through the Tailwind theme below
+   (bg-surface, text-muted, border-line, …) so dark mode needs no extra classes. */
+:root {
+  --bg: #f6f6f8;
+  --surface: #ffffff;
+  --surface-2: #f1f1f4;
+  --line: #e3e3e8;
+  --fg: #18181b;
+  --muted: #6b6b76;
+  --accent: #6d28d9;
+  --accent-fg: #ffffff;
+  --accent-soft: #ede9fe;
+  --danger: #b42318;
+  --danger-soft: #fef3f2;
+  --ok: #067647;
+  --ok-soft: #ecfdf3;
+  --warn: #b54708;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d0d11;
+    --surface: #16161c;
+    --surface-2: #1d1d24;
+    --line: #2b2b34;
+    --fg: #f2f2f5;
+    --muted: #a0a0ad;
+    --accent: #8b5cf6;
+    --accent-fg: #ffffff;
+    --accent-soft: #2a2140;
+    --danger: #f97066;
+    --danger-soft: #2b1513;
+    --ok: #47cd89;
+    --ok-soft: #102a1e;
+    --warn: #fdb022;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+body {
+  @apply font-sans antialiased;
+}

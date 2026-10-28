@@ -1,0 +1,11 @@
+.git
+.github
+bin
+dist
+config
+data
+docs
+web/node_modules
+internal/webui/dist
+**/*.db
+**/*.db-*

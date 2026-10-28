@@ -1,0 +1,446 @@
+{
+  "app": {
+    "name": "AutoDownloadarr",
+    "tagline": "Einmal schauen, dann wieder weg."
+  },
+  "common": {
+    "loading": "Wird geladen…",
+    "continue": "Weiter",
+    "back": "Zurück",
+    "skip": "Vorerst überspringen",
+    "save": "Speichern",
+    "edit": "Bearbeiten",
+    "delete": "Löschen",
+    "cancel": "Abbrechen",
+    "add": "Hinzufügen",
+    "comingSoon": "Demnächst",
+    "retry": "Erneut versuchen"
+  },
+  "nav": {
+    "dashboard": "Übersicht",
+    "movies": "Filme",
+    "settings": "Einstellungen",
+    "account": "Konto",
+    "logout": "Abmelden",
+    "language": "Sprache",
+    "liveUpdates": {
+      "open": "Live-Aktualisierung verbunden",
+      "connecting": "Live-Aktualisierung wird verbunden…",
+      "error": "Live-Aktualisierung getrennt, verbinde neu…"
+    },
+    "series": "Serien"
+  },
+  "login": {
+    "title": "Anmelden",
+    "subtitle": "Willkommen zurück bei AutoDownloadarr.",
+    "username": "Benutzername",
+    "password": "Passwort",
+    "submit": "Anmelden"
+  },
+  "setup": {
+    "title": "AutoDownloadarr einrichten",
+    "subtitle": "Ein paar Schritte, dann kann es losgehen.",
+    "stepOf": "Schritt {{current}} von {{total}}",
+    "configured": "Eingerichtet",
+    "missing": "Fehlt",
+    "steps": {
+      "account": {
+        "label": "Konto",
+        "title": "Admin-Konto anlegen",
+        "description": "Mit diesem Konto meldest du dich an der Weboberfläche an. Weitere Benutzer kannst du später anlegen.",
+        "token": "Setup-Token",
+        "tokenHint": "Steht beim ersten Start im Server-Log, z. B. mit: docker logs autodownloadarr",
+        "username": "Benutzername",
+        "usernameHint": "Buchstaben, Ziffern, Punkt, Binde- oder Unterstrich.",
+        "password": "Passwort",
+        "passwordHint": "Mindestens 8 Zeichen.",
+        "confirm": "Passwort wiederholen",
+        "submit": "Konto anlegen"
+      },
+      "usenet": {
+        "label": "Usenet",
+        "title": "Usenet-Anbieter hinzufügen",
+        "description": "Der eingebaute Downloader lädt und entpackt Releases direkt von deinem Anbieter. Teste die Verbindung vor dem Speichern."
+      },
+      "indexer": {
+        "label": "Indexer",
+        "title": "Indexer hinzufügen",
+        "description": "Releases werden bei Newznab-kompatiblen Indexern gesucht (auch Prowlarr funktioniert)."
+      },
+      "library": {
+        "label": "Filme",
+        "title": "Filmordner und Metadaten",
+        "description": "Wo temporäre Filme gespeichert werden und der TMDB-Schlüssel für die Filmsuche."
+      },
+      "mediaServer": {
+        "label": "Plex",
+        "title": "Plex verbinden",
+        "description": "Neue Filme erscheinen in deiner Plex-Bibliothek, sobald sie fertig sind; Gesehenes wird automatisch aufgeräumt."
+      },
+      "done": {
+        "label": "Fertig",
+        "title": "Alles bereit",
+        "description": "Fehlende Teile kannst du später unter Einstellungen ergänzen.",
+        "submit": "Zur Übersicht"
+      }
+    },
+    "errors": {
+      "passwordMismatch": "Die Passwörter stimmen nicht überein.",
+      "passwordTooShort": "Das Passwort muss mindestens 8 Zeichen lang sein."
+    }
+  },
+  "dashboard": {
+    "greeting": "Hallo, {{name}}",
+    "subtitle": "Was möchtest du heute schauen?",
+    "setupPending": "Die Einrichtung ist noch nicht abgeschlossen.",
+    "continueSetup": "Einrichtung fortsetzen",
+    "downloads": "Downloads",
+    "noDownloads": "Gerade wird nichts geladen.",
+    "system": {
+      "title": "System",
+      "version": "Version"
+    },
+    "openSeries": "Öffnen",
+    "seriesSummary_one": "{{count}} Serie, {{ready}} Folgen bereit",
+    "seriesSummary_other": "{{count}} Serien, {{ready}} Folgen bereit"
+  },
+  "movies": {
+    "title": "Filme",
+    "searchLabel": "Filme suchen",
+    "searchPlaceholder": "Film suchen…",
+    "mine": "Meine Filme",
+    "none": "Noch keine Filme angefordert. Suche oben nach einem Film.",
+    "tmdbMissing": "Hinterlege einen TMDB-API-Schlüssel, um Filme zu suchen.",
+    "noResults": "Keine Filme gefunden.",
+    "request": "Anfordern",
+    "kept": "Behalten",
+    "deletesAt": "Wird am {{date}} gelöscht",
+    "missingArticles_one": "{{count}} Artikel fehlt",
+    "missingArticles_other": "{{count}} Artikel fehlen",
+    "runtime": "{{minutes}} Min.",
+    "release": "Release",
+    "problem": "Problem",
+    "nextSearch": "Nächste Suche",
+    "watchedAt": "Gesehen",
+    "deleteAt": "Wird gelöscht",
+    "confirmDelete": "Die Dateien von „{{title}}“ jetzt löschen?",
+    "confirmForget": "„{{title}}“ samt Verlauf vollständig entfernen?",
+    "state": {
+      "searching": "Wird gesucht",
+      "waiting": "Wartet",
+      "queued": "In Warteschlange",
+      "downloading": "Wird geladen",
+      "available": "Bereit zum Schauen",
+      "watched": "Gesehen",
+      "deleted": "Gelöscht",
+      "failed": "Braucht Aufmerksamkeit",
+      "pending": "Noch nicht dran",
+      "skipped": "Übersprungen"
+    },
+    "actions": {
+      "keep": "Behalten",
+      "unkeep": "Nicht mehr behalten",
+      "search": "Erneut suchen",
+      "skip": "Nächstes Release versuchen",
+      "delete": "Dateien löschen",
+      "forget": "Entfernen"
+    },
+    "releases": {
+      "title": "Releases",
+      "description": "Ergebnisse der letzten Suche, das beste zuerst. Jedes lässt sich auch manuell starten.",
+      "none": "Noch keine Ergebnisse.",
+      "name": "Release",
+      "size": "Größe",
+      "score": "Punkte",
+      "status": "Status",
+      "passworded": "passwortgeschützt",
+      "blocklisted": "Gesperrt",
+      "ok": "Passend",
+      "download": "Laden"
+    },
+    "attempts": {
+      "title": "Verlauf",
+      "none": "Noch keine Downloads.",
+      "result": {
+        "running": "Läuft",
+        "success": "Erfolgreich",
+        "failed": "Fehlgeschlagen",
+        "cancelled": "Abgebrochen"
+      }
+    },
+    "blocklist": {
+      "title": "Sperrliste",
+      "description": "Diese Releases sind fehlgeschlagen und werden nicht erneut versucht.",
+      "none": "Nichts gesperrt.",
+      "remove": "Wieder erlauben"
+    }
+  },
+  "problems": {
+    "no_release": "Noch kein passendes Release gefunden",
+    "no_indexer": "Kein Indexer eingerichtet",
+    "indexer_error": "Indexer nicht erreichbar",
+    "no_usenet": "Kein Usenet-Server eingerichtet",
+    "usenet_auth": "Usenet-Server hat die Anmeldung abgelehnt",
+    "no_movies_path": "Kein Filmordner eingerichtet",
+    "sources_exhausted": "Alle versuchten Releases sind fehlgeschlagen",
+    "download_error": "Fehler beim Download",
+    "disk_error": "Dateien konnten nicht geschrieben werden",
+    "incomplete": "Release unvollständig (Artikel fehlen)",
+    "password": "Archiv-Passwort unbekannt",
+    "unpack": "Entpacken fehlgeschlagen",
+    "no_video": "Keine Videodatei im Release",
+    "nzb_unavailable": "NZB konnte nicht geladen werden",
+    "invalid_nzb": "Ungültige NZB",
+    "skipped": "Manuell übersprungen",
+    "cancelled": "Abgebrochen",
+    "spam": "Spam (Passwort nur auf einer Webseite)",
+    "no_series_path": "Kein Serienordner eingerichtet"
+  },
+  "reject": {
+    "resolution_too_high": "Auflösung über dem Limit",
+    "resolution_too_low": "Auflösung unter dem Minimum",
+    "required_word_missing": "Pflichtwort fehlt",
+    "forbidden_word": "Enthält ein verbotenes Wort",
+    "low_quality_source": "Kinoaufnahme",
+    "too_small": "Zu klein",
+    "too_large": "Zu groß",
+    "passworded": "Passwortgeschützt",
+    "blocklisted": "Gesperrt",
+    "wrong_movie": "Anderer Film",
+    "wrong_episode": "Andere Folge",
+    "season_pack": "Staffelpaket"
+  },
+  "settings": {
+    "tabs": {
+      "general": "Allgemein",
+      "usenet": "Usenet",
+      "indexers": "Indexer",
+      "plex": "Plex",
+      "profile": "Qualität",
+      "passwords": "Passwörter"
+    },
+    "saved": "Gespeichert.",
+    "unchanged": "unverändert",
+    "test": "Testen",
+    "testAndSave": "Testen und speichern",
+    "enabled": "Aktiv",
+    "disabled": "Deaktiviert",
+    "general": {
+      "title": "Allgemein",
+      "description": "Wo Filme gespeichert werden und wann sie wieder gelöscht werden.",
+      "moviesPath": "Filmordner",
+      "moviesPathHint": "Pfad im Container. Lege denselben Ordner in Plex als eigene Bibliothek an.",
+      "deleteAfterHours": "Nach dem Schauen löschen nach (Stunden)",
+      "deleteAfterHoursHint": "0 löscht direkt nach dem Schauen.",
+      "unwatchedExpiryDays": "Ungesehene Filme löschen nach (Tagen)",
+      "unwatchedExpiryDaysHint": "0 behält ungesehene Filme.",
+      "maxSources": "Zu versuchende Releases",
+      "maxSourcesHint": "Nach so vielen fehlgeschlagenen Releases braucht der Film deine Aufmerksamkeit.",
+      "parallelDownloads": "Parallele Downloads",
+      "watchPollMinutes": "Gesehen-Status prüfen alle (Minuten)",
+      "watchPollMinutesHint": "Wie oft Plex gefragt wird, was geschaut wurde.",
+      "language": "Sprache der Metadaten",
+      "languageHint": "Sprache von Titeln und Beschreibungen.",
+      "maxDownloadMBps": "Geschwindigkeitslimit (MiB/s)",
+      "maxDownloadMBpsHint": "0 bedeutet unbegrenzt.",
+      "seriesPath": "Serienordner",
+      "seriesPathHint": "Pfad im Container. Lege ihn in Plex als eigene Serien-Bibliothek an.",
+      "seriesDefaults": "Standards für neue Serien"
+    },
+    "tmdb": {
+      "title": "TMDB",
+      "description": "Filme werden bei The Movie Database gesucht. Einen kostenlosen API-Schlüssel gibt es unter themoviedb.org → Einstellungen → API.",
+      "configured": "Eingerichtet",
+      "saved": "Der Schlüssel funktioniert und wurde gespeichert.",
+      "key": "API-Schlüssel oder Lesezugriffs-Token",
+      "keyHint": "Sowohl der v3-API-Schlüssel als auch das v4-Token funktionieren."
+    },
+    "usenet": {
+      "title": "Usenet-Server",
+      "description": "Hauptserver werden zuerst genutzt, Backup-Server (Block-Accounts) nur für fehlende Artikel.",
+      "add": "Server hinzufügen",
+      "empty": "Noch kein Server hinzugefügt.",
+      "connectionsCount_one": "{{count}} Verbindung",
+      "connectionsCount_other": "{{count}} Verbindungen",
+      "primary": "Hauptserver",
+      "backup": "Backup",
+      "testOk": "Verbindung und Anmeldung erfolgreich.",
+      "host": "Server",
+      "port": "Port",
+      "username": "Benutzername",
+      "password": "Passwort",
+      "connections": "Verbindungen",
+      "connectionsHint": "Höchstens so viele, wie dein Anbieter erlaubt.",
+      "role": "Rolle",
+      "name": "Name",
+      "tls": "SSL/TLS verwenden"
+    },
+    "indexers": {
+      "title": "Indexer",
+      "description": "Newznab-kompatible Indexer. „Testen“ prüft den API-Schlüssel und lädt die Kategorien.",
+      "add": "Indexer hinzufügen",
+      "empty": "Noch kein Indexer hinzugefügt.",
+      "testOk": "Verbunden. Filmsuche per {{params}} wird unterstützt.",
+      "testOkTextOnly": "Verbunden. Dieser Indexer unterstützt nur die Textsuche.",
+      "url": "URL",
+      "urlHint": "Basis-URL des Indexers oder die Newznab-URL aus Prowlarr.",
+      "apiKey": "API-Schlüssel",
+      "name": "Name",
+      "categories": "Film-Kategorien",
+      "tvCategories": "Serien-Kategorien"
+    },
+    "plex": {
+      "title": "Plex",
+      "description": "Mit Plex anmelden, Server und Bibliothek für temporäre Filme wählen.",
+      "signIn": "Mit Plex anmelden",
+      "waiting": "Warte auf die Anmeldung im Plex-Fenster…",
+      "manual": "URL und Token manuell eingeben",
+      "url": "Server-URL",
+      "token": "Plex-Token",
+      "tokenHint": "X-Plex-Token eines Kontos mit Zugriff auf den Server.",
+      "noServers": "Für dieses Konto wurde kein Plex-Server gefunden.",
+      "pickServer": "Server und Verbindung wählen:",
+      "owned": "eigener",
+      "local": "Lokal",
+      "relay": "Relay",
+      "use": "Verwenden",
+      "disconnect": "Trennen",
+      "library": "Bibliothek für Filme",
+      "libraryHint": "Am besten eine eigene Bibliothek, die nur die Filme von AutoDownloadarr enthält.",
+      "chooseLibrary": "Bibliothek wählen…",
+      "mappings": "Ordner-Zuordnung",
+      "mappingsHint": "Falls Plex den Filmordner unter einem anderen Pfad sieht, z. B. hier /filme und auf dem Plex-Server /mnt/hdd/filme.",
+      "remote": "Pfad auf dem Plex-Server",
+      "addMapping": "Zuordnung hinzufügen",
+      "applySuggestion": "{{local}} → {{remote}} übernehmen",
+      "preview": "{{local}} ist für Plex {{remote}}.",
+      "inLibrary": "liegt in der Bibliothek",
+      "notInLibrary": "liegt in keiner Film-Bibliothek",
+      "tvLibrary": "Bibliothek für Serien",
+      "tvLibraryHint": "Eine Serien-Bibliothek, die den Serienordner enthält.",
+      "previewSeries": "{{local}} ist für Plex {{remote}}."
+    },
+    "profile": {
+      "title": "Qualitätsprofil",
+      "description": "Welche Releases erlaubt sind und welche bevorzugt werden.",
+      "any": "Beliebig",
+      "maxResolution": "Maximale Auflösung",
+      "minResolution": "Minimale Auflösung",
+      "requiredWords": "Pflichtwörter",
+      "requiredWordsHint": "Kommagetrennt, z. B. German. Ganze Wörter, /Regex/ ist möglich.",
+      "requiredMode": "Pflichtwörter müssen",
+      "modeAny": "mindestens eines enthalten",
+      "modeAll": "alle enthalten",
+      "forbiddenWords": "Verbotene Wörter",
+      "forbiddenWordsHint": "Releases mit einem dieser Wörter werden übersprungen.",
+      "preferredWords": "Bevorzugte Wörter",
+      "preferredWordsHint": "Wort=Punkte, z. B. DL=100. Mehr Punkte gewinnen.",
+      "minMb": "Minimum MB pro Minute",
+      "maxMb": "Maximum MB pro Minute",
+      "codec": "Bevorzugter Codec",
+      "passwordPolicy": "Passwortgeschützte Releases",
+      "password": {
+        "allow": "Erlauben",
+        "known": "Nur mit bekanntem Passwort",
+        "avoid": "Erlauben, aber andere bevorzugen",
+        "reject": "Nie"
+      },
+      "allowLowQuality": "Kinoaufnahmen erlauben",
+      "allowLowQualityHint": "CAM, TS, TC und Screener."
+    },
+    "passwords": {
+      "title": "Archiv-Passwörter",
+      "description": "Werden bei verschlüsselten Archiven probiert, wenn weder NZB noch Release-Name das Passwort enthalten.",
+      "new": "Neues Passwort",
+      "hits_one": "{{count}} Treffer",
+      "hits_other": "{{count}} Treffer"
+    }
+  },
+  "account": {
+    "title": "Konto",
+    "role": "Rolle",
+    "roles": {
+      "admin": "Administrator",
+      "user": "Benutzer"
+    },
+    "memberSince": "Dabei seit",
+    "changePassword": {
+      "title": "Passwort ändern",
+      "description": "Andere Geräte werden dabei abgemeldet.",
+      "current": "Aktuelles Passwort",
+      "new": "Neues Passwort",
+      "confirm": "Neues Passwort wiederholen",
+      "submit": "Passwort ändern",
+      "success": "Dein Passwort wurde geändert."
+    }
+  },
+  "notFound": {
+    "title": "Seite nicht gefunden",
+    "back": "Zurück zur Übersicht"
+  },
+  "errors": {
+    "unknown": "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
+    "network_error": "Der Server ist nicht erreichbar.",
+    "invalid_credentials": "Benutzername oder Passwort ist falsch.",
+    "invalid_current_password": "Das aktuelle Passwort ist falsch.",
+    "invalid_setup_token": "Das Setup-Token ist nicht korrekt.",
+    "invalid_username": "Der Benutzername darf nur Buchstaben, Ziffern, Punkt, Binde- oder Unterstrich enthalten (max. 64 Zeichen).",
+    "weak_password": "Das Passwort muss mindestens 8 Zeichen lang sein.",
+    "setup_completed": "Die Einrichtung ist bereits abgeschlossen. Bitte melde dich an.",
+    "too_many_attempts": "Zu viele Fehlversuche. Versuche es in {{minutes}} Min. erneut.",
+    "loadFailed": "Daten konnten nicht vom Server geladen werden.",
+    "not_configured": "Das muss zuerst eingerichtet werden.",
+    "invalid_input": "Bitte prüfe deine Eingaben.",
+    "credentials_rejected": "Die Zugangsdaten wurden abgelehnt.",
+    "connection_failed": "Keine Verbindung zum Server.",
+    "rate_limited": "Der Dienst begrenzt gerade die Anfragen. Versuche es später erneut.",
+    "service_unavailable": "Der Dienst ist nicht erreichbar.",
+    "path_not_writable": "Der Ordner existiert nicht oder ist nicht beschreibbar. Gib einen absoluten Pfad im Container an.",
+    "invalid_state": "Im aktuellen Zustand nicht möglich.",
+    "forbidden": "Das dürfen nur Administratoren.",
+    "not_found": "Nicht gefunden."
+  },
+  "series": {
+    "title": "Serien",
+    "searchLabel": "Serien suchen",
+    "searchPlaceholder": "Serie suchen…",
+    "mine": "Meine Serien",
+    "none": "Noch keine Serien angefordert.",
+    "open": "Öffnen",
+    "season": "Staffel {{number}}",
+    "ready_one": "{{count}} bereit",
+    "ready_other": "{{count}} bereit",
+    "loading_one": "{{count}} lädt",
+    "loading_other": "{{count}} laden",
+    "paused": "Pausiert",
+    "delete": "Serie entfernen",
+    "confirmDelete": "„{{title}}“ samt aller geladenen Folgen entfernen?",
+    "settings": "Einstellungen",
+    "settingsHint": "Gilt sofort: Das Fenster wächst oder schrumpft, neue Staffeln werden geladen.",
+    "windowSize": "Bereitliegende Folgen",
+    "windowSizeHint": "Wie viele ungesehene Folgen bereitliegen.",
+    "trigger": "Gesehene Folgen löschen",
+    "triggers": {
+      "progress": "wenn die nächste zu … gesehen ist",
+      "minutes": "… Minuten nach Start der nächsten",
+      "watched": "wenn als gesehen markiert"
+    },
+    "triggerValue": {
+      "progress": "Prozent der nächsten Folge",
+      "minutes": "Minuten",
+      "watched": "Verzögerung in Minuten"
+    },
+    "keep": "Alle Folgen behalten",
+    "keepHint": "Es wird nichts automatisch gelöscht.",
+    "pause": "Pausieren",
+    "pauseHint": "Es werden keine neuen Folgen geladen.",
+    "searchEpisode": "Suchen",
+    "details": "Details",
+    "request": {
+      "description": "Wähle die Staffeln und wie viele Folgen bereitliegen sollen.",
+      "seasons": "Staffeln",
+      "allSeasons": "Alle Staffeln",
+      "defaultsHint": "Die Standardwerte legt der Administrator fest."
+    }
+  }
+}
