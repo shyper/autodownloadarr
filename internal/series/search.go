@@ -293,6 +293,9 @@ func (m *Manager) startQueued() {
 		busy[a.episode.SeriesID] = true
 	}
 	for _, e := range queued {
+		if m.deleting[e.SeriesID] {
+			continue // the series is being removed
+		}
 		if len(m.active) >= max(g.ParallelDownloads, 1) {
 			return
 		}
@@ -308,9 +311,10 @@ func (m *Manager) startQueued() {
 			continue
 		}
 		dctx, cancel := context.WithCancelCause(ctx)
-		m.active[e.ID] = &activeDownload{episode: e, cancel: cancel, release: rel}
+		done := make(chan struct{})
+		m.active[e.ID] = &activeDownload{episode: e, cancel: cancel, release: rel, done: done}
 		busy[e.SeriesID] = true
 		delete(m.forced, e.ID)
-		go m.runDownload(dctx, e, rel)
+		go m.runDownload(dctx, e, rel, done)
 	}
 }

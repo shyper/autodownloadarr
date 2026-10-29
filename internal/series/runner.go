@@ -35,11 +35,12 @@ func (m *Manager) cancelDownload(id int64, cause error) bool {
 	return ok
 }
 
-func (m *Manager) runDownload(ctx context.Context, e store.Episode, rel store.Release) {
+func (m *Manager) runDownload(ctx context.Context, e store.Episode, rel store.Release, done chan struct{}) {
 	defer func() {
 		m.mu.Lock()
 		delete(m.active, e.ID)
 		m.mu.Unlock()
+		close(done)
 		m.startQueued()
 	}()
 	bg := context.WithoutCancel(ctx)

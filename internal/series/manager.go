@@ -66,6 +66,9 @@ type Manager struct {
 	mu     sync.Mutex
 	active map[int64]*activeDownload // episode → running download
 	forced map[int64]int64           // episode → release chosen by the user
+	// deleting holds the series that are being removed. No new downloads
+	// start for them and Delete waits for the running ones.
+	deleting map[int64]bool
 	// reconciling serialises window updates per series.
 	reconciling sync.Mutex
 }
@@ -77,6 +80,9 @@ type activeDownload struct {
 	progress download.Progress
 	// playable is set once the video can be read while the download runs.
 	playable bool
+	// done is closed when the download goroutine has finished and removed
+	// itself from active.
+	done chan struct{}
 }
 
 // NewManager creates the manager and registers its scheduler handlers.
@@ -86,7 +92,7 @@ func NewManager(st *store.Store, svc *movies.Services, sched *scheduler.Schedule
 	m := &Manager{
 		store: st, svc: svc, sched: sched, bus: bus, log: log.With("component", "series"), limiter: limiter,
 		now: time.Now, ctx: context.Background(),
-		active: map[int64]*activeDownload{}, forced: map[int64]int64{},
+		active: map[int64]*activeDownload{}, forced: map[int64]int64{}, deleting: map[int64]bool{},
 	}
 	m.fetcher = &fetch.Fetcher{Log: m.log}
 	sched.Handle(taskSearch, m.handleSearch)
@@ -310,8 +316,46 @@ func (m *Manager) Delete(ctx context.Context, id int64) error {
 	if err != nil {
 		return err
 	}
+
+	// Mark the series as deleting before looking at the running downloads:
+	// a download that has just been queued either registers before this
+	// lock (and is cancelled below) or sees the flag and does not start.
+	m.mu.Lock()
+	if m.deleting == nil {
+		m.deleting = map[int64]bool{}
+	}
+	m.deleting[id] = true
+	var running []chan struct{}
+	for _, a := range m.active {
+		if a.episode.SeriesID == id {
+			a.cancel(errDeleted)
+			if a.done != nil {
+				running = append(running, a.done)
+			}
+		}
+	}
+	m.mu.Unlock()
+	removed := false
+	defer func() {
+		m.mu.Lock()
+		delete(m.deleting, id)
+		m.mu.Unlock()
+		if !removed {
+			m.startQueued() // the deletion failed, let the series continue
+		}
+	}()
+
+	// Wait until the downloads have stopped. Otherwise they keep writing
+	// into the folder while it is removed and can leave a file behind.
+	for _, done := range running {
+		select {
+		case <-done:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
 	for _, e := range eps {
-		m.cancelDownload(e.ID, errDeleted)
 		_ = m.sched.Cancel(ctx, searchKey(e.ID))
 		if err := m.removeFiles(ctx, se, &e); err != nil {
 			return err
@@ -323,6 +367,7 @@ func (m *Manager) Delete(ctx context.Context, id int64) error {
 		return err
 	}
 	m.cleanupFolder(ctx, se)
+	removed = true
 	m.bus.Publish(EventSeriesRemoved, map[string]int64{"id": id})
 	return nil
 }

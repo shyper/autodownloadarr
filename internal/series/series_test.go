@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -540,5 +541,126 @@ func TestEpisodeDownloadsReportPlayable(t *testing.T) {
 	list = m.Downloads()
 	if !list[0].Playable || list[0].Progress.DoneBytes != 100 {
 		t.Errorf("after progress: %+v", list[0])
+	}
+}
+
+// Deleting a series must cancel its running download and wait until the
+// goroutine has stopped, so that nothing writes into the folder afterwards.
+func TestDeleteCancelsAndWaitsForDownloads(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w := newWorld(t)
+	m, st, _ := setup(ctx, t, w, nil)
+
+	se, err := st.CreateSeries(ctx, store.Series{TMDBID: 7, TVDBID: 99, Title: "Show", Year: 2020,
+		WindowSize: 1, DeleteTrigger: store.TriggerProgress, TriggerValue: 10}, 0)
+	must(t, err)
+	must(t, st.UpsertEpisodes(ctx, se.ID, []store.Episode{{Season: 1, Episode: 1, Title: "Folge 1", State: store.MovieQueued}}))
+	eps, err := st.Episodes(ctx, se.ID)
+	must(t, err)
+
+	var cancelled atomic.Bool
+	downloadDone := make(chan struct{})
+	m.mu.Lock()
+	m.active[eps[0].ID] = &activeDownload{
+		episode: eps[0],
+		cancel:  func(error) { cancelled.Store(true) },
+		done:    downloadDone,
+	}
+	m.mu.Unlock()
+
+	deleted := make(chan error, 1)
+	go func() { deleted <- m.Delete(ctx, se.ID) }()
+
+	// Delete must not return while the download is still running.
+	select {
+	case err := <-deleted:
+		t.Fatalf("Delete returned before the download stopped: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	if !cancelled.Load() {
+		t.Error("running download was not cancelled")
+	}
+
+	close(downloadDone)
+	select {
+	case err := <-deleted:
+		must(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("Delete did not return after the download stopped")
+	}
+	if _, err := st.Series(ctx, se.ID); err == nil {
+		t.Error("series still exists")
+	}
+	m.mu.Lock()
+	stillDeleting := m.deleting[se.ID]
+	m.mu.Unlock()
+	if stillDeleting {
+		t.Error("series is still marked as deleting")
+	}
+}
+
+// A series that is being deleted must not start another queued episode.
+func TestDeleteBlocksQueuedDownloads(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w := newWorld(t)
+	m, st, _ := setup(ctx, t, w, func(g *store.General) { g.ParallelDownloads = 1 })
+
+	se, err := st.CreateSeries(ctx, store.Series{TMDBID: 7, TVDBID: 99, Title: "Show", Year: 2020,
+		WindowSize: 1, DeleteTrigger: store.TriggerProgress, TriggerValue: 10}, 0)
+	must(t, err)
+	must(t, st.UpsertEpisodes(ctx, se.ID, []store.Episode{{Season: 1, Episode: 1, Title: "Folge 1", State: store.MovieQueued}}))
+	eps, err := st.Episodes(ctx, se.ID)
+	must(t, err)
+	must(t, st.ReplaceReleasesOf(ctx, store.ForEpisode(eps[0].ID), []store.Release{{
+		EpisodeID: eps[0].ID, IndexerID: 1, GUID: "e1", Title: "Show.S01E01.German.720p.WEB.h264-GRP",
+		Size: 40000, NZBURL: "http://example.invalid/getnzb/1", Fingerprint: "fp",
+	}}))
+
+	m.mu.Lock()
+	m.deleting[se.ID] = true
+	m.mu.Unlock()
+	m.startQueued()
+
+	m.mu.Lock()
+	_, running := m.active[eps[0].ID]
+	m.mu.Unlock()
+	if running {
+		t.Error("a download started for a series that is being deleted")
+	}
+}
+
+// Deleting a series while its episode downloads must stop the download and
+// leave no file behind.
+func TestDeleteWhileDownloadingLeavesNoFiles(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w := newWorld(t)
+	w.usenet.SetDelay(400 * time.Millisecond)
+	m, _, root := setup(ctx, t, w, func(g *store.General) { g.ParallelDownloads = 1 })
+
+	se, err := m.Request(ctx, 7, 0, RequestOptions{WindowSize: 1, Trigger: store.TriggerProgress, TriggerValue: 10})
+	must(t, err)
+	eventually(t, "download started", func() bool { return len(m.Downloads()) > 0 })
+
+	must(t, m.Delete(ctx, se.ID))
+	if got := m.Downloads(); len(got) != 0 {
+		t.Errorf("downloads still running after delete: %+v", got)
+	}
+	// Give a leaked download goroutine time to write its file.
+	time.Sleep(700 * time.Millisecond)
+
+	var left []string
+	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		// The library markers (.autodownloadarr/.ignore, .plexignore) are
+		// recreated for every folder; only video files matter here.
+		if err == nil && info != nil && !info.IsDir() && strings.HasSuffix(path, ".mkv") {
+			left = append(left, path)
+		}
+		return nil
+	})
+	if len(left) > 0 {
+		t.Errorf("files left after deleting the series: %v", left)
 	}
 }

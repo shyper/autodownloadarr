@@ -113,9 +113,12 @@ func (m *Manager) removeFiles(ctx context.Context, se store.Series, e *store.Epi
 		}
 		_ = os.Remove(filepath.Dir(f)) // season folder, if now empty
 	}
-	if len(files) > 0 && root != "" {
+	if root != "" {
+		// The download may have been cancelled before it tracked a file.
 		_ = os.RemoveAll(filepath.Join(root, fetch.WorkDirName, "incomplete", "e"+strconv.FormatInt(e.ID, 10)))
-		m.scan(ctx, filepath.Join(root, SeriesFolder(se)))
+		if len(files) > 0 {
+			m.scan(ctx, filepath.Join(root, SeriesFolder(se)))
+		}
 	}
 	e.File, e.MediaKey = "", ""
 	return nil
