@@ -123,6 +123,12 @@ func New(opts Options) http.Handler {
 			r.Get("/onboarding", s.handleGetOnboarding)
 			r.Put("/onboarding", s.handlePutOnboarding)
 
+			r.Get("/users", s.handleListUsers)
+			r.Post("/users", s.handleCreateUser)
+			r.Put("/users/{id}", s.handleUpdateUser)
+			r.Delete("/users/{id}", s.handleDeleteUser)
+			r.Post("/users/{id}/password", s.handleResetUserPassword)
+
 			r.Get("/usenet-servers", s.handleListUsenet)
 			r.Post("/usenet-servers", s.handleSaveUsenet)
 			r.Post("/usenet-servers/test", s.handleTestUsenet)

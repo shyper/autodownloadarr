@@ -25,32 +25,34 @@ const (
 
 // Series is a requested TV series.
 type Series struct {
-	ID            int64      `json:"id"`
-	TMDBID        int        `json:"tmdbId"`
-	TVDBID        int        `json:"tvdbId"`
-	IMDbID        string     `json:"imdbId"`
-	Title         string     `json:"title"`
-	OriginalTitle string     `json:"originalTitle"`
-	Year          int        `json:"year"`
-	Overview      string     `json:"overview"`
-	PosterPath    string     `json:"posterPath"`
-	Status        string     `json:"status"`
-	Runtime       int        `json:"runtime"`
-	AltTitles     []string   `json:"altTitles"`
-	ProfileID     int64      `json:"profileId"`
-	Seasons       []int      `json:"seasons"`       // empty: all seasons
-	FutureSeasons bool       `json:"futureSeasons"` // also seasons after KnownSeasons
-	KnownSeasons  int        `json:"knownSeasons"`  // highest season when the selection was made
-	StartSeason   int        `json:"startSeason"`
-	StartEpisode  int        `json:"startEpisode"`
-	WindowSize    int        `json:"windowSize"`
-	DeleteTrigger string     `json:"deleteTrigger"`
-	TriggerValue  int        `json:"triggerValue"`
-	Keep          bool       `json:"keep"`
-	Paused        bool       `json:"paused"`
-	Folder        string     `json:"folder"`
-	RefreshedAt   *time.Time `json:"refreshedAt,omitempty"`
-	CreatedAt     time.Time  `json:"createdAt"`
+	ID              int64      `json:"id"`
+	TMDBID          int        `json:"tmdbId"`
+	TVDBID          int        `json:"tvdbId"`
+	IMDbID          string     `json:"imdbId"`
+	Title           string     `json:"title"`
+	OriginalTitle   string     `json:"originalTitle"`
+	Year            int        `json:"year"`
+	Overview        string     `json:"overview"`
+	PosterPath      string     `json:"posterPath"`
+	Status          string     `json:"status"`
+	Runtime         int        `json:"runtime"`
+	AltTitles       []string   `json:"altTitles"`
+	ProfileID       int64      `json:"profileId"`
+	RequestedBy     int64      `json:"requestedBy"`
+	RequestedByName string     `json:"requestedByName,omitempty"`
+	Seasons         []int      `json:"seasons"`       // empty: all seasons
+	FutureSeasons   bool       `json:"futureSeasons"` // also seasons after KnownSeasons
+	KnownSeasons    int        `json:"knownSeasons"`  // highest season when the selection was made
+	StartSeason     int        `json:"startSeason"`
+	StartEpisode    int        `json:"startEpisode"`
+	WindowSize      int        `json:"windowSize"`
+	DeleteTrigger   string     `json:"deleteTrigger"`
+	TriggerValue    int        `json:"triggerValue"`
+	Keep            bool       `json:"keep"`
+	Paused          bool       `json:"paused"`
+	Folder          string     `json:"folder"`
+	RefreshedAt     *time.Time `json:"refreshedAt,omitempty"`
+	CreatedAt       time.Time  `json:"createdAt"`
 }
 
 // Wants reports whether a season is part of the selection.
@@ -110,7 +112,8 @@ func (e Episode) Before(o Episode) bool {
 }
 
 const seriesColumns = `id, tmdb_id, tvdb_id, imdb_id, title, original_title, year, overview, poster_path, status, runtime, alt_titles,
-	COALESCE(profile_id, 0), seasons, future_seasons, known_seasons, start_season, start_episode, window_size, delete_trigger, trigger_value, keep, paused,
+	COALESCE(profile_id, 0), COALESCE(requested_by, 0), COALESCE((SELECT username FROM users WHERE id = series.requested_by), ''),
+	seasons, future_seasons, known_seasons, start_season, start_episode, window_size, delete_trigger, trigger_value, keep, paused,
 	folder, refreshed_at, created_at`
 
 func scanSeries(row interface{ Scan(...any) error }) (Series, error) {
@@ -119,7 +122,7 @@ func scanSeries(row interface{ Scan(...any) error }) (Series, error) {
 	var refreshed sql.NullInt64
 	var created int64
 	err := row.Scan(&s.ID, &s.TMDBID, &s.TVDBID, &s.IMDbID, &s.Title, &s.OriginalTitle, &s.Year, &s.Overview, &s.PosterPath,
-		&s.Status, &s.Runtime, &alt, &s.ProfileID, &seasons, &s.FutureSeasons, &s.KnownSeasons, &s.StartSeason, &s.StartEpisode, &s.WindowSize, &s.DeleteTrigger,
+		&s.Status, &s.Runtime, &alt, &s.ProfileID, &s.RequestedBy, &s.RequestedByName, &seasons, &s.FutureSeasons, &s.KnownSeasons, &s.StartSeason, &s.StartEpisode, &s.WindowSize, &s.DeleteTrigger,
 		&s.TriggerValue, &s.Keep, &s.Paused, &s.Folder, &refreshed, &created)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Series{}, ErrNotFound
