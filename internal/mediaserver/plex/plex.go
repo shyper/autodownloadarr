@@ -239,6 +239,32 @@ func (i Item) Progress() float64 {
 // Watched reports whether the account has watched the item completely.
 func (i Item) Watched() bool { return i.ViewCount > 0 }
 
+// Baseline is the watch state of an item at one moment. Plex keeps the
+// history of a title when its file is deleted and added again, so only
+// what changes after a new file appeared counts as watching it.
+type Baseline struct {
+	Views  int
+	Offset time.Duration
+}
+
+// Baseline returns the current watch state.
+func (i Item) Baseline() Baseline { return Baseline{Views: i.ViewCount, Offset: i.ViewOffset} }
+
+// WatchedSince reports whether the item was watched completely after b.
+func (i Item) WatchedSince(b Baseline) bool { return i.ViewCount > b.Views }
+
+// ProgressSince is the share watched after b (0..1): 1 when watched since
+// then, the resume position once it moved, else 0.
+func (i Item) ProgressSince(b Baseline) float64 {
+	if i.WatchedSince(b) {
+		return 1
+	}
+	if i.ViewOffset == b.Offset || i.Duration <= 0 {
+		return 0
+	}
+	return min(float64(i.ViewOffset)/float64(i.Duration), 1)
+}
+
 // Movies lists the movies of a library with the watch state of the account
 // the token belongs to.
 func (c *Client) Movies(ctx context.Context, libraryKey string) ([]Item, error) {

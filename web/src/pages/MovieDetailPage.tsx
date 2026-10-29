@@ -11,7 +11,7 @@ import {
   useSkipRelease,
 } from '../api/movies'
 import type { MovieDetail } from '../api/types'
-import { DownloadProgress, Poster, Problem, Rejection, StateBadge } from '../components/MovieBits'
+import { DownloadProgress, Poster, Problem, Rejection, StateBadge, WatchProgress } from '../components/MovieBits'
 import { Alert, Badge, Button, Card, SectionTitle, Spinner } from '../components/ui'
 import { formatBytes, formatDateTime } from '../format'
 import { errorMessage } from '../i18n'
@@ -62,6 +62,11 @@ function Detail({ m }: { m: MovieDetail }) {
               {m.runtime > 0 && <Badge tone="muted">{t('movies.runtime', { minutes: m.runtime })}</Badge>}
             </div>
             {m.overview && <p className="max-w-3xl text-sm text-muted">{m.overview}</p>}
+            {m.state === 'available' && (
+              <div className="max-w-md">
+                <WatchProgress progress={m.progress} runtime={m.runtime} />
+              </div>
+            )}
           </div>
           {error && <Alert>{errorMessage(t, error)}</Alert>}
           <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">

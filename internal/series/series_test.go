@@ -3,6 +3,7 @@ package series
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -20,6 +21,7 @@ import (
 	"github.com/shyper/autodownloadarr/internal/db"
 	"github.com/shyper/autodownloadarr/internal/events"
 	"github.com/shyper/autodownloadarr/internal/mediaserver/pathmap"
+	"github.com/shyper/autodownloadarr/internal/metadata/tmdb"
 	"github.com/shyper/autodownloadarr/internal/movies"
 	"github.com/shyper/autodownloadarr/internal/scheduler"
 	"github.com/shyper/autodownloadarr/internal/secrets"
@@ -42,6 +44,9 @@ type world struct {
 	mu       sync.Mutex
 	progress map[int]float64       // episode → Plex progress (1 = watched)
 	delay    map[int]time.Duration // episode → how long its search takes
+	old      map[int]bool          // episode → the Plex history is from long ago
+	views    map[int]int           // episode → earlier complete viewings
+	seasons  int                   // seasons TMDB knows (episodes of later ones air in 2020-02)
 	fetched  []int                 // episodes in the order their NZB was fetched
 }
 
@@ -74,8 +79,23 @@ func (w *world) setProgress(ep int, p float64) {
 func (w *world) handler(t *testing.T, base *string) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/tmdb/tv/7", func(rw http.ResponseWriter, _ *http.Request) {
-		_, _ = rw.Write([]byte(`{"id":7,"name":"Show","first_air_date":"2020-01-01","status":"Ended","episode_run_time":[45],
-			"seasons":[{"season_number":1,"name":"Staffel 1","episode_count":5}],"external_ids":{"tvdb_id":99}}`))
+		w.mu.Lock()
+		n := max(w.seasons, 1)
+		w.mu.Unlock()
+		var seasons []string
+		for i := 1; i <= n; i++ {
+			seasons = append(seasons, fmt.Sprintf(`{"season_number":%d,"name":"Staffel %d","episode_count":%d,"air_date":"2020-%02d-01"}`,
+				i, i, episodes, i))
+		}
+		_, _ = fmt.Fprintf(rw, `{"id":7,"name":"Show","first_air_date":"2020-01-01","status":"Returning Series","episode_run_time":[45],
+			"seasons":[%s],"external_ids":{"tvdb_id":99}}`, strings.Join(seasons, ","))
+	})
+	mux.HandleFunc("/tmdb/tv/7/season/2", func(rw http.ResponseWriter, _ *http.Request) {
+		var parts []string
+		for ep := 1; ep <= episodes; ep++ {
+			parts = append(parts, fmt.Sprintf(`{"season_number":2,"episode_number":%d,"name":"Neu %d","air_date":"2020-02-%02d"}`, ep, ep, ep))
+		}
+		_, _ = fmt.Fprintf(rw, `{"episodes":[%s]}`, strings.Join(parts, ","))
 	})
 	mux.HandleFunc("/tmdb/tv/7/season/1", func(rw http.ResponseWriter, _ *http.Request) {
 		var parts []string
@@ -115,14 +135,21 @@ func (w *world) handler(t *testing.T, base *string) http.Handler {
 		var parts []string
 		for ep := 1; ep <= episodes; ep++ {
 			p := w.progress[ep]
-			views, offset := 0, int(p*2_700_000)
+			views, offset, viewed := 0, int(p*2_700_000), int64(0)
 			if p >= 1 {
 				views, offset = 1, 0
+			}
+			views += w.views[ep]
+			if p > 0 {
+				viewed = time.Now().Unix() // Plex updates it while playing
+			}
+			if w.old[ep] {
+				viewed = time.Now().AddDate(-1, 0, 0).Unix()
 			}
 			file := fmt.Sprintf("/remote/tv/Show (2020) {tvdb-99}/Season 01/Show (2020) - S01E%02d - Folge %d.mkv", ep, ep)
 			parts = append(parts, fmt.Sprintf(`{"ratingKey":"%d","guid":"plex://episode/%d","grandparentTitle":"Show","parentIndex":1,"index":%d,"viewCount":%d,
 				"viewOffset":%d,"duration":2700000,"lastViewedAt":%d,"Media":[{"Part":[{"file":%q}]}]}`,
-				100+ep, ep, ep, views, offset, time.Now().Add(-time.Minute).Unix(), file))
+				100+ep, ep, ep, views, offset, viewed, file))
 		}
 		_, _ = fmt.Fprintf(rw, `{"MediaContainer":{"Metadata":[%s]}}`, strings.Join(parts, ","))
 	})
@@ -199,7 +226,8 @@ func setup(ctx context.Context, t *testing.T, w *world, tune func(*store.General
 }
 
 func newWorld(t *testing.T) *world {
-	return &world{usenet: nntptest.New(t), nzbs: map[int][]byte{}, progress: map[int]float64{}, delay: map[int]time.Duration{}}
+	return &world{usenet: nntptest.New(t), nzbs: map[int][]byte{}, progress: map[int]float64{}, delay: map[int]time.Duration{},
+		old: map[int]bool{}, views: map[int]int{}}
 }
 
 func TestRollingWindow(t *testing.T) {
@@ -296,6 +324,118 @@ func TestEpisodesDownloadInOrder(t *testing.T) {
 	}
 }
 
+// Plex keeps the history of a show: episodes watched long ago show up as
+// watched as soon as their files are back. That must neither delete them
+// nor move the window.
+func TestOldWatchHistoryIsIgnored(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w := newWorld(t)
+	for ep := 1; ep <= episodes; ep++ {
+		w.progress[ep], w.old[ep] = 1, true
+	}
+	m, st, _ := setup(ctx, t, w, nil)
+	se, err := m.Request(ctx, 7, 0, RequestOptions{WindowSize: 2, Trigger: store.TriggerProgress, TriggerValue: 10})
+	must(t, err)
+	states := func() string {
+		eps, _ := st.Episodes(ctx, se.ID)
+		var out []string
+		for _, e := range eps {
+			out = append(out, e.State)
+		}
+		return strings.Join(out, " ")
+	}
+	want := "available available pending pending pending"
+	eventually(t, "first window", func() bool { return states() == want })
+	for range 3 {
+		must(t, m.PollWatched(ctx))
+	}
+	time.Sleep(200 * time.Millisecond)
+	if got := states(); got != want {
+		t.Fatalf("after polls with old history: %s, want %s", got, want)
+	}
+
+	// Watching episode 2 again now counts.
+	w.mu.Lock()
+	w.old[2], w.views[2], w.progress[2] = false, 1, 0.5
+	w.mu.Unlock()
+	must(t, m.PollWatched(ctx))
+	eventually(t, "window moved", func() bool { return states() == "deleted available available pending pending" })
+}
+
+// With future seasons, a season TMDB adds later is picked up by the daily
+// refresh; without, it is ignored. Seasons that already existed are not
+// "future" ones.
+func TestFutureSeasons(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w := newWorld(t)
+	m, st, _ := setup(ctx, t, w, nil)
+	follow, err := m.Request(ctx, 7, 0, RequestOptions{Seasons: []int{1}, FutureSeasons: true, WindowSize: 1})
+	must(t, err)
+	if follow.KnownSeasons != 1 {
+		t.Errorf("known seasons = %d", follow.KnownSeasons)
+	}
+
+	w.mu.Lock()
+	w.seasons = 2
+	w.mu.Unlock()
+	refresh := func(id int64) {
+		t.Helper()
+		payload, _ := json.Marshal(idPayload{ID: id})
+		must(t, m.handleRefresh(ctx, scheduler.Task{Payload: payload}))
+	}
+	refresh(follow.ID)
+	count := func(id int64, season int) int {
+		eps, _ := st.Episodes(ctx, id)
+		n := 0
+		for _, e := range eps {
+			if e.Season == season {
+				n++
+			}
+		}
+		return n
+	}
+	if n := count(follow.ID, 2); n != episodes {
+		t.Errorf("future season: %d episodes of season 2, want %d", n, episodes)
+	}
+
+	// Without the option the new season stays out.
+	must(t, m.Delete(ctx, follow.ID))
+	only, err := m.Request(ctx, 7, 0, RequestOptions{Seasons: []int{1}, WindowSize: 1})
+	must(t, err)
+	refresh(only.ID)
+	if n := count(only.ID, 2); n != 0 {
+		t.Errorf("without future seasons: %d episodes of season 2", n)
+	}
+
+	// Switching the option on now: season 2 has aired already, so it is
+	// not a future season; an announced season 3 would be.
+	_, err = m.Update(ctx, only.ID, Settings{Seasons: []int{1}, FutureSeasons: true, WindowSize: 1, Trigger: store.TriggerProgress, TriggerValue: 10})
+	must(t, err)
+	if se, _ := st.Series(ctx, only.ID); se.KnownSeasons != 2 || se.Wants(2) || !se.Wants(3) {
+		t.Errorf("after update: known %d, wants 2 %v, wants 3 %v", se.KnownSeasons, se.Wants(2), se.Wants(3))
+	}
+}
+
+func TestWants(t *testing.T) {
+	cases := []struct {
+		se   store.Series
+		want map[int]bool
+	}{
+		{store.Series{Seasons: []int{}}, map[int]bool{0: false, 1: true, 9: true}},
+		{store.Series{Seasons: []int{0, 2}}, map[int]bool{0: true, 1: false, 2: true, 3: false}},
+		{store.Series{Seasons: []int{1}, FutureSeasons: true, KnownSeasons: 3}, map[int]bool{0: false, 1: true, 2: false, 3: false, 4: true}},
+	}
+	for i, c := range cases {
+		for season, want := range c.want {
+			if got := c.se.Wants(season); got != want {
+				t.Errorf("case %d: Wants(%d) = %v, want %v", i, season, got, want)
+			}
+		}
+	}
+}
+
 func TestDeletionDue(t *testing.T) {
 	now := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	started := now.Add(-20 * time.Minute)
@@ -319,6 +459,26 @@ func TestDeletionDue(t *testing.T) {
 	if due, _ := deletionDue(se, g, list, 0, now); !due {
 		t.Error("watched trigger should delete")
 	}
+	// A skipped episode counts as seen once a later one has been watched.
+	skipped := []store.Episode{{ID: 1}, {ID: 2, Progress: 1, WatchedAt: &watched}, {ID: 3}}
+	se = store.Series{DeleteTrigger: store.TriggerWatched, TriggerValue: 90}
+	if due, at := deletionDue(se, g, skipped, 0, now); due || !at.Equal(watched.Add(90*time.Minute)) {
+		t.Errorf("skipped, watched trigger: due %v at %v", due, at)
+	}
+	if due, _ := deletionDue(se, g, skipped, 0, now.Add(time.Hour)); !due {
+		t.Error("skipped episode should be deleted 90 minutes after the next one was watched")
+	}
+	if due, at := deletionDue(se, g, skipped[:1], 0, now); due || !at.IsZero() {
+		t.Errorf("nothing watched yet: due %v at %v", due, at)
+	}
+	for _, trig := range []string{store.TriggerProgress, store.TriggerMinutes} {
+		se = store.Series{DeleteTrigger: trig, TriggerValue: 10}
+		s2 := []store.Episode{{ID: 1}, {ID: 2, Progress: 0.5, StartedAt: &watched}}
+		if due, _ := deletionDue(se, g, s2, 0, now); !due {
+			t.Errorf("skipped, %s trigger: not deleted", trig)
+		}
+	}
+
 	// The last episode falls back to the movie delay.
 	se = store.Series{DeleteTrigger: store.TriggerProgress, TriggerValue: 10}
 	if due, at := deletionDue(se, g, list[:1], 0, now); due || !at.Equal(watched.Add(48*time.Hour)) {
@@ -333,5 +493,16 @@ func TestNames(t *testing.T) {
 	}
 	if got := EpisodeFileName(se, store.Episode{Season: 1, Episode: 3, Title: "eps1.2_d3bug.mkv"}); got != "Mr. Robot Season (2015) - S01E03 - eps1.2_d3bug.mkv" {
 		t.Errorf("EpisodeFileName = %q", got)
+	}
+}
+
+func TestLastSeason(t *testing.T) {
+	now := time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)
+	show := tmdb.Show{Seasons: []tmdb.SeasonInfo{
+		{Number: 0, AirDate: "2018-01-01"}, {Number: 1, AirDate: "2017-12-01"}, {Number: 2, AirDate: "2026-10-29"},
+		{Number: 3, AirDate: "2027-06-01"}, {Number: 4},
+	}}
+	if got := lastSeason(show, now); got != 2 {
+		t.Errorf("lastSeason = %d, want 2 (season 3 is only announced)", got)
 	}
 }

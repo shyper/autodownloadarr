@@ -129,6 +129,7 @@ func (m *Manager) download(ctx context.Context, mv store.Movie, rel store.Releas
 		WorkDir:      filepath.Join(root, fetch.WorkDirName, "incomplete", strconv.FormatInt(mv.ID, 10)),
 		Folder:       folder,
 		VideoName:    FolderName(mv),
+		FullCheck:    m.svc.FullCheck(ctx),
 		OnVisible: func(path string) {
 			visible.Store(true)
 			m.log.Info("movie playable while downloading", "movie", mv.Title, "file", path)

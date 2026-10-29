@@ -34,6 +34,40 @@ func TestPrecheck(t *testing.T) {
 	}
 }
 
+func TestFullCheck(t *testing.T) {
+	srv := nntptest.New(t)
+	n := post(srv, 1_000, postedFile{"a.rar", randomBytes(40_000, 1)}, postedFile{"a.vol00+03.par2", randomBytes(4_000, 2)})
+	pool := newPool(t, srv.Config(4))
+	var last, total int
+	res, err := download.FullCheck(context.Background(), pool, n, 3, func(done, all int) { last, total = done, all })
+	if err != nil || res.Missing != 0 || !res.Repairable() || res.Segments != 44 || last != 44 || total != 44 {
+		t.Fatalf("complete release: %+v %v, progress %d/%d", res, err, last, total)
+	}
+	if res.RecoveryBytes != 4_000 {
+		t.Errorf("recovery bytes = %d", res.RecoveryBytes)
+	}
+
+	// Two articles gone: the 4 kB of recovery data can restore them.
+	for _, i := range []int{5, 30} {
+		n.Files[0].Segments[i].MessageID = "gone-" + n.Files[0].Segments[i].MessageID
+	}
+	res, err = download.FullCheck(context.Background(), pool, n, 3, nil)
+	if err != nil || res.Missing != 2 || res.MissingBytes != 2_000 || !res.Repairable() {
+		t.Errorf("two missing: %+v %v", res, err)
+	}
+	// Ten gone: beyond repair.
+	for i := 10; i < 18; i++ {
+		n.Files[0].Segments[i].MessageID = "gone-" + n.Files[0].Segments[i].MessageID
+	}
+	res, err = download.FullCheck(context.Background(), pool, n, 3, nil)
+	if err != nil || res.Missing != 10 || res.Repairable() {
+		t.Errorf("ten missing: %+v %v", res, err)
+	}
+	if srv.Requests.Load() != 0 {
+		t.Error("the check downloaded article bodies")
+	}
+}
+
 func TestMissingBytesAndGaps(t *testing.T) {
 	srv := nntptest.New(t)
 	n := post(srv, 1_000, postedFile{"a.rar", randomBytes(10_000, 3)})

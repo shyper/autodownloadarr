@@ -29,6 +29,8 @@ export type UsenetServer = {
   connections: number
   priority: number
   enabled: boolean
+  /** Check every article before downloading instead of a sample. */
+  fullCheck: boolean
 }
 
 export type Indexer = {
@@ -130,6 +132,8 @@ export type Movie = {
   availableAt?: string
   watchedAt?: string
   deleteAt?: string
+  /** 0..1, watched since the file is there */
+  progress: number
   createdAt: string
 }
 
@@ -181,7 +185,26 @@ export type Progress = {
   failedBytes: number
   /** nanoseconds */
   elapsed: number
+  /** While the availability of the articles is checked before the download. */
+  checking?: boolean
+  checked?: number
+  checkTotal?: number
 }
+
+export type Warning = { code: string; detail: string; at: string }
+
+export type HistoryEntry = Attempt & {
+  movieId?: number
+  episodeId?: number
+  seriesId?: number
+  kind: 'movie' | 'episode'
+  label: string
+  size: number
+}
+
+export type HistoryPage = { items: HistoryEntry[]; next?: number }
+
+export type QueueEntry = { kind: 'movie' | 'episode'; movieId?: number; episodeId?: number; seriesId?: number; label: string }
 
 export type Download = { movieId: number; releaseTitle: string; progress: Progress }
 
@@ -209,13 +232,21 @@ export type Series = {
   posterUrl?: string
   status: string
   seasons: number[]
+  futureSeasons: boolean
+  knownSeasons: number
   windowSize: number
   deleteTrigger: DeleteTrigger
   triggerValue: number
   keep: boolean
   paused: boolean
   counts: Partial<Record<EpisodeState, number>>
+  /** The episode being watched or next up. */
+  current?: EpisodeRef
+  /** The next episode still to be broadcast. */
+  upcoming?: EpisodeRef
 }
+
+export type EpisodeRef = { id: number; season: number; episode: number; progress: number; airDate?: string }
 
 export type Episode = {
   id: number
@@ -224,11 +255,15 @@ export type Episode = {
   episode: number
   title: string
   airDate: string
+  /** minutes */
+  runtime: number
   state: EpisodeState
   lastError: string
   nextSearchAt?: string
   releaseTitle: string
   progress: number
+  startedAt?: string
+  watchedAt?: string
   deleteAt?: string
 }
 
@@ -245,6 +280,7 @@ export type EpisodeDownload = {
 
 export type SeriesSettings = {
   seasons: number[]
+  futureSeasons: boolean
   windowSize: number
   deleteTrigger: DeleteTrigger
   triggerValue: number

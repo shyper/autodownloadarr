@@ -34,9 +34,19 @@ export function useServerEvents(): StreamState {
         list?.map((m) => (m.id === ev.data.id ? { ...m, ...ev.data, posterUrl: m.posterUrl } : m)),
       )
       void qc.invalidateQueries({ queryKey: movieKeys.detail(ev.data.id) })
+      refreshHistory()
       if (ev.data.state !== 'downloading') {
         qc.setQueryData<Download[]>(movieKeys.downloads, (list) => list?.filter((d) => d.movieId !== ev.data.id))
       }
+    }
+    // Queue and history change with every state change; refreshed lazily.
+    let pendingHistory: number | undefined
+    const refreshHistory = () => {
+      window.clearTimeout(pendingHistory)
+      pendingHistory = window.setTimeout(() => {
+        void qc.invalidateQueries({ queryKey: ['downloads', 'queue'] })
+        void qc.invalidateQueries({ queryKey: ['downloads', 'history'] })
+      }, 500)
     }
     const onRemoved = () => void qc.invalidateQueries({ queryKey: movieKeys.all })
     const onProgress = (e: MessageEvent<string>) => {
@@ -66,6 +76,7 @@ export function useServerEvents(): StreamState {
       pending = window.setTimeout(() => {
         void qc.invalidateQueries({ queryKey: seriesKeys.all })
       }, 300)
+      refreshHistory()
     }
     source.addEventListener('series.updated', onSeries)
     source.addEventListener('episode.updated', onSeries)

@@ -614,6 +614,7 @@ Beim ersten Start (noch kein Konto vorhanden) führt die Weboberfläche durch di
 |---|---|
 | Stream-Entpacken bei fehlenden Artikeln | Optimistisch streamen, bei Fehler auf „Laden → PAR2 → Entpacken“ zurückfallen |
 | Medienserver erkennt wachsende Dateien schlecht | Erster Scan erst nach 32 MB (Container-Kopf vollständig), zweiter Scan nach Abschluss; Spulen nur in bereits geladene Teile (MKV-Index am Dateiende) |
+| Plex behält den Gesehen-Status eines Titels über das Löschen hinaus | Beim ersten Erscheinen einer neuen Datei wird der Plex-Stand als Ausgangswert gespeichert; nur Änderungen danach zählen als Schauen (Wiedergabe nach Download-Beginn zählt). Zuordnung nur über die eigene Datei, nicht über die TMDB-ID |
 | Watch-Status-Erkennung (Mehrbenutzer, Plex Pass) | WebSocket/Polling statt Webhooks; klare Benutzerzuordnung in den Einstellungen |
 | Indexer-API-Limits | Caching der Suchergebnisse, RSS-Feed statt wiederholter Suche, Limits je Indexer konfigurierbar |
 | Release-Namen-Vielfalt (deutsche Releases) | Großes Test-Korpus echter Namen, Parser tabellengetrieben testen |
@@ -637,6 +638,11 @@ Beim ersten Start (noch kein Konto vorhanden) führt die Weboberfläche durch di
 | Passwörter | Mehrere Passwortquellen (NZB-Meta, NZB-Name, Titel, Liste, Betreff, NFO, Archiv-Kommentar, manuell); Quelle gilt erst als unbrauchbar, wenn kein Passwort passt |
 | Entpacken | Entpacken **während** des Downloads ist Kernfunktion (ab Phase 1); klassisches Entpacken nur als Rückfall nach einer Reparatur |
 | Schauen während des Downloads | A (wachsende Datei): Video unter endgültigem Namen, Plex-Scan nach 32 MB und nach Abschluss; B (virtuelles Dateisystem) später, siehe Abschnitt 6 |
+| Verfügbarkeitsprüfung | Pro Usenet-Server abschaltbar (Standard an): vor dem Download wird jeder Artikel per `STAT` mit Pipelining geprüft; geladen wird nur, was vollständig oder per PAR2 reparierbar ist (Recovery-Daten ≥ 1,2 × fehlende Daten). Aus: Stichprobe von 20 Artikeln. Die nächsten Quellen werden nicht im Hintergrund vorab geprüft – das bräuchte Verbindungen und NZB-Abrufe während des laufenden Downloads |
+| Künftige Staffeln | Pro Serie: gewählte Staffeln plus alle nach der höchsten Staffel, die bei der Auswahl schon lief (angekündigte zählen als künftig). „Alle Staffeln“ schließt künftige immer ein |
+| Übersprungene Folgen | Gelten bei allen Löschauslösern als gesehen: gelöscht, sobald eine spätere Folge den Auslöser erreicht |
+| Plex-Scan | Fehlgeschlagene Teil-Scans werden bis zu sechsmal mit Backoff wiederholt und bis zum nächsten erfolgreichen Scan als Warnung im Dashboard angezeigt |
+| Download-Verlauf | Jeder Versuch mit Titel, Release, Größe, Indexer, Dauer und Ergebnis; bleibt erhalten, wenn Film oder Serie entfernt werden. Seite „Downloads“ mit Laufend, Warteschlange und Verlauf (Filter, Seiten à 50) |
 | Reihenfolge der Folgen | Folgen einer Serie laden nacheinander in Ausstrahlungsreihenfolge; eine frühere Folge, die noch gesucht wird, hält die späteren zurück. Freie Plätze nutzen andere Serien und Filme |
 | Einrichtung | Einrichtungsassistent beim ersten Start: Konto → Plex → Indexer → Usenet → Standards; Schritte testen vor dem Speichern, überspringbar, später erneut aufrufbar |
 | Lizenz | GPL-3.0 |

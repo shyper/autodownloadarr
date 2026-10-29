@@ -62,6 +62,11 @@ type Progress struct {
 	FailedSegments int           `json:"failedSegments"`
 	FailedBytes    int64         `json:"failedBytes"`
 	Elapsed        time.Duration `json:"elapsed"` // nanoseconds in JSON
+	// While the availability is checked before the download: how many of
+	// the articles have been asked for.
+	Checking   bool `json:"checking,omitempty"`
+	Checked    int  `json:"checked,omitempty"`
+	CheckTotal int  `json:"checkTotal,omitempty"`
 }
 
 // FileResult describes one file of the NZB.

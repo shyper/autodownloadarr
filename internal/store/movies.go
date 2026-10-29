@@ -45,13 +45,24 @@ type Movie struct {
 	AvailableAt   *time.Time `json:"availableAt,omitempty"`
 	WatchedAt     *time.Time `json:"watchedAt,omitempty"`
 	DeleteAt      *time.Time `json:"deleteAt,omitempty"`
+	Progress      float64    `json:"progress"` // 0..1, watched since the file is there
+	Base          WatchBase  `json:"-"`
 	CreatedAt     time.Time  `json:"createdAt"`
 	UpdatedAt     time.Time  `json:"updatedAt"`
 }
 
+// WatchBase is the watch state the media server reported when the current
+// file first showed up there. Plex keeps the history of a title across
+// deletions, so only changes against it count as watching.
+type WatchBase struct {
+	Set    bool
+	Views  int
+	Offset int64 // resume position in ms
+}
+
 const movieColumns = `id, tmdb_id, imdb_id, title, original_title, year, overview, poster_path, runtime, alt_titles,
 	COALESCE(profile_id, 0), state, keep, attempts, last_error, next_search_at, release_title, folder, media_key,
-	available_at, watched_at, delete_at, created_at, updated_at`
+	available_at, watched_at, delete_at, progress, base_set, base_views, base_offset, created_at, updated_at`
 
 func scanMovie(row interface{ Scan(...any) error }) (Movie, error) {
 	var m Movie
@@ -60,7 +71,7 @@ func scanMovie(row interface{ Scan(...any) error }) (Movie, error) {
 	var created, updated int64
 	err := row.Scan(&m.ID, &m.TMDBID, &m.IMDbID, &m.Title, &m.OriginalTitle, &m.Year, &m.Overview, &m.PosterPath, &m.Runtime, &alt,
 		&m.ProfileID, &m.State, &m.Keep, &m.Attempts, &m.LastError, &next, &m.ReleaseTitle, &m.Folder, &m.MediaKey,
-		&avail, &watched, &del, &created, &updated)
+		&avail, &watched, &del, &m.Progress, &m.Base.Set, &m.Base.Views, &m.Base.Offset, &created, &updated)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Movie{}, ErrNotFound
 	}
@@ -144,10 +155,12 @@ func (s *Store) Movies(ctx context.Context, states ...string) ([]Movie, error) {
 func (s *Store) UpdateMovie(ctx context.Context, m Movie) error {
 	return affected(s.db.ExecContext(ctx, `
 		UPDATE movies SET state = ?, keep = ?, attempts = ?, last_error = ?, next_search_at = ?, release_title = ?,
-			folder = ?, media_key = ?, available_at = ?, watched_at = ?, delete_at = ?, updated_at = ?
+			folder = ?, media_key = ?, available_at = ?, watched_at = ?, delete_at = ?, progress = ?, base_set = ?, base_views = ?,
+			base_offset = ?, updated_at = ?
 		WHERE id = ?`,
 		m.State, m.Keep, m.Attempts, m.LastError, timeArg(m.NextSearchAt), m.ReleaseTitle,
-		m.Folder, m.MediaKey, timeArg(m.AvailableAt), timeArg(m.WatchedAt), timeArg(m.DeleteAt), s.ms(), m.ID))
+		m.Folder, m.MediaKey, timeArg(m.AvailableAt), timeArg(m.WatchedAt), timeArg(m.DeleteAt), m.Progress, m.Base.Set,
+		m.Base.Views, m.Base.Offset, s.ms(), m.ID))
 }
 
 // DeleteMovie removes a movie and its history.
@@ -369,8 +382,20 @@ func (s *Store) StartAttempt(ctx context.Context, movieID int64, r Release) (int
 
 // StartAttemptOf records the start of a download of a movie or episode.
 func (s *Store) StartAttemptOf(ctx context.Context, o Owner, r Release) (int64, error) {
-	res, err := s.db.ExecContext(ctx, `INSERT INTO attempts (`+o.col+`, release_title, indexer_name, started_at) VALUES (?, ?, ?, ?)`,
-		o.ID, r.Title, r.IndexerName, s.ms())
+	// The label and the series are copied so that the history keeps them
+	// after the movie or series is removed.
+	var q string
+	if o.col == "movie_id" {
+		q = `INSERT INTO attempts (movie_id, kind, label, size, release_title, indexer_name, started_at)
+			SELECT id, 'movie', title || CASE WHEN year > 0 THEN ' (' || year || ')' ELSE '' END, ?, ?, ?, ?
+			FROM movies WHERE id = ?`
+	} else {
+		q = `INSERT INTO attempts (episode_id, series_id, kind, label, size, release_title, indexer_name, started_at)
+			SELECT e.id, e.series_id, 'episode', s.title || ' · S' || printf('%02d', e.season) || 'E' || printf('%02d', e.episode),
+				?, ?, ?, ?
+			FROM episodes e JOIN series s ON s.id = e.series_id WHERE e.id = ?`
+	}
+	res, err := s.db.ExecContext(ctx, q, r.Size, r.Title, r.IndexerName, s.ms(), o.ID)
 	if err != nil {
 		return 0, err
 	}
@@ -458,4 +483,95 @@ func (s *Store) FilesOf(ctx context.Context, o Owner) ([]string, error) {
 func (s *Store) UntrackFile(ctx context.Context, path string) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM files WHERE path = ?`, path)
 	return err
+}
+
+// HistoryEntry is one download attempt for the history page.
+type HistoryEntry struct {
+	Attempt
+	EpisodeID int64  `json:"episodeId,omitempty"`
+	SeriesID  int64  `json:"seriesId,omitempty"`
+	Kind      string `json:"kind"` // movie, episode
+	Label     string `json:"label"`
+	Size      int64  `json:"size"`
+}
+
+// HistoryFilter selects history entries. Before (an entry ID) pages back.
+type HistoryFilter struct {
+	Kind, Result string
+	Before       int64
+	Limit        int
+}
+
+// History lists download attempts, newest first.
+func (s *Store) History(ctx context.Context, f HistoryFilter) ([]HistoryEntry, error) {
+	q := `SELECT id, COALESCE(movie_id, 0), COALESCE(episode_id, 0), COALESCE(series_id, 0), kind, label, size, release_title,
+		indexer_name, started_at, finished_at, result, error_kind, message FROM attempts WHERE 1 = 1`
+	var args []any
+	if f.Kind != "" {
+		q += ` AND kind = ?`
+		args = append(args, f.Kind)
+	}
+	if f.Result != "" {
+		q += ` AND result = ?`
+		args = append(args, f.Result)
+	}
+	if f.Before > 0 {
+		q += ` AND id < ?`
+		args = append(args, f.Before)
+	}
+	if f.Limit <= 0 || f.Limit > 200 {
+		f.Limit = 50
+	}
+	rows, err := s.db.QueryContext(ctx, q+` ORDER BY id DESC LIMIT ?`, append(args, f.Limit)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []HistoryEntry{}
+	for rows.Next() {
+		var h HistoryEntry
+		var started int64
+		var finished sql.NullInt64
+		if err := rows.Scan(&h.ID, &h.MovieID, &h.EpisodeID, &h.SeriesID, &h.Kind, &h.Label, &h.Size, &h.ReleaseTitle, &h.IndexerName,
+			&started, &finished, &h.Result, &h.ErrorKind, &h.Message); err != nil {
+			return nil, err
+		}
+		h.StartedAt, h.FinishedAt = time.UnixMilli(started), nullTime(finished)
+		out = append(out, h)
+	}
+	return out, rows.Err()
+}
+
+// QueueEntry is a movie or episode waiting for a free download slot.
+type QueueEntry struct {
+	Kind      string `json:"kind"`
+	MovieID   int64  `json:"movieId,omitempty"`
+	EpisodeID int64  `json:"episodeId,omitempty"`
+	SeriesID  int64  `json:"seriesId,omitempty"`
+	Label     string `json:"label"`
+}
+
+// Queue lists what waits for a download slot, movies first, episodes in
+// broadcast order.
+func (s *Store) Queue(ctx context.Context) ([]QueueEntry, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT 'movie', id, 0, 0, title || CASE WHEN year > 0 THEN ' (' || year || ')' ELSE '' END
+		FROM movies WHERE state = ?
+		UNION ALL
+		SELECT 'episode', 0, e.id, e.series_id, s.title || ' · S' || printf('%02d', e.season) || 'E' || printf('%02d', e.episode)
+		FROM episodes e JOIN series s ON s.id = e.series_id WHERE e.state = ?
+		ORDER BY 1 DESC, 5`, MovieQueued, MovieQueued)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []QueueEntry{}
+	for rows.Next() {
+		var q QueueEntry
+		if err := rows.Scan(&q.Kind, &q.MovieID, &q.EpisodeID, &q.SeriesID, &q.Label); err != nil {
+			return nil, err
+		}
+		out = append(out, q)
+	}
+	return out, rows.Err()
 }

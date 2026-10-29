@@ -91,6 +91,7 @@ func NewManager(st *store.Store, svc *movies.Services, sched *scheduler.Schedule
 	sched.Handle(taskRefresh, m.handleRefresh)
 	sched.Handle(taskCheck, m.handleCheck)
 	sched.Every("plex-episode-poll", time.Minute, m.pollWatched)
+	svc.HandleScanRetries(sched)
 	return m
 }
 
@@ -115,13 +116,14 @@ func (m *Manager) Start(ctx context.Context) error {
 
 // RequestOptions configure a new series.
 type RequestOptions struct {
-	ProfileID    int64  `json:"profileId"`
-	Seasons      []int  `json:"seasons"` // empty: all
-	StartSeason  int    `json:"startSeason"`
-	StartEpisode int    `json:"startEpisode"`
-	WindowSize   int    `json:"windowSize"`
-	Trigger      string `json:"deleteTrigger"`
-	TriggerValue int    `json:"triggerValue"`
+	ProfileID     int64  `json:"profileId"`
+	Seasons       []int  `json:"seasons"`       // empty: all
+	FutureSeasons bool   `json:"futureSeasons"` // also seasons that appear later
+	StartSeason   int    `json:"startSeason"`
+	StartEpisode  int    `json:"startEpisode"`
+	WindowSize    int    `json:"windowSize"`
+	Trigger       string `json:"deleteTrigger"`
+	TriggerValue  int    `json:"triggerValue"`
 }
 
 // Request adds a series by its TMDB ID.
@@ -170,7 +172,8 @@ func (m *Manager) Request(ctx context.Context, tmdbID int, userID int64, opts Re
 	se, err := m.store.CreateSeries(ctx, store.Series{
 		TMDBID: show.ID, TVDBID: show.TVDBID, IMDbID: show.IMDbID, Title: show.Title, OriginalTitle: show.OriginalTitle,
 		Year: show.Year, Overview: show.Overview, PosterPath: show.PosterPath, Status: show.Status, Runtime: show.Runtime,
-		AltTitles: show.AltTitles, ProfileID: opts.ProfileID, Seasons: opts.Seasons, StartSeason: opts.StartSeason,
+		AltTitles: show.AltTitles, ProfileID: opts.ProfileID, Seasons: opts.Seasons, FutureSeasons: opts.FutureSeasons,
+		KnownSeasons: lastSeason(show, m.now()), StartSeason: opts.StartSeason,
 		StartEpisode: opts.StartEpisode, WindowSize: opts.WindowSize, DeleteTrigger: opts.Trigger, TriggerValue: opts.TriggerValue,
 	}, userID)
 	if err != nil {
@@ -185,6 +188,18 @@ func (m *Manager) Request(ctx context.Context, tmdbID int, userID int64, opts Re
 		return se, err
 	}
 	return se, m.scheduleRefresh(ctx, se.ID)
+}
+
+// lastSeason is the highest season of a show that has started airing by
+// now. Seasons after it, announced or not, count as future seasons.
+func lastSeason(show tmdb.Show, now time.Time) int {
+	n := 0
+	for _, s := range show.Seasons {
+		if d, err := time.ParseInLocation(time.DateOnly, s.AirDate, now.Location()); err == nil && !d.After(now) {
+			n = max(n, s.Number)
+		}
+	}
+	return n
 }
 
 func validateTrigger(trigger string, value int) error {
@@ -234,12 +249,13 @@ func (m *Manager) loadEpisodes(ctx context.Context, client *tmdb.Client, se *sto
 
 // Settings are the user-changeable options of a series.
 type Settings struct {
-	Seasons      []int  `json:"seasons"`
-	WindowSize   int    `json:"windowSize"`
-	Trigger      string `json:"deleteTrigger"`
-	TriggerValue int    `json:"triggerValue"`
-	Keep         bool   `json:"keep"`
-	Paused       bool   `json:"paused"`
+	Seasons       []int  `json:"seasons"`
+	FutureSeasons bool   `json:"futureSeasons"`
+	WindowSize    int    `json:"windowSize"`
+	Trigger       string `json:"deleteTrigger"`
+	TriggerValue  int    `json:"triggerValue"`
+	Keep          bool   `json:"keep"`
+	Paused        bool   `json:"paused"`
 }
 
 // Update changes the settings of a series and adapts the window.
@@ -254,7 +270,21 @@ func (m *Manager) Update(ctx context.Context, id int64, st Settings) (store.Seri
 	if err := validateTrigger(st.Trigger, st.TriggerValue); err != nil {
 		return se, err
 	}
-	seasonsChanged := !slices.Equal(se.Seasons, st.Seasons)
+	seasonsChanged := !slices.Equal(se.Seasons, st.Seasons) || se.FutureSeasons != st.FutureSeasons
+	if seasonsChanged && st.FutureSeasons {
+		// Seasons that exist now are covered by the selection; only later
+		// ones count as future.
+		client, err := m.svc.TMDB(ctx)
+		if err != nil {
+			return se, err
+		}
+		show, err := client.Show(ctx, se.TMDBID)
+		if err != nil {
+			return se, err
+		}
+		se.KnownSeasons = lastSeason(show, m.now())
+	}
+	se.FutureSeasons = st.FutureSeasons
 	se.Seasons, se.WindowSize, se.DeleteTrigger, se.TriggerValue, se.Keep, se.Paused = st.Seasons, st.WindowSize, st.Trigger, st.TriggerValue, st.Keep, st.Paused
 	if err := m.store.UpdateSeries(ctx, se); err != nil {
 		return se, err

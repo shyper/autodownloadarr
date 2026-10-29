@@ -1,4 +1,5 @@
 import { Route, Routes } from 'react-router'
+import { DownloadsPage } from './pages/DownloadsPage'
 import { RequireAuth, RequireGuest } from './components/guards'
 import { Layout } from './components/Layout'
 import { AccountPage } from './pages/AccountPage'
@@ -36,6 +37,7 @@ export function App() {
         <Route path="movies/:id" element={<MovieDetailPage />} />
         <Route path="series" element={<SeriesPage />} />
         <Route path="series/:id" element={<SeriesDetailPage />} />
+        <Route path="downloads" element={<DownloadsPage />} />
         <Route path="settings/:tab?" element={<SettingsPage />} />
         <Route path="account" element={<AccountPage />} />
         <Route path="*" element={<NotFoundPage />} />

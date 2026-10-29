@@ -22,7 +22,13 @@ AutoDownloadarr handles everything you only want to see once.
 - Plex first, Jellyfin and Emby later: new items appear immediately, watched
   ones are removed after a configurable delay (default 48 h)
 - Series as a rolling window: only the next *n* episodes are kept; starting the
-  next episode removes the watched one and fetches another
+  next episode removes the watched one and fetches another; future seasons can
+  be subscribed
+- Optional full availability check before downloading (every article, `STAT`
+  with pipelining), so a download does not fail halfway
+- Only new viewing counts: Plex remembers titles watched long ago, that history
+  does not trigger deletions
+- Download page with running downloads, queue and history
 - Folder mapping between the container and the media server
 - Multiple ways to request: web UI, API, Plex watchlist, …
 

@@ -80,6 +80,7 @@ func New(opts Options) http.Handler {
 			r.Get("/auth/me", s.handleMe)
 			r.Post("/auth/password", s.handleChangePassword)
 			r.Get("/events", s.handleEvents)
+			r.Get("/system/warnings", s.handleWarnings)
 
 			r.Get("/movies", s.handleListMovies)
 			r.Post("/movies", s.handleRequestMovie)
@@ -91,6 +92,8 @@ func New(opts Options) http.Handler {
 			r.Post("/movies/{id}/skip", s.handleMovieSkip)
 			r.Post("/movies/{id}/releases/{releaseId}/download", s.handleMovieDownloadRelease)
 			r.Get("/downloads", s.handleDownloads)
+			r.Get("/downloads/queue", s.handleQueue)
+			r.Get("/downloads/history", s.handleHistory)
 
 			r.Get("/series", s.handleListSeries)
 			r.Post("/series", s.handleRequestSeries)

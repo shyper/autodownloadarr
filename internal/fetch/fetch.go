@@ -101,6 +101,9 @@ type Request struct {
 	// playback can start before the download is complete.
 	VideoName string
 	OnVisible func(path string)
+	// FullCheck asks for every article before downloading instead of a
+	// sample, and skips releases that cannot be repaired.
+	FullCheck bool
 	// Passwords from the password list, tried after the release's own.
 	Passwords  []string
 	Limiter    *download.RateLimiter
@@ -132,9 +135,30 @@ func (f *Fetcher) Fetch(ctx context.Context, req Request) (Result, error) {
 		}
 	}
 
-	// Ask the servers for a sample of the articles before downloading: a
-	// release that is mostly gone is skipped in seconds.
-	if checked, missing, err := download.Precheck(ctx, req.Pool, n, precheckSample); err == nil && checked > 0 &&
+	// Ask the servers whether the articles exist before downloading: every
+	// one of them, or a sample (a release that is mostly gone is skipped in
+	// seconds).
+	if req.FullCheck {
+		res, err := download.FullCheck(ctx, req.Pool, n, req.Pool.Connections(), func(done, total int) {
+			if req.OnProgress != nil {
+				req.OnProgress(download.Progress{Checking: true, Checked: done, CheckTotal: total})
+			}
+		})
+		switch {
+		case ctx.Err() != nil:
+			return Result{}, fail(KindCancelled, context.Cause(ctx))
+		case errors.Is(err, nntp.ErrNoServers) || errors.Is(err, nntp.ErrAuthFailed):
+			return Result{}, fail(KindUsenetAuth, err)
+		case err != nil:
+			return Result{}, fail(KindDownloadError, fmt.Errorf("availability check: %w", err))
+		case !res.Repairable():
+			return Result{}, fail(KindIncomplete, fmt.Errorf("%d of %d articles missing (%s), recovery data only %s",
+				res.Missing, res.Segments, formatSize(res.MissingBytes), formatSize(res.RecoveryBytes)))
+		case res.Missing > 0:
+			f.Log.Info("articles missing, a repair will be needed", "release", req.ReleaseTitle, "missing", res.Missing,
+				"segments", res.Segments)
+		}
+	} else if checked, missing, err := download.Precheck(ctx, req.Pool, n, precheckSample); err == nil && checked > 0 &&
 		float64(missing) > float64(checked)*precheckMaxMissing {
 		return Result{}, fail(KindIncomplete, fmt.Errorf("%d of %d sampled articles missing", missing, checked))
 	}

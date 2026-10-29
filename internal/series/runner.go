@@ -115,6 +115,7 @@ func (m *Manager) download(ctx context.Context, se store.Series, e store.Episode
 		WorkDir:   filepath.Join(root, fetch.WorkDirName, "incomplete", "e"+strconv.FormatInt(e.ID, 10)),
 		Folder:    folder,
 		VideoName: EpisodeFileName(se, e),
+		FullCheck: m.svc.FullCheck(ctx),
 		OnVisible: func(path string) {
 			visible.Store(true)
 			m.log.Info("episode playable while downloading", "series", se.Title, "file", path)
@@ -189,6 +190,9 @@ func (m *Manager) finish(ctx, dctx context.Context, se store.Series, e store.Epi
 		}
 		now := m.now()
 		e.State, e.File, e.AvailableAt, e.Attempts, e.LastError = store.MovieAvailable, path, &now, 0, ""
+		// A new file: earlier viewing does not count, the next poll takes
+		// the baseline.
+		e.Progress, e.StartedAt, e.WatchedAt, e.DeleteAt, e.Base = 0, nil, nil, nil, store.WatchBase{}
 		if err := m.store.UpdateEpisode(ctx, e); err != nil {
 			return err
 		}

@@ -28,7 +28,10 @@
       "connecting": "Connecting live updates…",
       "error": "Live updates disconnected, reconnecting…"
     },
-    "series": "Series"
+    "series": "Series",
+    "downloads": "Downloads",
+    "menuOpen": "Open menu",
+    "menuClose": "Close menu"
   },
   "login": {
     "title": "Sign in",
@@ -102,7 +105,8 @@
     },
     "openSeries": "Open",
     "seriesSummary_one": "{{count}} series, {{ready}} episodes ready",
-    "seriesSummary_other": "{{count}} series, {{ready}} episodes ready"
+    "seriesSummary_other": "{{count}} series, {{ready}} episodes ready",
+    "allDownloads": "All downloads"
   },
   "movies": {
     "title": "Movies",
@@ -173,7 +177,10 @@
       "description": "These releases failed and are not tried again.",
       "none": "Nothing blocklisted.",
       "remove": "Allow again"
-    }
+    },
+    "checking": "Checking availability … {{percent}} %",
+    "timeLeft": "{{time}} left",
+    "watchedPercent": "{{percent}} % watched"
   },
   "problems": {
     "no_release": "No suitable release found yet",
@@ -273,7 +280,9 @@
       "connectionsHint": "At most as many as your provider allows.",
       "role": "Role",
       "name": "Name",
-      "tls": "Use SSL/TLS"
+      "tls": "Use SSL/TLS",
+      "fullCheck": "Check completely before downloading",
+      "fullCheckHint": "Asks for every article (takes a few seconds) and only downloads releases that are complete or repairable. Off: a sample only."
     },
     "indexers": {
       "title": "Indexers",
@@ -439,8 +448,50 @@
     "request": {
       "description": "Choose the seasons and how many episodes should be kept ready.",
       "seasons": "Seasons",
-      "allSeasons": "All seasons",
-      "defaultsHint": "Defaults are set by the administrator."
+      "allSeasons": "All seasons (including future ones)",
+      "defaultsHint": "Defaults are set by the administrator.",
+      "allSeasonsHint": "New seasons are added automatically.",
+      "futureSeasons": "Load future seasons automatically",
+      "futureSeasonsHint": "Seasons that have not started yet or are announced later are added automatically."
+    },
+    "specials": "Specials",
+    "episodeCount_one": "{{count}} episode",
+    "episodeCount_other": "{{count}} episodes",
+    "subscribed": "Subscribed",
+    "more": "more",
+    "less": "less",
+    "status": {
+      "watching": "You are at {{code}} ({{percent}} %)",
+      "next": "Up next: {{code}}",
+      "upcoming": "next broadcast {{code}} on {{date}}"
+    },
+    "summary": {
+      "window_one": "{{count}} episode in the window",
+      "window_other": "{{count}} episodes in the window",
+      "progress": "delete at {{value}} % of the next",
+      "minutes": "delete {{value}} min after the next starts",
+      "watched": "delete after watching"
     }
+  },
+  "warnings": {
+    "plex_scan_movies": "Plex could not scan the movie library ({{detail}}). It is retried automatically.",
+    "plex_scan_tv": "Plex could not scan the TV library ({{detail}}). It is retried automatically."
+  },
+  "downloads": {
+    "title": "Downloads",
+    "active": "Running",
+    "queue": "Queue",
+    "queueHint": "Waiting for a free download slot.",
+    "history": "History",
+    "filterKind": "Kind",
+    "filterResult": "Result",
+    "allKinds": "All kinds",
+    "allResults": "All results",
+    "empty": "No downloads yet.",
+    "more": "Load older",
+    "kindMovie": "Movie",
+    "kindEpisode": "Episode",
+    "removed": "removed",
+    "duration": "{{minutes}} min"
   }
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/shyper/autodownloadarr/internal/auth"
+	"github.com/shyper/autodownloadarr/internal/movies"
 )
 
 func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -32,6 +33,16 @@ func (s *server) handleSystemStatus(w http.ResponseWriter, r *http.Request) {
 		"version":       s.Version,
 		"setupRequired": required,
 	})
+}
+
+// handleWarnings lists problems the user should know about (e.g. Plex
+// scans that keep failing).
+func (s *server) handleWarnings(w http.ResponseWriter, _ *http.Request) {
+	if s.Services == nil {
+		writeJSON(w, http.StatusOK, []movies.Warning{})
+		return
+	}
+	writeJSON(w, http.StatusOK, s.Services.Warnings())
 }
 
 type setupRequest struct {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/shyper/autodownloadarr/internal/fetch"
 	"github.com/shyper/autodownloadarr/internal/mediaserver/plex"
+	"github.com/shyper/autodownloadarr/internal/movies"
 	"github.com/shyper/autodownloadarr/internal/store"
 )
 
@@ -44,29 +45,27 @@ func (m *Manager) PollWatched(ctx context.Context) error {
 	now := m.now()
 	changedSeries := map[int64]bool{}
 	for _, e := range eps {
-		it, ok := byKey[e.MediaKey]
+		it, ok := byFile[filepath.Clean(e.File)]
 		if !ok {
-			it, ok = byFile[filepath.Clean(e.File)]
+			it, ok = byKey[e.MediaKey]
 		}
 		if !ok {
 			continue // not scanned yet
 		}
-		changed := e.MediaKey != it.RatingKey
+		base := e.Base
+		watched, progress := movies.Observe(&e.Base, it, movies.FileSince(ctx, m.store, store.ForEpisode(e.ID), e.Base))
+		changed := e.MediaKey != it.RatingKey || e.Base != base
 		e.MediaKey = it.RatingKey
-		if p := it.Progress(); p != e.Progress {
-			e.Progress, changed = p, true
+		if progress != e.Progress {
+			e.Progress, changed = progress, true
 		}
 		if e.Progress > 0 && e.StartedAt == nil {
 			e.StartedAt, changed = &now, true
 		}
 		switch {
-		case it.Watched() && e.WatchedAt == nil:
-			watched := it.LastViewedAt
-			if watched.IsZero() {
-				watched = now
-			}
-			e.WatchedAt, e.State, changed = &watched, store.MovieWatched, true
-		case !it.Watched() && e.State == store.MovieWatched:
+		case watched && e.WatchedAt == nil:
+			e.WatchedAt, e.State, changed = &now, store.MovieWatched, true
+		case !watched && e.State == store.MovieWatched:
 			e.WatchedAt, e.State, e.DeleteAt, changed = nil, store.MovieAvailable, nil, true
 		}
 		if !changed {
@@ -87,16 +86,7 @@ func (m *Manager) PollWatched(ctx context.Context) error {
 }
 
 // scan asks Plex to look at a folder of the TV library.
-func (m *Manager) scan(ctx context.Context, folder string) {
-	target, err := m.svc.PlexTV(ctx)
-	if err != nil || target == nil {
-		return
-	}
-	remote := target.Mapper.ToRemote(folder)
-	if err := target.Client.Scan(ctx, target.Library, remote); err != nil {
-		m.log.Warn("plex scan failed", "path", remote, "err", err)
-	}
-}
+func (m *Manager) scan(ctx context.Context, folder string) { m.svc.Scan(ctx, true, folder) }
 
 // removeFiles deletes the tracked files of an episode, only inside the
 // series folder.

@@ -13,6 +13,7 @@ import (
 	"github.com/shyper/autodownloadarr/internal/mediaserver/pathmap"
 	"github.com/shyper/autodownloadarr/internal/mediaserver/plex"
 	"github.com/shyper/autodownloadarr/internal/metadata/tmdb"
+	"github.com/shyper/autodownloadarr/internal/scheduler"
 	"github.com/shyper/autodownloadarr/internal/store"
 	"github.com/shyper/autodownloadarr/internal/usenet/nntp"
 )
@@ -31,11 +32,13 @@ type Services struct {
 	TMDBBaseURL string
 	PlexTVURL   string
 
-	mu      sync.Mutex
-	pool    *nntp.Pool
-	poolKey string
-	caps    map[int64]cachedCaps
-	breaker map[int64]*breakerState
+	mu       sync.Mutex
+	pool     *nntp.Pool
+	poolKey  string
+	caps     map[int64]cachedCaps
+	breaker  map[int64]*breakerState
+	sched    *scheduler.Scheduler // retries failed Plex scans
+	warnings map[string]Warning
 }
 
 type breakerState struct {
@@ -220,6 +223,21 @@ func (s *Services) Pool(ctx context.Context) (*nntp.Pool, error) {
 	}
 	s.pool, s.poolKey = pool, key
 	return pool, nil
+}
+
+// FullCheck reports whether releases are checked completely before they
+// are downloaded: when an enabled Usenet server asks for it.
+func (s *Services) FullCheck(ctx context.Context) bool {
+	list, err := s.Store.UsenetServers(ctx)
+	if err != nil {
+		return false
+	}
+	for _, u := range list {
+		if u.Enabled && u.FullCheck {
+			return true
+		}
+	}
+	return false
 }
 
 // PlexTarget is the configured Plex library for movies.

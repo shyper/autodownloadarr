@@ -241,6 +241,45 @@ func (c *Conn) Stat(ctx context.Context, messageID string) error {
 	}
 }
 
+// StatMany checks several articles at once: the STAT commands are sent in
+// one go (pipelining, RFC 3977 section 3.5) and the answers read after.
+// found[i] reports whether messageIDs[i] exists.
+func (c *Conn) StatMany(ctx context.Context, messageIDs []string) (found []bool, err error) {
+	ids := make([]string, len(messageIDs))
+	for i, m := range messageIDs {
+		if ids[i], err = formatID(m); err != nil {
+			return nil, err
+		}
+	}
+	stop := c.watch(ctx)
+	defer stop()
+	_ = c.nc.SetDeadline(time.Now().Add(c.timeout))
+	for _, id := range ids {
+		if _, err := c.bw.WriteString("STAT " + id + "\r\n"); err != nil {
+			return nil, c.ioError(ctx, "send command", err)
+		}
+	}
+	if err := c.bw.Flush(); err != nil {
+		return nil, c.ioError(ctx, "send command", err)
+	}
+	found = make([]bool, len(ids))
+	for i := range ids {
+		code, line, err := c.readStatus()
+		if err != nil {
+			return nil, c.ioError(ctx, "read response", err)
+		}
+		switch code {
+		case 223:
+			found[i] = true
+		case 420, 423, 430:
+		default:
+			c.broken = true // the remaining answers would be out of step
+			return nil, &ProtocolError{Code: code, Line: line}
+		}
+	}
+	return found, nil
+}
+
 // Close says goodbye to the server and closes the connection.
 func (c *Conn) Close() error {
 	if !c.broken {

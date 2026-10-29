@@ -51,6 +51,15 @@ export function Rejection({ value }: { value: string }) {
 export function DownloadProgress({ download }: { download: Pick<Download, 'progress'> & { progress: Progress } }) {
   const { t } = useTranslation()
   const p = download.progress
+  if (p.checking) {
+    const checked = p.checkTotal ? (p.checked ?? 0) / p.checkTotal : 0
+    return (
+      <div className="space-y-1">
+        <ProgressBar value={checked} />
+        <p className="text-xs text-muted">{t('movies.checking', { percent: Math.round(checked * 100) })}</p>
+      </div>
+    )
+  }
   const ratio = p.totalBytes > 0 ? p.doneBytes / p.totalBytes : 0
   const seconds = p.elapsed / 1e9
   const speed = seconds > 0 ? p.doneBytes / seconds : 0
@@ -68,6 +77,25 @@ export function DownloadProgress({ download }: { download: Pick<Download, 'progr
       </p>
     </div>
   )
+}
+
+/** How far a title has been watched, with the time left. */
+export function WatchProgress({ progress, runtime }: { progress: number; runtime: number }) {
+  const { t } = useTranslation()
+  if (progress <= 0 || progress >= 1) return null
+  const left = Math.round((1 - progress) * runtime)
+  return (
+    <div className="flex items-center gap-2">
+      <ProgressBar value={progress} />
+      <span className="text-xs whitespace-nowrap text-muted">
+        {Math.round(progress * 100)} %{runtime > 0 && <> · {t('movies.timeLeft', { time: formatMinutes(left) })}</>}
+      </span>
+    </div>
+  )
+}
+
+function formatMinutes(min: number) {
+  return min >= 60 ? `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')} min` : `${min} min`
 }
 
 export function Poster({ url, title, className = '' }: { url?: string; title: string; className?: string }) {

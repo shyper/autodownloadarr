@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -67,6 +68,25 @@ type seriesView struct {
 	store.Series
 	PosterURL string         `json:"posterUrl,omitempty"`
 	Counts    map[string]int `json:"counts"`
+	// Current is the episode being watched or next up, Upcoming the next
+	// one still to be broadcast.
+	Current  *episodeRef `json:"current,omitempty"`
+	Upcoming *episodeRef `json:"upcoming,omitempty"`
+}
+
+type episodeRef struct {
+	ID       int64   `json:"id"`
+	Season   int     `json:"season"`
+	Episode  int     `json:"episode"`
+	Progress float64 `json:"progress"`
+	AirDate  string  `json:"airDate,omitempty"`
+}
+
+func refOf(e *store.Episode) *episodeRef {
+	if e == nil {
+		return nil
+	}
+	return &episodeRef{ID: e.ID, Season: e.Season, Episode: e.Episode, Progress: e.Progress, AirDate: e.AirDate}
 }
 
 func (s *server) seriesView(r *http.Request, se store.Series) (seriesView, []store.Episode, error) {
@@ -78,6 +98,8 @@ func (s *server) seriesView(r *http.Request, se store.Series) (seriesView, []sto
 	for _, e := range eps {
 		v.Counts[e.State]++
 	}
+	current, upcoming := series.Position(se, eps, time.Now())
+	v.Current, v.Upcoming = refOf(current), refOf(upcoming)
 	return v, eps, nil
 }
 

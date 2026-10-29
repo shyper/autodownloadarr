@@ -145,6 +145,28 @@ func (m *Manager) want(ctx context.Context, e *store.Episode, now time.Time) err
 	return nil // unknown date: the daily refresh will bring one
 }
 
+// Position is where the viewer stands in a series: the current episode
+// (being watched, or the next one up) and the next episode still to be
+// broadcast. Either can be nil.
+func Position(se store.Series, eps []store.Episode, now time.Time) (current, upcoming *store.Episode) {
+	var list []store.Episode
+	for _, e := range eps {
+		if se.Wants(e.Season) && e.State != store.EpisodeSkipped {
+			list = append(list, e)
+		}
+	}
+	if start := windowStart(list); start < len(list) {
+		current = &list[start]
+	}
+	for i := range list {
+		if list[i].AirDate != "" && !list[i].Aired(now) {
+			upcoming = &list[i]
+			break
+		}
+	}
+	return current, upcoming
+}
+
 // windowStart is the index of the current episode: the last one started,
 // or the one after it when it has been seen.
 func windowStart(list []store.Episode) int {
@@ -186,6 +208,12 @@ func deletionDue(se store.Series, g store.General, list []store.Episode, i int, 
 		case store.TriggerMinutes:
 			if later.StartedAt != nil {
 				earliest(later.StartedAt.Add(time.Duration(se.TriggerValue) * time.Minute))
+			}
+		case store.TriggerWatched:
+			// Skipped (or left unfinished): it counts as seen once a later
+			// episode has been watched.
+			if e.WatchedAt == nil && later.WatchedAt != nil {
+				earliest(later.WatchedAt.Add(time.Duration(se.TriggerValue) * time.Minute))
 			}
 		}
 	}

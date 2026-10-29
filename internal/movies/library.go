@@ -3,6 +3,7 @@ package movies
 import (
 	"context"
 	"errors"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -31,6 +32,7 @@ func (m *Manager) available(ctx context.Context, mv store.Movie, rel store.Relea
 	mv.AvailableAt = &now
 	mv.Attempts, mv.LastError, mv.NextSearchAt = 0, "", nil
 	mv.WatchedAt, mv.DeleteAt = nil, nil
+	mv.Progress, mv.Base = 0, store.WatchBase{} // a new file: the next poll takes the baseline
 	if err := m.store.UpdateMovie(ctx, mv); err != nil {
 		return err
 	}
@@ -40,22 +42,48 @@ func (m *Manager) available(ctx context.Context, mv store.Movie, rel store.Relea
 	return m.scheduleDeletion(ctx, mv)
 }
 
-// scan asks the media server to look at a folder. Failures are logged:
-// Plex finds the files on its next scheduled scan anyway.
-func (m *Manager) scan(ctx context.Context, folder string) {
-	target, err := m.svc.Plex(ctx)
-	if err != nil {
-		m.log.Warn("plex not usable", "err", err)
-		return
+// Observe compares a media server item with the baseline of a file. On the
+// first sighting the baseline is taken, unless the item was played after
+// since (when the file appeared; it is playable while downloading): then
+// that playback counts. Marking the item unwatched in Plex lowers the
+// baseline again. It returns whether the file was watched since and how
+// far (0..1).
+func Observe(base *store.WatchBase, it plex.Item, since time.Time) (watched bool, progress float64) {
+	switch {
+	case !base.Set && !since.IsZero() && !it.LastViewedAt.Before(since.Truncate(time.Second)): // Plex has seconds
+		views := it.ViewCount
+		if views > 0 && it.ViewOffset == 0 {
+			views-- // just watched to the end
+		}
+		*base = store.WatchBase{Set: true, Views: views}
+	case !base.Set || it.ViewCount < base.Views:
+		*base = store.WatchBase{Set: true, Views: it.ViewCount, Offset: it.ViewOffset.Milliseconds()}
 	}
-	if target == nil {
-		return
-	}
-	remote := target.Mapper.ToRemote(folder)
-	if err := target.Client.Scan(ctx, target.Library, remote); err != nil {
-		m.log.Warn("plex scan failed", "path", remote, "err", err)
-	}
+	b := plex.Baseline{Views: base.Views, Offset: time.Duration(base.Offset) * time.Millisecond}
+	return it.WatchedSince(b), it.ProgressSince(b)
 }
+
+// fileSince is when the current file of a movie or episode started to
+// appear (the start of its last download), needed only while no baseline
+// has been taken.
+func (m *Manager) fileSince(ctx context.Context, o store.Owner, base store.WatchBase) time.Time {
+	return FileSince(ctx, m.store, o, base)
+}
+
+// FileSince is fileSince for other packages.
+func FileSince(ctx context.Context, st *store.Store, o store.Owner, base store.WatchBase) time.Time {
+	if base.Set {
+		return time.Time{}
+	}
+	attempts, err := st.AttemptsOf(ctx, o)
+	if err != nil || len(attempts) == 0 {
+		return time.Time{}
+	}
+	return attempts[0].StartedAt
+}
+
+// scan asks the media server to look at a folder; failures are retried.
+func (m *Manager) scan(ctx context.Context, folder string) { m.svc.Scan(ctx, false, folder) }
 
 func (m *Manager) handleDelete(ctx context.Context, t scheduler.Task) error {
 	p, err := decode[deletePayload](t)
@@ -162,16 +190,13 @@ func (m *Manager) PollWatched(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	byKey, byDir, byTMDB := map[string]plex.Item{}, map[string]plex.Item{}, map[string]plex.Item{}
+	// Matched by our own file only: another copy of the movie (e.g. from
+	// Radarr) has a watch state of its own.
+	byKey, byDir := map[string]plex.Item{}, map[string]plex.Item{}
 	for _, it := range items {
 		byKey[it.RatingKey] = it
 		for _, f := range it.Files {
 			byDir[filepath.Dir(target.Mapper.ToLocal(f))] = it
-		}
-		for _, guid := range it.GUIDs {
-			if id, ok := strings.CutPrefix(guid, "tmdb://"); ok {
-				byTMDB[id] = it
-			}
 		}
 	}
 	g, err := m.store.General(ctx)
@@ -180,29 +205,26 @@ func (m *Manager) PollWatched(ctx context.Context) error {
 	}
 
 	for _, mv := range list {
-		it, ok := byKey[mv.MediaKey]
+		it, ok := byDir[filepath.Clean(mv.Folder)]
 		if !ok {
-			it, ok = byDir[filepath.Clean(mv.Folder)]
-		}
-		if !ok {
-			it, ok = byTMDB[strconv.Itoa(mv.TMDBID)]
+			it, ok = byKey[mv.MediaKey]
 		}
 		if !ok {
 			continue // not scanned yet
 		}
-		changed := mv.MediaKey != it.RatingKey
-		mv.MediaKey = it.RatingKey
+		base := mv.Base
+		watched, progress := Observe(&mv.Base, it, m.fileSince(ctx, store.ForMovie(mv.ID), mv.Base))
+		changed := mv.MediaKey != it.RatingKey || mv.Base != base || math.Abs(progress-mv.Progress) >= 0.01 ||
+			(progress != mv.Progress && (progress == 0 || progress == 1))
+		mv.MediaKey, mv.Progress = it.RatingKey, progress
 		switch {
-		case it.Watched() && mv.State == store.MovieAvailable:
-			watched := it.LastViewedAt
-			if watched.IsZero() {
-				watched = m.now()
-			}
-			deleteAt := watched.Add(time.Duration(g.DeleteAfterHours) * time.Hour)
-			mv.State, mv.WatchedAt, mv.DeleteAt = store.MovieWatched, &watched, &deleteAt
+		case watched && mv.State == store.MovieAvailable:
+			now := m.now()
+			deleteAt := now.Add(time.Duration(g.DeleteAfterHours) * time.Hour)
+			mv.State, mv.WatchedAt, mv.DeleteAt = store.MovieWatched, &now, &deleteAt
 			m.log.Info("movie watched", "movie", mv.Title, "delete_at", deleteAt)
 			changed = true
-		case !it.Watched() && mv.State == store.MovieWatched:
+		case !watched && mv.State == store.MovieWatched:
 			// Marked as unwatched in Plex: keep it again.
 			mv.State, mv.WatchedAt, mv.DeleteAt = store.MovieAvailable, nil, nil
 			changed = true

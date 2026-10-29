@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"testing"
@@ -219,5 +220,40 @@ func TestPoolStat(t *testing.T) {
 	}
 	if err := pool.Stat(context.Background(), "nowhere@test"); !errors.Is(err, nntp.ErrNoSuchArticle) {
 		t.Errorf("missing article: %v", err)
+	}
+}
+
+func TestPoolStatMany(t *testing.T) {
+	primary, backup := nntptest.New(t), nntptest.New(t)
+	var ids []string
+	for i := range 120 {
+		id := fmt.Sprintf("a%d@test", i)
+		ids = append(ids, id)
+		switch {
+		case i%10 == 3:
+			backup.AddArticle(id, []byte("x\r\n")) // only on the backup
+		case i%10 != 7:
+			primary.AddArticle(id, []byte("x\r\n"))
+		}
+	}
+	bcfg := backup.Config(1)
+	bcfg.Priority = 1
+	pool, _ := nntp.NewPool([]nntp.Config{primary.Config(1), bcfg}, discard)
+	defer pool.Close()
+	found, err := pool.StatMany(context.Background(), ids)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, ok := range found {
+		if want := i%10 != 7; ok != want {
+			t.Errorf("%s: found %v, want %v", ids[i], ok, want)
+		}
+	}
+	// The connection is still in step afterwards.
+	if err := pool.Stat(context.Background(), "a0@test"); err != nil {
+		t.Errorf("stat after pipelining: %v", err)
+	}
+	if primary.Requests.Load()+backup.Requests.Load() != 0 {
+		t.Error("article bodies were downloaded")
 	}
 }

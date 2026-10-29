@@ -209,3 +209,33 @@ func (s *server) handlePlexPoll(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+func (s *server) handleQueue(w http.ResponseWriter, r *http.Request) {
+	q, err := s.Store.Queue(r.Context())
+	if err != nil {
+		s.internalError(w, "read queue", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, q)
+}
+
+type historyPage struct {
+	Items []store.HistoryEntry `json:"items"`
+	Next  int64                `json:"next,omitempty"` // "before" for the next page
+}
+
+func (s *server) handleHistory(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	f := store.HistoryFilter{Kind: q.Get("kind"), Result: q.Get("result"), Limit: 50}
+	f.Before, _ = strconv.ParseInt(q.Get("before"), 10, 64)
+	items, err := s.Store.History(r.Context(), f)
+	if err != nil {
+		s.internalError(w, "read history", err)
+		return
+	}
+	page := historyPage{Items: items}
+	if len(items) == f.Limit {
+		page.Next = items[len(items)-1].ID
+	}
+	writeJSON(w, http.StatusOK, page)
+}

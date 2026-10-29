@@ -97,6 +97,7 @@ func NewManager(st *store.Store, svc *Services, sched *scheduler.Scheduler, bus 
 	sched.Handle(taskSearch, m.handleSearch)
 	sched.Handle(taskDelete, m.handleDelete)
 	sched.Every("plex-watch-poll", time.Minute, m.pollWatched)
+	svc.HandleScanRetries(sched)
 	return m
 }
 

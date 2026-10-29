@@ -125,7 +125,14 @@ function MovieCard({ movie }: { movie: Movie }) {
   return (
     <Link to={`/movies/${movie.id}`} className="group rounded-2xl focus-visible:outline-2 focus-visible:outline-accent">
       <Card className="flex h-full flex-col gap-2 p-3 transition-colors group-hover:border-accent/50">
-        <Poster url={movie.posterUrl} title={movie.title} className={movie.state === 'deleted' ? 'opacity-40' : ''} />
+        <div className="relative overflow-hidden rounded-lg">
+          <Poster url={movie.posterUrl} title={movie.title} className={movie.state === 'deleted' ? 'opacity-40' : ''} />
+          {movie.progress > 0 && movie.progress < 1 && (
+            <div className="absolute inset-x-0 bottom-0 h-1 bg-black/40" aria-label={t('movies.watchedPercent', { percent: Math.round(movie.progress * 100) })}>
+              <div className="h-full bg-accent" style={{ width: `${movie.progress * 100}%` }} />
+            </div>
+          )}
+        </div>
         <p className="line-clamp-2 text-sm font-medium">
           {movie.title} {movie.year > 0 && <span className="text-muted">({movie.year})</span>}
         </p>

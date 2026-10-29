@@ -143,6 +143,60 @@ func (p *Pool) Stat(ctx context.Context, messageID string) error {
 	return lastErr
 }
 
+// StatMany checks which of the articles any server has, asking the servers
+// in priority order for those still missing. found[i] belongs to
+// messageIDs[i]. A connection error is returned only if no server could
+// answer at all.
+func (p *Pool) StatMany(ctx context.Context, messageIDs []string) ([]bool, error) {
+	found := make([]bool, len(messageIDs))
+	todo := make([]int, len(messageIDs))
+	for i := range todo {
+		todo[i] = i
+	}
+	answered := false
+	lastErr := ErrNoServers
+	for _, s := range p.servers {
+		if len(todo) == 0 {
+			break
+		}
+		if s.isDisabled() {
+			continue
+		}
+		c, err := s.acquire(ctx)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		ids := make([]string, len(todo))
+		for i, k := range todo {
+			ids[i] = messageIDs[k]
+		}
+		res, err := c.StatMany(ctx, ids)
+		s.release(c)
+		if err != nil {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return nil, ctxErr
+			}
+			lastErr = err
+			continue
+		}
+		answered = true
+		var still []int
+		for i, k := range todo {
+			if res[i] {
+				found[k] = true
+			} else {
+				still = append(still, k)
+			}
+		}
+		todo = still
+	}
+	if !answered {
+		return nil, lastErr
+	}
+	return found, nil
+}
+
 // Close closes all idle connections.
 func (p *Pool) Close() {
 	for _, s := range p.servers {

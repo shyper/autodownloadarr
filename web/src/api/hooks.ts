@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from './client'
+import type { Warning } from './types'
 
 export type Role = 'admin' | 'user'
 
@@ -26,6 +27,16 @@ export function useSystemStatus() {
     queryKey: queryKeys.status,
     queryFn: ({ signal }) => api<SystemStatus>('/system/status', { signal }),
     staleTime: 60_000,
+  })
+}
+
+/** Problems the user should know about (e.g. failing Plex scans). */
+export function useWarnings(enabled = true) {
+  return useQuery({
+    queryKey: ['system', 'warnings'],
+    queryFn: ({ signal }) => api<Warning[]>('/system/warnings', { signal }),
+    refetchInterval: 60_000,
+    enabled,
   })
 }
 

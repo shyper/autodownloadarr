@@ -28,7 +28,10 @@
       "connecting": "Live-Aktualisierung wird verbunden…",
       "error": "Live-Aktualisierung getrennt, verbinde neu…"
     },
-    "series": "Serien"
+    "series": "Serien",
+    "downloads": "Downloads",
+    "menuOpen": "Menü öffnen",
+    "menuClose": "Menü schließen"
   },
   "login": {
     "title": "Anmelden",
@@ -102,7 +105,8 @@
     },
     "openSeries": "Öffnen",
     "seriesSummary_one": "{{count}} Serie, {{ready}} Folgen bereit",
-    "seriesSummary_other": "{{count}} Serien, {{ready}} Folgen bereit"
+    "seriesSummary_other": "{{count}} Serien, {{ready}} Folgen bereit",
+    "allDownloads": "Alle Downloads"
   },
   "movies": {
     "title": "Filme",
@@ -173,7 +177,10 @@
       "description": "Diese Releases sind fehlgeschlagen und werden nicht erneut versucht.",
       "none": "Nichts gesperrt.",
       "remove": "Wieder erlauben"
-    }
+    },
+    "checking": "Prüfe Verfügbarkeit … {{percent}} %",
+    "timeLeft": "noch {{time}}",
+    "watchedPercent": "{{percent}} % gesehen"
   },
   "problems": {
     "no_release": "Noch kein passendes Release gefunden",
@@ -273,7 +280,9 @@
       "connectionsHint": "Höchstens so viele, wie dein Anbieter erlaubt.",
       "role": "Rolle",
       "name": "Name",
-      "tls": "SSL/TLS verwenden"
+      "tls": "SSL/TLS verwenden",
+      "fullCheck": "Vor dem Download vollständig prüfen",
+      "fullCheckHint": "Fragt jeden Artikel ab (dauert einige Sekunden) und lädt nur Releases, die vollständig oder reparierbar sind. Aus: nur eine Stichprobe."
     },
     "indexers": {
       "title": "Indexer",
@@ -439,8 +448,50 @@
     "request": {
       "description": "Wähle die Staffeln und wie viele Folgen bereitliegen sollen.",
       "seasons": "Staffeln",
-      "allSeasons": "Alle Staffeln",
-      "defaultsHint": "Die Standardwerte legt der Administrator fest."
+      "allSeasons": "Alle Staffeln (auch künftige)",
+      "defaultsHint": "Die Standardwerte legt der Administrator fest.",
+      "allSeasonsHint": "Neue Staffeln kommen automatisch dazu.",
+      "futureSeasons": "Künftige Staffeln automatisch laden",
+      "futureSeasonsHint": "Staffeln, die noch nicht laufen oder neu angekündigt werden, kommen automatisch dazu."
+    },
+    "specials": "Specials",
+    "episodeCount_one": "{{count}} Folge",
+    "episodeCount_other": "{{count}} Folgen",
+    "subscribed": "Abonniert",
+    "more": "mehr",
+    "less": "weniger",
+    "status": {
+      "watching": "Du bist bei {{code}} ({{percent}} %)",
+      "next": "Als Nächstes: {{code}}",
+      "upcoming": "nächste Ausstrahlung {{code}} am {{date}}"
+    },
+    "summary": {
+      "window_one": "{{count}} Folge im Fenster",
+      "window_other": "{{count}} Folgen im Fenster",
+      "progress": "löschen ab {{value}} % der nächsten",
+      "minutes": "löschen {{value}} min nach Start der nächsten",
+      "watched": "löschen nach dem Schauen"
     }
+  },
+  "warnings": {
+    "plex_scan_movies": "Plex konnte die Filmbibliothek nicht scannen ({{detail}}). Es wird automatisch erneut versucht.",
+    "plex_scan_tv": "Plex konnte die Serienbibliothek nicht scannen ({{detail}}). Es wird automatisch erneut versucht."
+  },
+  "downloads": {
+    "title": "Downloads",
+    "active": "Laufend",
+    "queue": "Warteschlange",
+    "queueHint": "Warten auf einen freien Download-Platz.",
+    "history": "Verlauf",
+    "filterKind": "Art",
+    "filterResult": "Ergebnis",
+    "allKinds": "Alle Arten",
+    "allResults": "Alle Ergebnisse",
+    "empty": "Noch keine Downloads.",
+    "more": "Ältere laden",
+    "kindMovie": "Film",
+    "kindEpisode": "Folge",
+    "removed": "entfernt",
+    "duration": "{{minutes}} min"
   }
 }

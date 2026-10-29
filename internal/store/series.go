@@ -38,7 +38,9 @@ type Series struct {
 	Runtime       int        `json:"runtime"`
 	AltTitles     []string   `json:"altTitles"`
 	ProfileID     int64      `json:"profileId"`
-	Seasons       []int      `json:"seasons"` // empty: all seasons
+	Seasons       []int      `json:"seasons"`       // empty: all seasons
+	FutureSeasons bool       `json:"futureSeasons"` // also seasons after KnownSeasons
+	KnownSeasons  int        `json:"knownSeasons"`  // highest season when the selection was made
 	StartSeason   int        `json:"startSeason"`
 	StartEpisode  int        `json:"startEpisode"`
 	WindowSize    int        `json:"windowSize"`
@@ -56,7 +58,7 @@ func (s Series) Wants(season int) bool {
 	if season == 0 {
 		return containsInt(s.Seasons, 0) // specials only when chosen
 	}
-	return len(s.Seasons) == 0 || containsInt(s.Seasons, season)
+	return len(s.Seasons) == 0 || containsInt(s.Seasons, season) || (s.FutureSeasons && season > s.KnownSeasons)
 }
 
 func containsInt(list []int, v int) bool {
@@ -89,6 +91,7 @@ type Episode struct {
 	AvailableAt  *time.Time `json:"availableAt,omitempty"`
 	WatchedAt    *time.Time `json:"watchedAt,omitempty"`
 	DeleteAt     *time.Time `json:"deleteAt,omitempty"`
+	Base         WatchBase  `json:"-"`
 }
 
 // Aired reports whether the episode has been broadcast by now (unknown
@@ -107,7 +110,7 @@ func (e Episode) Before(o Episode) bool {
 }
 
 const seriesColumns = `id, tmdb_id, tvdb_id, imdb_id, title, original_title, year, overview, poster_path, status, runtime, alt_titles,
-	COALESCE(profile_id, 0), seasons, start_season, start_episode, window_size, delete_trigger, trigger_value, keep, paused,
+	COALESCE(profile_id, 0), seasons, future_seasons, known_seasons, start_season, start_episode, window_size, delete_trigger, trigger_value, keep, paused,
 	folder, refreshed_at, created_at`
 
 func scanSeries(row interface{ Scan(...any) error }) (Series, error) {
@@ -116,7 +119,7 @@ func scanSeries(row interface{ Scan(...any) error }) (Series, error) {
 	var refreshed sql.NullInt64
 	var created int64
 	err := row.Scan(&s.ID, &s.TMDBID, &s.TVDBID, &s.IMDbID, &s.Title, &s.OriginalTitle, &s.Year, &s.Overview, &s.PosterPath,
-		&s.Status, &s.Runtime, &alt, &s.ProfileID, &seasons, &s.StartSeason, &s.StartEpisode, &s.WindowSize, &s.DeleteTrigger,
+		&s.Status, &s.Runtime, &alt, &s.ProfileID, &seasons, &s.FutureSeasons, &s.KnownSeasons, &s.StartSeason, &s.StartEpisode, &s.WindowSize, &s.DeleteTrigger,
 		&s.TriggerValue, &s.Keep, &s.Paused, &s.Folder, &refreshed, &created)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Series{}, ErrNotFound
@@ -151,10 +154,11 @@ func (s *Store) CreateSeries(ctx context.Context, se Series, requestedBy int64) 
 	}
 	res, err := s.db.ExecContext(ctx, `
 		INSERT INTO series (tmdb_id, tvdb_id, imdb_id, title, original_title, year, overview, poster_path, status, runtime, alt_titles,
-			profile_id, requested_by, seasons, start_season, start_episode, window_size, delete_trigger, trigger_value, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			profile_id, requested_by, seasons, future_seasons, known_seasons, start_season, start_episode, window_size, delete_trigger,
+			trigger_value, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		se.TMDBID, se.TVDBID, se.IMDbID, se.Title, se.OriginalTitle, se.Year, se.Overview, se.PosterPath, se.Status, se.Runtime,
-		string(alt), profile, user, string(seasons), se.StartSeason, se.StartEpisode, se.WindowSize, se.DeleteTrigger, se.TriggerValue,
+		string(alt), profile, user, string(seasons), se.FutureSeasons, se.KnownSeasons, se.StartSeason, se.StartEpisode, se.WindowSize, se.DeleteTrigger, se.TriggerValue,
 		now, now)
 	if err != nil {
 		return Series{}, err
@@ -200,11 +204,11 @@ func (s *Store) UpdateSeries(ctx context.Context, se Series) error {
 	seasons, _ := json.Marshal(se.Seasons)
 	return affected(s.db.ExecContext(ctx, `
 		UPDATE series SET tvdb_id = ?, imdb_id = ?, title = ?, original_title = ?, overview = ?, poster_path = ?, status = ?,
-			runtime = ?, alt_titles = ?, seasons = ?, start_season = ?, start_episode = ?, window_size = ?, delete_trigger = ?,
+			runtime = ?, alt_titles = ?, seasons = ?, future_seasons = ?, known_seasons = ?, start_season = ?, start_episode = ?, window_size = ?, delete_trigger = ?,
 			trigger_value = ?, keep = ?, paused = ?, folder = ?, refreshed_at = ?, updated_at = ?
 		WHERE id = ?`,
 		se.TVDBID, se.IMDbID, se.Title, se.OriginalTitle, se.Overview, se.PosterPath, se.Status, se.Runtime, string(alt),
-		string(seasons), se.StartSeason, se.StartEpisode, se.WindowSize, se.DeleteTrigger, se.TriggerValue, se.Keep, se.Paused,
+		string(seasons), se.FutureSeasons, se.KnownSeasons, se.StartSeason, se.StartEpisode, se.WindowSize, se.DeleteTrigger, se.TriggerValue, se.Keep, se.Paused,
 		se.Folder, timeArg(se.RefreshedAt), s.ms(), se.ID))
 }
 
@@ -240,13 +244,14 @@ func (s *Store) UpsertEpisodes(ctx context.Context, seriesID int64, eps []Episod
 }
 
 const episodeColumns = `id, series_id, season, episode, title, air_date, runtime, state, attempts, last_error, next_search_at,
-	release_title, file, media_key, progress, started_at, available_at, watched_at, delete_at`
+	release_title, file, media_key, progress, started_at, available_at, watched_at, delete_at, base_set, base_views, base_offset`
 
 func scanEpisode(row interface{ Scan(...any) error }) (Episode, error) {
 	var e Episode
 	var next, started, avail, watched, del sql.NullInt64
 	err := row.Scan(&e.ID, &e.SeriesID, &e.Season, &e.Episode, &e.Title, &e.AirDate, &e.Runtime, &e.State, &e.Attempts, &e.LastError,
-		&next, &e.ReleaseTitle, &e.File, &e.MediaKey, &e.Progress, &started, &avail, &watched, &del)
+		&next, &e.ReleaseTitle, &e.File, &e.MediaKey, &e.Progress, &started, &avail, &watched, &del, &e.Base.Set, &e.Base.Views,
+		&e.Base.Offset)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Episode{}, ErrNotFound
 	}
@@ -295,8 +300,10 @@ func (s *Store) Episode(ctx context.Context, id int64) (Episode, error) {
 func (s *Store) UpdateEpisode(ctx context.Context, e Episode) error {
 	return affected(s.db.ExecContext(ctx, `
 		UPDATE episodes SET state = ?, attempts = ?, last_error = ?, next_search_at = ?, release_title = ?, file = ?, media_key = ?,
-			progress = ?, started_at = ?, available_at = ?, watched_at = ?, delete_at = ?, updated_at = ?
+			progress = ?, started_at = ?, available_at = ?, watched_at = ?, delete_at = ?, base_set = ?, base_views = ?, base_offset = ?,
+			updated_at = ?
 		WHERE id = ?`,
 		e.State, e.Attempts, e.LastError, timeArg(e.NextSearchAt), e.ReleaseTitle, e.File, e.MediaKey, e.Progress,
-		timeArg(e.StartedAt), timeArg(e.AvailableAt), timeArg(e.WatchedAt), timeArg(e.DeleteAt), s.ms(), e.ID))
+		timeArg(e.StartedAt), timeArg(e.AvailableAt), timeArg(e.WatchedAt), timeArg(e.DeleteAt), e.Base.Set, e.Base.Views,
+		e.Base.Offset, s.ms(), e.ID))
 }

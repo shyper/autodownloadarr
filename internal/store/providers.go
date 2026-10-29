@@ -30,6 +30,9 @@ type UsenetServer struct {
 	Connections        int    `json:"connections"`
 	Priority           int    `json:"priority"`
 	Enabled            bool   `json:"enabled"`
+	// FullCheck asks for every article of a release before downloading
+	// it, instead of a sample.
+	FullCheck bool `json:"fullCheck"`
 }
 
 // NNTPConfig converts the server for the NNTP pool.
@@ -73,7 +76,7 @@ func (u *UsenetServer) Validate() error {
 // UsenetServers lists all servers with decrypted passwords.
 func (s *Store) UsenetServers(ctx context.Context) ([]UsenetServer, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, name, host, port, tls, insecure_skip_verify, username, password_enc, connections, priority, enabled
+		SELECT id, name, host, port, tls, insecure_skip_verify, username, password_enc, connections, priority, enabled, full_check
 		FROM usenet_servers ORDER BY priority, id`)
 	if err != nil {
 		return nil, err
@@ -83,7 +86,8 @@ func (s *Store) UsenetServers(ctx context.Context) ([]UsenetServer, error) {
 	for rows.Next() {
 		var u UsenetServer
 		var enc string
-		if err := rows.Scan(&u.ID, &u.Name, &u.Host, &u.Port, &u.TLS, &u.InsecureSkipVerify, &u.Username, &enc, &u.Connections, &u.Priority, &u.Enabled); err != nil {
+		if err := rows.Scan(&u.ID, &u.Name, &u.Host, &u.Port, &u.TLS, &u.InsecureSkipVerify, &u.Username, &enc, &u.Connections, &u.Priority, &u.Enabled,
+			&u.FullCheck); err != nil {
 			return nil, err
 		}
 		u.Password = s.decrypt(enc)
@@ -105,9 +109,10 @@ func (s *Store) SaveUsenetServer(ctx context.Context, u UsenetServer) (int64, er
 	now := s.ms()
 	if u.ID == 0 {
 		res, err := s.db.ExecContext(ctx, `
-			INSERT INTO usenet_servers (name, host, port, tls, insecure_skip_verify, username, password_enc, connections, priority, enabled, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			u.Name, u.Host, u.Port, u.TLS, u.InsecureSkipVerify, u.Username, enc, u.Connections, u.Priority, u.Enabled, now, now)
+			INSERT INTO usenet_servers (name, host, port, tls, insecure_skip_verify, username, password_enc, connections, priority, enabled,
+				full_check, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			u.Name, u.Host, u.Port, u.TLS, u.InsecureSkipVerify, u.Username, enc, u.Connections, u.Priority, u.Enabled, u.FullCheck, now, now)
 		if err != nil {
 			return 0, err
 		}
@@ -116,9 +121,10 @@ func (s *Store) SaveUsenetServer(ctx context.Context, u UsenetServer) (int64, er
 	res, err := s.db.ExecContext(ctx, `
 		UPDATE usenet_servers SET name = ?, host = ?, port = ?, tls = ?, insecure_skip_verify = ?, username = ?,
 			password_enc = CASE WHEN ? = '' THEN password_enc ELSE ? END,
-			connections = ?, priority = ?, enabled = ?, updated_at = ?
+			connections = ?, priority = ?, enabled = ?, full_check = ?, updated_at = ?
 		WHERE id = ?`,
-		u.Name, u.Host, u.Port, u.TLS, u.InsecureSkipVerify, u.Username, enc, enc, u.Connections, u.Priority, u.Enabled, now, u.ID)
+		u.Name, u.Host, u.Port, u.TLS, u.InsecureSkipVerify, u.Username, enc, enc, u.Connections, u.Priority, u.Enabled, u.FullCheck,
+		now, u.ID)
 	return u.ID, affected(res, err)
 }
 

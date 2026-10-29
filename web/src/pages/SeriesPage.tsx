@@ -7,8 +7,9 @@ import { useMe } from '../api/hooks'
 import { useRequestSeries, useSeriesList, useShow, useShowSearch } from '../api/series'
 import type { DeleteTrigger, Series, ShowResult } from '../api/types'
 import { Poster } from '../components/MovieBits'
+import { SeasonPicker } from '../components/SeasonPicker'
 import { TriggerFields } from '../components/TriggerFields'
-import { Alert, Badge, Button, Card, Checkbox, Input, Spinner } from '../components/ui'
+import { Alert, Badge, Button, Card, Input, Spinner } from '../components/ui'
 import { errorMessage } from '../i18n'
 
 function useDebounced<T>(value: T, ms: number): T {
@@ -101,8 +102,8 @@ function RequestPanel({ show, onClose }: { show: ShowResult; onClose: () => void
   const general = useGeneral()
   const details = useShow(show.tmdbId)
   const request = useRequestSeries()
-  const seasons = (details.data?.seasons ?? []).filter((s) => s.number > 0)
-  const [picked, setPicked] = useState<number[] | null>(null)
+  const [picked, setPicked] = useState<number[]>([])
+  const [future, setFuture] = useState(false)
   const [windowSize, setWindowSize] = useState<number | null>(null)
   const [trigger, setTrigger] = useState<DeleteTrigger | null>(null)
   const [value, setValue] = useState<number | null>(null)
@@ -111,11 +112,12 @@ function RequestPanel({ show, onClose }: { show: ShowResult; onClose: () => void
   const win = windowSize ?? defaults?.seriesWindow ?? 3
   const trig = trigger ?? defaults?.seriesTrigger ?? 'progress'
   const val = value ?? defaults?.seriesTriggerValue ?? 10
-  const selected = picked ?? []
-
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    request.mutate({ tmdbId: show.tmdbId, seasons: selected, windowSize: win, deleteTrigger: trig, triggerValue: val }, { onSuccess: onClose })
+    request.mutate(
+      { tmdbId: show.tmdbId, seasons: picked, futureSeasons: future, windowSize: win, deleteTrigger: trig, triggerValue: val },
+      { onSuccess: onClose },
+    )
   }
 
   return (
@@ -131,26 +133,16 @@ function RequestPanel({ show, onClose }: { show: ShowResult; onClose: () => void
       </div>
       {request.isError && <Alert>{errorMessage(t, request.error)}</Alert>}
       <form onSubmit={submit} className="space-y-4">
-        <fieldset className="space-y-2">
-          <legend className="text-sm font-medium">{t('series.request.seasons')}</legend>
-          {details.isPending ? (
-            <Spinner />
-          ) : (
-            <div className="flex flex-wrap gap-x-5 gap-y-2">
-              <Checkbox label={t('series.request.allSeasons')} checked={selected.length === 0} onChange={() => setPicked([])} />
-              {seasons.map((s) => (
-                <Checkbox
-                  key={s.number}
-                  label={`${t('series.season', { number: s.number })} (${s.episodeCount})`}
-                  checked={selected.includes(s.number)}
-                  onChange={(e) =>
-                    setPicked(e.target.checked ? [...selected, s.number].sort((a, b) => a - b) : selected.filter((n) => n !== s.number))
-                  }
-                />
-              ))}
-            </div>
-          )}
-        </fieldset>
+        <SeasonPicker
+          seasons={details.data?.seasons ?? []}
+          loading={details.isPending}
+          selected={picked}
+          future={future}
+          onChange={(s, f) => {
+            setPicked(s)
+            setFuture(f)
+          }}
+        />
         <TriggerFields
           windowSize={win}
           trigger={trig}
@@ -187,6 +179,14 @@ function SeriesCard({ series }: { series: Series }) {
           {(series.counts.failed ?? 0) > 0 && <Badge tone="danger">{t('movies.state.failed')}</Badge>}
           {series.paused && <Badge tone="muted">{t('series.paused')}</Badge>}
         </div>
+        {series.current && series.current.progress > 0 && (
+          <p className="text-xs text-muted">
+            {t('series.status.watching', {
+              code: `S${String(series.current.season).padStart(2, '0')}E${String(series.current.episode).padStart(2, '0')}`,
+              percent: Math.round(series.current.progress * 100),
+            })}
+          </p>
+        )}
       </Card>
     </Link>
   )

@@ -258,3 +258,65 @@ func TestSeriesAndEpisodes(t *testing.T) {
 		t.Error("episodes not deleted with series")
 	}
 }
+
+func TestHistoryAndQueue(t *testing.T) {
+	s, ctx := newStore(t), context.Background()
+	mv, err := s.CreateMovie(ctx, Movie{TMDBID: 1, Title: "Dune", Year: 2024, State: MovieQueued}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	se, err := s.CreateSeries(ctx, Series{TMDBID: 7, Title: "Dark", Seasons: []int{}, WindowSize: 2, DeleteTrigger: TriggerProgress}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.UpsertEpisodes(ctx, se.ID, []Episode{{Season: 1, Episode: 2}, {Season: 1, Episode: 3}}); err != nil {
+		t.Fatal(err)
+	}
+	eps, _ := s.Episodes(ctx, se.ID)
+	eps[1].State = MovieQueued
+	if err := s.UpdateEpisode(ctx, eps[1]); err != nil {
+		t.Fatal(err)
+	}
+
+	a1, _ := s.StartAttemptOf(ctx, ForMovie(mv.ID), Release{Title: "Dune.2024.720p", IndexerName: "nzb", Size: 5 << 30})
+	_ = s.FinishAttempt(ctx, a1, "failed", "incomplete", "")
+	a2, _ := s.StartAttemptOf(ctx, ForEpisode(eps[0].ID), Release{Title: "Dark.S01E02", Size: 1 << 30})
+	_ = s.FinishAttempt(ctx, a2, "success", "", "")
+
+	all, err := s.History(ctx, HistoryFilter{})
+	if err != nil || len(all) != 2 {
+		t.Fatalf("history = %+v %v", all, err)
+	}
+	if h := all[0]; h.Kind != "episode" || h.Label != "Dark · S01E02" || h.SeriesID != se.ID || h.Result != "success" {
+		t.Errorf("episode entry = %+v", h)
+	}
+	if h := all[1]; h.Kind != "movie" || h.Label != "Dune (2024)" || h.Size != 5<<30 || h.ErrorKind != "incomplete" {
+		t.Errorf("movie entry = %+v", h)
+	}
+	if f, _ := s.History(ctx, HistoryFilter{Kind: "movie"}); len(f) != 1 || f[0].ID != a1 {
+		t.Errorf("movies only = %+v", f)
+	}
+	if f, _ := s.History(ctx, HistoryFilter{Result: "failed"}); len(f) != 1 || f[0].ID != a1 {
+		t.Errorf("failed only = %+v", f)
+	}
+	if f, _ := s.History(ctx, HistoryFilter{Before: a2, Limit: 1}); len(f) != 1 || f[0].ID != a1 {
+		t.Errorf("next page = %+v", f)
+	}
+
+	q, err := s.Queue(ctx)
+	if err != nil || len(q) != 2 || q[0].Label != "Dune (2024)" || q[1].Label != "Dark · S01E03" || q[1].SeriesID != se.ID {
+		t.Errorf("queue = %+v %v", q, err)
+	}
+
+	// Removing the movie and the series keeps their history.
+	if err := s.DeleteMovie(ctx, mv.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteSeries(ctx, se.ID); err != nil {
+		t.Fatal(err)
+	}
+	all, _ = s.History(ctx, HistoryFilter{})
+	if len(all) != 2 || all[1].Label != "Dune (2024)" || all[1].MovieID != 0 || all[0].SeriesID != 0 {
+		t.Errorf("history after removal = %+v", all)
+	}
+}

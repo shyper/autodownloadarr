@@ -1,12 +1,12 @@
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { useOnboarding } from '../api/config'
-import { useMe, useSystemStatus } from '../api/hooks'
+import { useMe, useSystemStatus, useWarnings } from '../api/hooks'
 import { useDownloads, useMovies } from '../api/movies'
 import { useEpisodeDownloads, useSeriesList } from '../api/series'
 import type { EpisodeDownload, MovieState } from '../api/types'
 import { DownloadProgress } from '../components/MovieBits'
-import { Card } from '../components/ui'
+import { Alert, Card } from '../components/ui'
 
 const counted: MovieState[] = ['downloading', 'available', 'watched', 'waiting', 'failed']
 
@@ -15,6 +15,7 @@ export function DashboardPage() {
   const { data: user } = useMe()
   const { data: status } = useSystemStatus()
   const onboarding = useOnboarding(user?.role === 'admin')
+  const warnings = useWarnings()
   const movies = useMovies()
   const downloads = useDownloads()
   const series = useSeriesList()
@@ -37,6 +38,10 @@ export function DashboardPage() {
         <p className="text-sm text-muted">{t('dashboard.subtitle')}</p>
       </div>
 
+      {warnings.data?.map((w) => (
+        <Alert key={w.code}>{t(`warnings.${w.code}`, { detail: w.detail, defaultValue: w.detail })}</Alert>
+      ))}
+
       {onboarding.data && !onboarding.data.finished && (
         <Card className="flex flex-wrap items-center justify-between gap-3 border-accent/40">
           <p className="text-sm">{t('dashboard.setupPending')}</p>
@@ -58,7 +63,12 @@ export function DashboardPage() {
       </div>
 
       <Card className="space-y-4">
-        <h2 className="font-semibold">{t('dashboard.downloads')}</h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="font-semibold">{t('dashboard.downloads')}</h2>
+          <Link to="/downloads" className="text-sm text-accent hover:underline">
+            {t('dashboard.allDownloads')}
+          </Link>
+        </div>
         {active.length ? (
           <ul className="space-y-4">
             {active.map((a) => (

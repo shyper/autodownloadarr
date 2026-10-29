@@ -155,7 +155,7 @@ func TestMovieLifecycle(t *testing.T) {
 	must(t, st.SetTMDBKey(ctx, "key"))
 	host, port, _ := net.SplitHostPort(world.usenet.Addr())
 	portNum, _ := strconv.Atoi(port)
-	_, err = st.SaveUsenetServer(ctx, store.UsenetServer{Host: host, Port: portNum, Connections: 4, Enabled: true})
+	_, err = st.SaveUsenetServer(ctx, store.UsenetServer{Host: host, Port: portNum, Connections: 4, Enabled: true, FullCheck: true})
 	must(t, err)
 	_, err = st.SaveIndexer(ctx, store.Indexer{Name: "fake", URL: srv.URL + "/indexer", APIKey: "k", Enabled: true})
 	must(t, err)

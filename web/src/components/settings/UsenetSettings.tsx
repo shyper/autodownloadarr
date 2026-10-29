@@ -5,7 +5,18 @@ import type { UsenetServer } from '../../api/types'
 import { errorMessage } from '../../i18n'
 import { Alert, Badge, Button, Checkbox, Field, Input, SectionTitle, Select } from '../ui'
 
-const empty: Partial<UsenetServer> = { name: '', host: '', port: 563, tls: true, username: '', password: '', connections: 20, priority: 0, enabled: true }
+const empty: Partial<UsenetServer> = {
+  name: '',
+  host: '',
+  port: 563,
+  tls: true,
+  username: '',
+  password: '',
+  connections: 20,
+  priority: 0,
+  enabled: true,
+  fullCheck: true,
+}
 
 export function UsenetSettings() {
   const { t } = useTranslation()
@@ -119,6 +130,12 @@ function UsenetServerForm({ initial, onDone }: { initial: Partial<UsenetServer>;
           }}
         />
         <Checkbox label={t('settings.enabled')} checked={u.enabled} onChange={(e) => set('enabled', e.target.checked)} />
+        <Checkbox
+          label={t('settings.usenet.fullCheck')}
+          hint={t('settings.usenet.fullCheckHint')}
+          checked={u.fullCheck ?? true}
+          onChange={(e) => set('fullCheck', e.target.checked)}
+        />
       </div>
       <div className="flex flex-wrap justify-end gap-2">
         <Button type="button" variant="ghost" onClick={onDone}>

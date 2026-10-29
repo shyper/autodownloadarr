@@ -53,6 +53,7 @@ function useSeriesMutation<V, R>(fn: (v: V) => Promise<R>) {
 export type SeriesRequest = {
   tmdbId: number
   seasons: number[]
+  futureSeasons: boolean
   windowSize: number
   deleteTrigger: DeleteTrigger
   triggerValue: number
