@@ -4,7 +4,7 @@ import { useGeneral, useSaveGeneral } from '../../api/config'
 import type { General } from '../../api/types'
 import { errorMessage } from '../../i18n'
 import { TriggerFields } from '../TriggerFields'
-import { Alert, Button, Checkbox, Field, Input, SectionTitle, Select } from '../ui'
+import { Alert, Button, Field, Input, SectionTitle, Select } from '../ui'
 
 type Props = {
   /** "library" shows only the movies folder (setup wizard). */
@@ -85,17 +85,6 @@ function GeneralFormInner({ initial, fields, onSaved }: Props & { initial: Gener
             <Field id="poll" label={t('settings.general.watchPollMinutes')} hint={t('settings.general.watchPollMinutesHint')}>
               <Input id="poll" type="number" min={1} value={g.watchPollMinutes} onChange={num('watchPollMinutes')} />
             </Field>
-            <div className="space-y-3 rounded-xl border border-line p-4 sm:col-span-2">
-              <Checkbox
-                label={t('settings.general.watchlist')}
-                hint={t('settings.general.watchlistHint')}
-                checked={g.watchlist}
-                onChange={(e) => set('watchlist', e.target.checked)}
-              />
-              <Field id="watchlist-poll" label={t('settings.general.watchlistPollMinutes')} hint={t('settings.general.watchlistPollMinutesHint')}>
-                <Input id="watchlist-poll" type="number" min={1} value={g.watchlistPollMinutes} onChange={num('watchlistPollMinutes')} />
-              </Field>
-            </div>
             <Field id="max-rate" label={t('settings.general.maxDownloadMBps')} hint={t('settings.general.maxDownloadMBpsHint')}>
               <Input id="max-rate" type="number" min={0} step="1" value={g.maxDownloadMBps} onChange={num('maxDownloadMBps')} />
             </Field>

@@ -5,13 +5,15 @@ import {
   plexPinStatus,
   useConnectPlex,
   useDeletePlex,
+  useGeneral,
+  useSaveGeneral,
   usePlex,
   usePlexLibraries,
   useSavePlex,
 } from '../../api/config'
 import type { MediaServer, MediaServerKind, PathMapping, PlexServer } from '../../api/types'
 import { errorMessage } from '../../i18n'
-import { Alert, Badge, Button, Field, Input, SectionTitle, Select, Spinner } from '../ui'
+import { Alert, Badge, Button, Checkbox, Field, Input, SectionTitle, Select, Spinner } from '../ui'
 
 const kinds: { value: MediaServerKind; label: string }[] = [
   { value: 'plex', label: 'Plex' },
@@ -31,6 +33,7 @@ export function PlexSettings({ onSaved }: { onSaved?: () => void }) {
       ) : (
         <PlexConnect />
       )}
+      {plex.data.configured && plex.data.server.kind === 'plex' && <PlexWatchlistSettings />}
     </div>
   )
 }
@@ -309,6 +312,46 @@ function PlexLibrarySettings({ server, onSaved }: { server: MediaServer; onSaved
         <Button type="submit" loading={save.isPending}>
           {t('common.save')}
         </Button>
+      </div>
+    </form>
+  )
+}
+
+/** Watchlist preferences keep using the existing general settings API. */
+function PlexWatchlistSettings() {
+  const { t } = useTranslation()
+  const general = useGeneral()
+  const save = useSaveGeneral()
+  const [watchlist, setWatchlist] = useState<boolean | null>(null)
+  const [pollMinutes, setPollMinutes] = useState<number | null>(null)
+
+  if (general.isError) return <Alert>{errorMessage(t, general.error)}</Alert>
+  if (!general.data) return <Spinner />
+  const enabled = watchlist ?? general.data.watchlist
+  const interval = pollMinutes ?? general.data.watchlistPollMinutes
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault()
+    if (!general.data) return
+    save.mutate({ ...general.data, watchlist: enabled, watchlistPollMinutes: interval })
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-4 rounded-xl border border-line p-4">
+      <SectionTitle title={t('settings.mediaServer.watchlistTitle')} />
+      {save.isError && <Alert>{errorMessage(t, save.error)}</Alert>}
+      {save.isSuccess && <Alert tone="success">{t('settings.saved')}</Alert>}
+      <Checkbox
+        label={t('settings.mediaServer.watchlist')}
+        hint={t('settings.mediaServer.watchlistHint')}
+        checked={enabled}
+        onChange={(e) => setWatchlist(e.target.checked)}
+      />
+      <Field id="watchlist-poll" label={t('settings.mediaServer.watchlistPollMinutes')} hint={t('settings.mediaServer.watchlistPollMinutesHint')}>
+        <Input id="watchlist-poll" type="number" required min={1} value={interval} onChange={(e) => setPollMinutes(Number(e.target.value))} />
+      </Field>
+      <div className="flex justify-end">
+        <Button type="submit" loading={save.isPending}>{t('common.save')}</Button>
       </div>
     </form>
   )

@@ -286,11 +286,7 @@
       "maxLibraryGB": "Obergrenze der temporären Bibliothek (GB)",
       "maxLibraryGBHint": "Downloads warten, solange die Film- und Serienordner zusammen größer sind. 0 bedeutet unbegrenzt.",
       "minFreeGB": "Freien Speicherplatz behalten (GB)",
-      "minFreeGBHint": "Es startet kein Download, wenn die Platte darunter fallen würde. 0 bedeutet aus.",
-      "watchlist": "Plex-Watchlist übernehmen",
-      "watchlistHint": "Filme und Serien auf deiner Plex-Watchlist werden automatisch angefragt. Dafür muss das Plex-Konto-Token gespeichert sein (Anmeldung über Plex).",
-      "watchlistPollMinutes": "Watchlist prüfen alle (Minuten)",
-      "watchlistPollMinutesHint": "Wie oft Plex nach neuen Watchlist-Einträgen gefragt wird."
+      "minFreeGBHint": "Es startet kein Download, wenn die Platte darunter fallen würde. 0 bedeutet aus."
     },
     "tmdb": {
       "title": "TMDB",
@@ -442,7 +438,12 @@
       "kindHint": "Plex meldet sich mit dem Plex-Konto an. Jellyfin und Emby verwenden einen API-Schlüssel.",
       "name": "Name",
       "apiKey": "API-Schlüssel",
-      "apiKeyHint": "Jellyfin/Emby: Dashboard → API-Schlüssel."
+      "apiKeyHint": "Jellyfin/Emby: Dashboard → API-Schlüssel.",
+      "watchlistTitle": "Plex-Watchlist",
+      "watchlist": "Plex-Watchlist übernehmen",
+      "watchlistHint": "Filme und Serien auf deiner Plex-Watchlist werden automatisch angefragt. Dafür muss das Plex-Konto-Token gespeichert sein (Anmeldung über Plex).",
+      "watchlistPollMinutes": "Watchlist prüfen alle (Minuten)",
+      "watchlistPollMinutesHint": "Wie oft Plex nach neuen Watchlist-Einträgen gefragt wird."
     }
   },
   "account": {
