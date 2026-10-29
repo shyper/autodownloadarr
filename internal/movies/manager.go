@@ -69,6 +69,7 @@ type Manager struct {
 	mu       sync.Mutex
 	active   map[int64]*activeDownload
 	forced   map[int64]int64 // movie → release chosen by the user
+	deleting map[int64]bool  // movie → being removed; no new downloads
 	lastPoll time.Time
 }
 
@@ -78,22 +79,26 @@ type activeDownload struct {
 	progress download.Progress
 	// playable is set once the video can be read while the download runs.
 	playable bool
+	// done is closed when the download goroutine has finished and removed
+	// itself from active.
+	done chan struct{}
 }
 
 // NewManager creates the manager and registers its scheduler handlers.
 // Call Start before the scheduler runs.
 func NewManager(st *store.Store, svc *Services, sched *scheduler.Scheduler, bus *events.Bus, log *slog.Logger) *Manager {
 	m := &Manager{
-		store:   st,
-		svc:     svc,
-		sched:   sched,
-		bus:     bus,
-		log:     log.With("component", "movies"),
-		now:     time.Now,
-		ctx:     context.Background(),
-		active:  map[int64]*activeDownload{},
-		forced:  map[int64]int64{},
-		limiter: download.NewRateLimiter(0),
+		store:    st,
+		svc:      svc,
+		sched:    sched,
+		bus:      bus,
+		log:      log.With("component", "movies"),
+		now:      time.Now,
+		ctx:      context.Background(),
+		active:   map[int64]*activeDownload{},
+		forced:   map[int64]int64{},
+		deleting: map[int64]bool{},
+		limiter:  download.NewRateLimiter(0),
 	}
 	m.fetcher = &fetch.Fetcher{Log: m.log}
 	sched.Handle(taskSearch, m.handleSearch)
@@ -257,7 +262,40 @@ func (m *Manager) SkipRelease(_ context.Context, id int64) error {
 // Delete removes the movie's files now. With forget the movie itself is
 // removed as well.
 func (m *Manager) Delete(ctx context.Context, id int64, forget bool) error {
-	m.cancelDownload(id, errDeleted)
+	// Mark the movie as deleting before looking at the running download: a
+	// download that has just been queued either registers before this lock
+	// (and is cancelled below) or sees the flag and does not start.
+	m.mu.Lock()
+	if m.deleting == nil {
+		m.deleting = map[int64]bool{}
+	}
+	m.deleting[id] = true
+	var done chan struct{}
+	if a, ok := m.active[id]; ok {
+		a.cancel(errDeleted)
+		done = a.done
+	}
+	m.mu.Unlock()
+	removed := false
+	defer func() {
+		m.mu.Lock()
+		delete(m.deleting, id)
+		m.mu.Unlock()
+		if !removed {
+			m.startQueued() // the deletion failed, let the movie continue
+		}
+	}()
+
+	// Wait until the download has stopped. Otherwise it keeps writing into
+	// the folder while it is removed and can leave a file behind.
+	if done != nil {
+		select {
+		case <-done:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
 	mv, err := m.store.Movie(ctx, id)
 	if err != nil {
 		return err
@@ -275,6 +313,7 @@ func (m *Manager) Delete(ctx context.Context, id int64, forget bool) error {
 		if err := m.store.DeleteMovie(ctx, id); err != nil {
 			return err
 		}
+		removed = true
 		m.bus.Publish(EventMovieRemoved, map[string]int64{"id": id})
 		return nil
 	}
@@ -283,6 +322,7 @@ func (m *Manager) Delete(ctx context.Context, id int64, forget bool) error {
 	if err := m.store.UpdateMovie(ctx, mv); err != nil {
 		return err
 	}
+	removed = true
 	m.publish(mv)
 	return nil
 }

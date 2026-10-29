@@ -284,6 +284,9 @@ func (m *Manager) startQueued() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, mv := range queued {
+		if m.deleting[mv.ID] {
+			continue // the movie is being removed
+		}
 		if len(m.active) >= max(g.ParallelDownloads, 1) {
 			return
 		}
@@ -296,8 +299,9 @@ func (m *Manager) startQueued() {
 			continue
 		}
 		dctx, cancel := context.WithCancelCause(ctx)
-		m.active[mv.ID] = &activeDownload{cancel: cancel, release: rel}
+		done := make(chan struct{})
+		m.active[mv.ID] = &activeDownload{cancel: cancel, release: rel, done: done}
 		delete(m.forced, mv.ID)
-		go m.runDownload(dctx, mv, rel)
+		go m.runDownload(dctx, mv, rel, done)
 	}
 }

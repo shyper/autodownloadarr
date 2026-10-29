@@ -310,6 +310,138 @@ func TestHelpers(t *testing.T) {
 	}
 }
 
+// deleteTestManager builds a manager with a store and a scheduler, without
+// providers. It is enough to exercise deletion.
+func deleteTestManager(t *testing.T) (context.Context, *Manager, *store.Store, string) {
+	t.Helper()
+	ctx := t.Context()
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	sqldb, err := db.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	must(t, err)
+	t.Cleanup(func() { _ = sqldb.Close() })
+	box, _ := secrets.New(make([]byte, 32))
+	st := store.New(sqldb, box)
+	root := t.TempDir()
+	g := store.DefaultGeneral()
+	g.MoviesPath = root
+	must(t, st.SetGeneral(ctx, g))
+	m := &Manager{
+		store: st, sched: scheduler.New(sqldb, log), bus: events.New(log), log: log.With("component", "movies"),
+		now: time.Now, ctx: ctx,
+		active: map[int64]*activeDownload{}, forced: map[int64]int64{}, deleting: map[int64]bool{},
+	}
+	return ctx, m, st, root
+}
+
+// Deleting a movie must cancel its running download and wait until the
+// goroutine has stopped, so that nothing writes into the folder afterwards.
+func TestDeleteCancelsAndWaitsForDownloads(t *testing.T) {
+	ctx, m, st, _ := deleteTestManager(t)
+	mv, err := st.CreateMovie(ctx, store.Movie{TMDBID: 42, Title: "Film", Year: 2024, State: store.MovieDownloading}, 0)
+	must(t, err)
+
+	var cancelled atomic.Bool
+	downloadDone := make(chan struct{})
+	m.mu.Lock()
+	m.active[mv.ID] = &activeDownload{
+		cancel: func(error) { cancelled.Store(true) },
+		done:   downloadDone,
+	}
+	m.mu.Unlock()
+
+	deleted := make(chan error, 1)
+	go func() { deleted <- m.Delete(ctx, mv.ID, true) }()
+
+	// Delete must not return while the download is still running.
+	select {
+	case err := <-deleted:
+		t.Fatalf("Delete returned before the download stopped: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	if !cancelled.Load() {
+		t.Error("running download was not cancelled")
+	}
+
+	close(downloadDone)
+	select {
+	case err := <-deleted:
+		must(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("Delete did not return after the download stopped")
+	}
+	if _, err := st.Movie(ctx, mv.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("movie still exists: %v", err)
+	}
+	m.mu.Lock()
+	stillDeleting := m.deleting[mv.ID]
+	m.mu.Unlock()
+	if stillDeleting {
+		t.Error("movie is still marked as deleting")
+	}
+}
+
+// A file that a cancelled download still tracks while it finishes must be
+// removed by Delete instead of being left behind.
+func TestDeleteRemovesFileTrackedWhileCancelling(t *testing.T) {
+	ctx, m, st, root := deleteTestManager(t)
+	mv, err := st.CreateMovie(ctx, store.Movie{TMDBID: 42, Title: "Film", Year: 2024, State: store.MovieDownloading}, 0)
+	must(t, err)
+
+	file := filepath.Join(root, "Film (2024) {tmdb-42}", "Film (2024) {tmdb-42}.mkv")
+	must(t, os.MkdirAll(filepath.Dir(file), 0o755))
+	must(t, os.WriteFile(file, []byte("video"), 0o644))
+
+	dctx, cancel := context.WithCancelCause(ctx)
+	downloadDone := make(chan struct{})
+	m.mu.Lock()
+	m.active[mv.ID] = &activeDownload{cancel: cancel, done: downloadDone}
+	m.mu.Unlock()
+
+	// The download notices the cancellation, writes and tracks its file, and
+	// only then finishes.
+	go func() {
+		<-dctx.Done()
+		_ = st.TrackFile(ctx, mv.ID, file, 5)
+		close(downloadDone)
+	}()
+
+	must(t, m.Delete(ctx, mv.ID, true))
+	if _, err := os.Stat(file); !os.IsNotExist(err) {
+		t.Error("file tracked by the cancelled download was left behind")
+	}
+}
+
+// A movie that is being deleted must not start its queued download.
+func TestDeleteBlocksQueuedDownloads(t *testing.T) {
+	ctx, m, st, _ := deleteTestManager(t)
+	// No movies path: if the guard were missing, the download would fail
+	// early instead of touching providers.
+	g := store.DefaultGeneral()
+	must(t, st.SetGeneral(ctx, g))
+
+	indexerID, err := st.SaveIndexer(ctx, store.Indexer{Name: "test", URL: "http://example.invalid", Enabled: true})
+	must(t, err)
+
+	mv, err := st.CreateMovie(ctx, store.Movie{TMDBID: 42, Title: "Film", Year: 2024, State: store.MovieQueued}, 0)
+	must(t, err)
+	must(t, st.ReplaceReleases(ctx, mv.ID, []store.Release{{
+		MovieID: mv.ID, IndexerID: indexerID, GUID: "film", Title: "Film.2024.German.720p.WEB.h264-GRP",
+		Size: 200000, NZBURL: "http://example.invalid/getnzb/film", Fingerprint: "fp",
+	}}))
+
+	m.mu.Lock()
+	m.deleting[mv.ID] = true
+	m.mu.Unlock()
+	m.startQueued()
+
+	m.mu.Lock()
+	_, running := m.active[mv.ID]
+	m.mu.Unlock()
+	if running {
+		t.Error("a download started for a movie that is being deleted")
+	}
+}
+
 func must(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
