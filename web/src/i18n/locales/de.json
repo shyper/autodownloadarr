@@ -99,14 +99,18 @@
     "continueSetup": "Einrichtung fortsetzen",
     "downloads": "Downloads",
     "noDownloads": "Gerade wird nichts geladen.",
-    "system": {
-      "title": "System",
-      "version": "Version"
-    },
-    "openSeries": "Öffnen",
-    "seriesSummary_one": "{{count}} Serie, {{ready}} Folgen bereit",
-    "seriesSummary_other": "{{count}} Serien, {{ready}} Folgen bereit",
-    "allDownloads": "Alle Downloads"
+    "allDownloads": "Alle Downloads",
+    "open": "Öffnen",
+    "moviesReady_one": "{{count}} bereit",
+    "moviesReady_other": "{{count}} bereit",
+    "loading_one": "{{count}} lädt",
+    "loading_other": "{{count}} laden",
+    "problems_one": "{{count}} Problem",
+    "problems_other": "{{count}} Probleme",
+    "seriesCount_one": "{{count}} Serie",
+    "seriesCount_other": "{{count}} Serien",
+    "noMovies": "Noch keine Filme angefragt.",
+    "noSeries": "Noch keine Serien angefragt."
   },
   "movies": {
     "title": "Filme",
@@ -160,7 +164,10 @@
       "passworded": "passwortgeschützt",
       "blocklisted": "Gesperrt",
       "ok": "Passend",
-      "download": "Laden"
+      "download": "Laden",
+      "loaded": "Geladen",
+      "loading": "Lädt gerade",
+      "failed": "Fehlgeschlagen"
     },
     "attempts": {
       "title": "Verlauf",
@@ -363,6 +370,10 @@
       "new": "Neues Passwort",
       "hits_one": "{{count}} Treffer",
       "hits_other": "{{count}} Treffer"
+    },
+    "system": {
+      "title": "System",
+      "version": "Version"
     }
   },
   "account": {

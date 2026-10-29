@@ -99,14 +99,18 @@
     "continueSetup": "Continue setup",
     "downloads": "Downloads",
     "noDownloads": "Nothing is downloading right now.",
-    "system": {
-      "title": "System",
-      "version": "Version"
-    },
-    "openSeries": "Open",
-    "seriesSummary_one": "{{count}} series, {{ready}} episodes ready",
-    "seriesSummary_other": "{{count}} series, {{ready}} episodes ready",
-    "allDownloads": "All downloads"
+    "allDownloads": "All downloads",
+    "open": "Open",
+    "moviesReady_one": "{{count}} ready",
+    "moviesReady_other": "{{count}} ready",
+    "loading_one": "{{count}} loading",
+    "loading_other": "{{count}} loading",
+    "problems_one": "{{count}} problem",
+    "problems_other": "{{count}} problems",
+    "seriesCount_one": "{{count}} series",
+    "seriesCount_other": "{{count}} series",
+    "noMovies": "No movies requested yet.",
+    "noSeries": "No series requested yet."
   },
   "movies": {
     "title": "Movies",
@@ -160,7 +164,10 @@
       "passworded": "password protected",
       "blocklisted": "Blocklisted",
       "ok": "Acceptable",
-      "download": "Download"
+      "download": "Download",
+      "loaded": "Loaded",
+      "loading": "Downloading",
+      "failed": "Failed"
     },
     "attempts": {
       "title": "History",
@@ -363,6 +370,10 @@
       "new": "New password",
       "hits_one": "{{count}} hit",
       "hits_other": "{{count}} hits"
+    },
+    "system": {
+      "title": "System",
+      "version": "Version"
     }
   },
   "account": {

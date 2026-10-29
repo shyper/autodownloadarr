@@ -1,38 +1,24 @@
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { useOnboarding } from '../api/config'
-import { useMe, useSystemStatus, useWarnings } from '../api/hooks'
+import { useMe, useWarnings } from '../api/hooks'
 import { useDownloads, useMovies } from '../api/movies'
 import { useEpisodeDownloads, useSeriesList } from '../api/series'
-import type { EpisodeDownload, MovieState } from '../api/types'
-import { DownloadProgress } from '../components/MovieBits'
-import { Alert, Card } from '../components/ui'
+import type { EpisodeDownload } from '../api/types'
+import { DownloadProgress, WatchProgress } from '../components/MovieBits'
+import { Alert, Badge, Card } from '../components/ui'
 
-const counted: MovieState[] = ['downloading', 'available', 'watched', 'waiting', 'failed']
+const code = (season: number, episode: number) => `S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')}`
 
 export function DashboardPage() {
   const { t } = useTranslation()
   const { data: user } = useMe()
-  const { data: status } = useSystemStatus()
   const onboarding = useOnboarding(user?.role === 'admin')
   const warnings = useWarnings()
-  const movies = useMovies()
-  const downloads = useDownloads()
-  const series = useSeriesList()
-  const episodeDownloads = useEpisodeDownloads()
-  const readyEpisodes = series.data?.reduce((n, s) => n + (s.counts.available ?? 0), 0) ?? 0
-
-  const count = (s: MovieState) => movies.data?.filter((m) => m.state === s).length ?? 0
-  const titleOf = (id: number) => movies.data?.find((m) => m.id === id)?.title ?? ''
-  const episodeLabel = (d: EpisodeDownload) =>
-    `${series.data?.find((s) => s.id === d.seriesId)?.title ?? ''} · S${String(d.season).padStart(2, '0')}E${String(d.episode).padStart(2, '0')}`
-  const active = [
-    ...(downloads.data ?? []).map((d) => ({ key: `m${d.movieId}`, to: `/movies/${d.movieId}`, label: titleOf(d.movieId), download: d })),
-    ...(episodeDownloads.data ?? []).map((d) => ({ key: `e${d.episodeId}`, to: `/series/${d.seriesId}`, label: episodeLabel(d), download: d })),
-  ]
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold">{t('dashboard.greeting', { name: user?.username })}</h1>
         <p className="text-sm text-muted">{t('dashboard.subtitle')}</p>
@@ -51,61 +37,156 @@ export function DashboardPage() {
         </Card>
       )}
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
-        {counted.map((s) => (
-          <Link key={s} to="/movies">
-            <Card className="space-y-1 p-4 hover:border-accent/50">
-              <p className="text-2xl font-semibold">{count(s)}</p>
-              <p className="text-xs text-muted">{t(`movies.state.${s}`)}</p>
-            </Card>
-          </Link>
-        ))}
-      </div>
-
-      <Card className="space-y-4">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="font-semibold">{t('dashboard.downloads')}</h2>
-          <Link to="/downloads" className="text-sm text-accent hover:underline">
-            {t('dashboard.allDownloads')}
-          </Link>
-        </div>
-        {active.length ? (
-          <ul className="space-y-4">
-            {active.map((a) => (
-              <li key={a.key} className="space-y-1">
-                <Link to={a.to} className="text-sm font-medium hover:underline">
-                  {a.label}
-                </Link>
-                <p className="font-mono text-xs break-all text-muted">{a.download.releaseTitle}</p>
-                <DownloadProgress download={a.download} />
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-muted">{t('dashboard.noDownloads')}</p>
-        )}
-      </Card>
-
       <div className="grid gap-4 md:grid-cols-2">
-        <Card className="space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="font-semibold">{t('nav.series')}</h2>
-            <Link to="/series" className="text-sm text-accent hover:underline">
-              {t('dashboard.openSeries')}
-            </Link>
-          </div>
-          <p className="text-sm text-muted">
-            {t('dashboard.seriesSummary', { count: series.data?.length ?? 0, ready: readyEpisodes })}
-          </p>
-        </Card>
-        <Card className="space-y-2">
-          <h2 className="font-semibold">{t('dashboard.system.title')}</h2>
-          <dl className="grid grid-cols-2 gap-y-1 text-sm">
-            <dt className="text-muted">{t('dashboard.system.version')}</dt>
-            <dd className="font-mono">{status?.version}</dd>
-          </dl>
-        </Card>
+        <MoviesCard />
+        <SeriesCard />
       </div>
+
+      <DownloadsCard />
     </div>
+  )
+}
+
+/** A dashboard card: title with a link, a line of figures and a list. */
+function SummaryCard({ title, to, figures, children }: { title: string; to: string; figures: ReactNode; children?: ReactNode }) {
+  const { t } = useTranslation()
+  return (
+    <Card className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="font-semibold">{title}</h2>
+        <Link to={to} className="text-sm text-accent hover:underline">
+          {t('dashboard.open')}
+        </Link>
+      </div>
+      <div className="flex flex-wrap gap-2">{figures}</div>
+      {children}
+    </Card>
+  )
+}
+
+function MoviesCard() {
+  const { t } = useTranslation()
+  const movies = useMovies()
+  const list = movies.data ?? []
+  const count = (...states: string[]) => list.filter((m) => states.includes(m.state)).length
+  const ready = count('available')
+  const loading = count('downloading', 'queued', 'searching')
+  const problems = count('failed', 'waiting')
+  const watching = list.filter((m) => m.state === 'available' && m.progress > 0 && m.progress < 1)
+
+  return (
+    <SummaryCard
+      title={t('nav.movies')}
+      to="/movies"
+      figures={
+        list.length === 0 ? (
+          <span className="text-sm text-muted">{t('dashboard.noMovies')}</span>
+        ) : (
+          <>
+            <Badge tone="ok">{t('dashboard.moviesReady', { count: ready })}</Badge>
+            {loading > 0 && <Badge>{t('dashboard.loading', { count: loading })}</Badge>}
+            {problems > 0 && <Badge tone="danger">{t('dashboard.problems', { count: problems })}</Badge>}
+          </>
+        )
+      }
+    >
+      {watching.length > 0 && (
+        <ul className="space-y-3 border-t border-line pt-3">
+          {watching.slice(0, 3).map((m) => (
+            <li key={m.id} className="space-y-1">
+              <Link to={`/movies/${m.id}`} className="text-sm font-medium hover:underline">
+                {m.title} {m.year > 0 && <span className="text-muted">({m.year})</span>}
+              </Link>
+              <WatchProgress progress={m.progress} runtime={m.runtime} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </SummaryCard>
+  )
+}
+
+function SeriesCard() {
+  const { t } = useTranslation()
+  const series = useSeriesList()
+  const list = series.data ?? []
+  const sum = (state: 'available' | 'downloading' | 'queued' | 'searching' | 'failed') =>
+    list.reduce((n, s) => n + (s.counts[state] ?? 0), 0)
+  const ready = sum('available')
+  const loading = sum('downloading') + sum('queued') + sum('searching')
+  const problems = sum('failed')
+  const watching = list.filter((s) => s.current && s.current.progress > 0 && s.current.progress < 1)
+
+  return (
+    <SummaryCard
+      title={t('nav.series')}
+      to="/series"
+      figures={
+        list.length === 0 ? (
+          <span className="text-sm text-muted">{t('dashboard.noSeries')}</span>
+        ) : (
+          <>
+            <Badge tone="muted">{t('dashboard.seriesCount', { count: list.length })}</Badge>
+            <Badge tone="ok">{t('series.ready', { count: ready })}</Badge>
+            {loading > 0 && <Badge>{t('dashboard.loading', { count: loading })}</Badge>}
+            {problems > 0 && <Badge tone="danger">{t('dashboard.problems', { count: problems })}</Badge>}
+          </>
+        )
+      }
+    >
+      {watching.length > 0 && (
+        <ul className="space-y-3 border-t border-line pt-3">
+          {watching.slice(0, 3).map((s) => (
+            <li key={s.id} className="space-y-1">
+              <Link to={`/series/${s.id}`} className="text-sm font-medium hover:underline">
+                {s.title} · {code(s.current!.season, s.current!.episode)}
+              </Link>
+              <WatchProgress progress={s.current!.progress} runtime={0} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </SummaryCard>
+  )
+}
+
+/** Running downloads of movies and episodes. */
+function DownloadsCard() {
+  const { t } = useTranslation()
+  const movies = useMovies()
+  const series = useSeriesList()
+  const downloads = useDownloads()
+  const episodeDownloads = useEpisodeDownloads()
+  const titleOf = (id: number) => movies.data?.find((m) => m.id === id)?.title ?? ''
+  const episodeLabel = (d: EpisodeDownload) => `${series.data?.find((s) => s.id === d.seriesId)?.title ?? ''} · ${code(d.season, d.episode)}`
+  const active = [
+    ...(downloads.data ?? []).map((d) => ({ key: `m${d.movieId}`, to: `/movies/${d.movieId}`, label: titleOf(d.movieId), download: d })),
+    ...(episodeDownloads.data ?? []).map((d) => ({ key: `e${d.episodeId}`, to: `/series/${d.seriesId}`, label: episodeLabel(d), download: d })),
+  ]
+
+  return (
+    <Card className="space-y-4">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="font-semibold">{t('dashboard.downloads')}</h2>
+        <Link to="/downloads" className="text-sm text-accent hover:underline">
+          {t('dashboard.allDownloads')}
+        </Link>
+      </div>
+      {active.length ? (
+        <ul className="space-y-4">
+          {active.map((a) => (
+            <li key={a.key} className="space-y-1">
+              <Link to={a.to} className="text-sm font-medium hover:underline">
+                {a.label}
+              </Link>
+              <p className="font-mono text-xs break-all text-muted">{a.download.releaseTitle}</p>
+              <DownloadProgress download={a.download} />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sm text-muted">{t('dashboard.noDownloads')}</p>
+      )}
+    </Card>
   )
 }

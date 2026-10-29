@@ -11,10 +11,11 @@ import {
   useSkipRelease,
 } from '../api/movies'
 import type { MovieDetail } from '../api/types'
-import { DownloadProgress, Poster, Problem, Rejection, StateBadge, WatchProgress } from '../components/MovieBits'
+import { DownloadProgress, Poster, Problem, ReleaseStatus, StateBadge, WatchProgress } from '../components/MovieBits'
 import { Alert, Badge, Button, Card, SectionTitle, Spinner } from '../components/ui'
 import { formatBytes, formatDateTime } from '../format'
 import { errorMessage } from '../i18n'
+import { releaseMark, releaseRowTone } from '../releases'
 
 export function MovieDetailPage() {
   const { id } = useParams()
@@ -153,8 +154,10 @@ function Detail({ m }: { m: MovieDetail }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
-                {m.releases.map((r) => (
-                  <tr key={r.id} className={r.rejected || r.blocklisted ? 'text-muted' : ''}>
+                {m.releases.map((r) => {
+                  const mark = releaseMark(r, m, m.attempts)
+                  return (
+                  <tr key={r.id} className={releaseRowTone(r, mark)}>
                     <td className="py-2 pr-3">
                       <p className="font-mono text-xs break-all">{r.title}</p>
                       <p className="text-xs text-muted">
@@ -165,21 +168,18 @@ function Detail({ m }: { m: MovieDetail }) {
                     <td className="py-2 pr-3 whitespace-nowrap">{formatBytes(r.size)}</td>
                     <td className="py-2 pr-3">{r.rejected ? '–' : r.score}</td>
                     <td className="py-2 pr-3 text-xs">
-                      {r.blocklisted ? (
-                        <Badge tone="danger">{t('movies.releases.blocklisted')}</Badge>
-                      ) : r.rejected ? (
-                        <Rejection value={r.rejected} />
-                      ) : (
-                        <Badge tone="ok">{t('movies.releases.ok')}</Badge>
-                      )}
+                      <ReleaseStatus r={r} mark={mark} />
                     </td>
                     <td className="py-2 text-right">
-                      <Button variant="ghost" loading={pick.isPending && pick.variables?.releaseId === r.id} onClick={() => pick.mutate({ id: m.id, releaseId: r.id })}>
-                        {t('movies.releases.download')}
-                      </Button>
+                      {mark?.kind !== 'loaded' && mark?.kind !== 'loading' && (
+                        <Button variant="ghost" loading={pick.isPending && pick.variables?.releaseId === r.id} onClick={() => pick.mutate({ id: m.id, releaseId: r.id })}>
+                          {t('movies.releases.download')}
+                        </Button>
+                      )}
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>

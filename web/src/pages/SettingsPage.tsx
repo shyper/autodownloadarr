@@ -7,7 +7,8 @@ import { PlexSettings } from '../components/settings/PlexSettings'
 import { ProfileSettings } from '../components/settings/ProfileSettings'
 import { TmdbForm } from '../components/settings/TmdbForm'
 import { UsenetSettings } from '../components/settings/UsenetSettings'
-import { Card } from '../components/ui'
+import { useSystemStatus } from '../api/hooks'
+import { Card, SectionTitle } from '../components/ui'
 
 const tabs = ['general', 'usenet', 'indexers', 'plex', 'profile', 'passwords'] as const
 type Tab = (typeof tabs)[number]
@@ -43,6 +44,9 @@ export function SettingsPage() {
               <Card>
                 <TmdbForm />
               </Card>
+              <Card>
+                <SystemInfo />
+              </Card>
             </>
           )}
           {tab === 'usenet' && (
@@ -72,6 +76,20 @@ export function SettingsPage() {
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+function SystemInfo() {
+  const { t } = useTranslation()
+  const { data: status } = useSystemStatus()
+  return (
+    <div className="space-y-3">
+      <SectionTitle title={t('settings.system.title')} />
+      <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
+        <dt className="text-muted">{t('settings.system.version')}</dt>
+        <dd className="font-mono">{status?.version}</dd>
+      </dl>
     </div>
   )
 }

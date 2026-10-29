@@ -13,7 +13,8 @@ import {
   useUpdateSeries,
 } from '../api/series'
 import type { DeleteTrigger, Episode, EpisodeState, SeasonInfo, SeriesDetail } from '../api/types'
-import { DownloadProgress, Poster, Problem, Rejection, StateBadge, WatchProgress } from '../components/MovieBits'
+import { DownloadProgress, Poster, Problem, ReleaseStatus, StateBadge, WatchProgress } from '../components/MovieBits'
+import { releaseMark, releaseTone } from '../releases'
 import { SeasonPicker } from '../components/SeasonPicker'
 import { TriggerFields } from '../components/TriggerFields'
 import { Alert, Badge, Button, Card, Checkbox, Spinner } from '../components/ui'
@@ -313,31 +314,30 @@ function EpisodeDetails({ e }: { e: Episode }) {
             <p className="text-muted">{t('movies.releases.none')}</p>
           ) : (
             <ul className="space-y-2">
-              {ep.data.releases.map((r) => (
-                <li key={r.id} className={`space-y-2 rounded-lg border border-line bg-surface p-3 ${r.rejected || r.blocklisted ? 'text-muted' : ''}`}>
-                  <p className="line-clamp-2 font-mono text-xs break-all" title={r.title}>
-                    {r.title}
-                  </p>
-                  <div className="flex flex-wrap items-center gap-2 text-xs">
-                    <span>{formatBytes(r.size)}</span>
-                    {r.blocklisted ? (
-                      <Badge tone="danger">{t('movies.releases.blocklisted')}</Badge>
-                    ) : r.rejected ? (
-                      <Rejection value={r.rejected} />
-                    ) : (
-                      <Badge tone="ok">{t('movies.releases.ok')}</Badge>
+              {ep.data.releases.map((r) => {
+                const mark = releaseMark(r, e, ep.data.attempts)
+                return (
+                  <li key={r.id} className={`space-y-2 rounded-lg border bg-surface p-3 ${releaseTone(r, mark)}`}>
+                    <p className="line-clamp-2 font-mono text-xs break-all" title={r.title}>
+                      {r.title}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      <span>{formatBytes(r.size)}</span>
+                      <ReleaseStatus r={r} mark={mark} />
+                    </div>
+                    {mark?.kind !== 'loaded' && mark?.kind !== 'loading' && (
+                      <Button
+                        variant="ghost"
+                        className="w-full sm:w-auto"
+                        loading={pick.isPending && pick.variables?.releaseId === r.id}
+                        onClick={() => pick.mutate({ id: e.id, releaseId: r.id })}
+                      >
+                        {t('movies.releases.download')}
+                      </Button>
                     )}
-                  </div>
-                  <Button
-                    variant="ghost"
-                    className="w-full sm:w-auto"
-                    loading={pick.isPending && pick.variables?.releaseId === r.id}
-                    onClick={() => pick.mutate({ id: e.id, releaseId: r.id })}
-                  >
-                    {t('movies.releases.download')}
-                  </Button>
-                </li>
-              ))}
+                  </li>
+                )
+              })}
             </ul>
           )}
           {ep.data.attempts.length > 0 && (

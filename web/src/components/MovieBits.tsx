@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
-import type { Download, EpisodeState, Progress } from '../api/types'
+import type { Download, EpisodeState, Progress, Release } from '../api/types'
+import type { ReleaseMark } from '../releases'
 import { formatBytes } from '../format'
 import { Badge, ProgressBar, type BadgeTone } from './ui'
 
@@ -77,6 +78,27 @@ export function DownloadProgress({ download }: { download: Pick<Download, 'progr
       </p>
     </div>
   )
+}
+
+/** The status of a release: its mark if it has one, else the verdict of the profile. */
+export function ReleaseStatus({ r, mark }: { r: Release; mark: ReleaseMark }) {
+  const { t } = useTranslation()
+  if (mark?.kind === 'loaded') return <Badge tone="ok">{t('movies.releases.loaded')}</Badge>
+  if (mark?.kind === 'loading') return <Badge tone="accent">{t('movies.releases.loading')}</Badge>
+  if (mark?.kind === 'failed')
+    return (
+      <span className="inline-flex flex-wrap items-center gap-1">
+        <Badge tone="danger">{t('movies.releases.failed')}</Badge>
+        {mark.errorKind && (
+          <span className="text-muted">
+            <Problem value={mark.errorKind} />
+          </span>
+        )}
+      </span>
+    )
+  if (r.blocklisted) return <Badge tone="danger">{t('movies.releases.blocklisted')}</Badge>
+  if (r.rejected) return <Rejection value={r.rejected} />
+  return <Badge tone="muted">{t('movies.releases.ok')}</Badge>
 }
 
 /** How far a title has been watched, with the time left. */
