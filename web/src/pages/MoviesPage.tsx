@@ -136,6 +136,9 @@ function MovieCard({ movie }: { movie: Movie }) {
         <p className="line-clamp-2 text-sm font-medium">
           {movie.title} {movie.year > 0 && <span className="text-muted">({movie.year})</span>}
         </p>
+        {movie.requestedByName && (
+          <p className="truncate text-xs text-muted">{t('movies.requestedBy', { name: movie.requestedByName })}</p>
+        )}
         <div className="flex flex-wrap gap-1">
           <StateBadge state={movie.state} />
           {movie.keep && <Badge tone="ok">{t('movies.kept')}</Badge>}

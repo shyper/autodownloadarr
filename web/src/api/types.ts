@@ -147,6 +147,8 @@ export type Movie = {
   runtime: number
   state: MovieState
   keep: boolean
+  requestedBy?: number
+  requestedByName?: string
   attempts: number
   lastError: string
   nextSearchAt?: string
@@ -258,6 +260,8 @@ export type Series = {
   futureSeasons: boolean
   knownSeasons: number
   windowSize: number
+  requestedBy?: number
+  requestedByName?: string
   deleteTrigger: DeleteTrigger
   triggerValue: number
   keep: boolean

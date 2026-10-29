@@ -71,6 +71,12 @@ function Detail({ m }: { m: MovieDetail }) {
           </div>
           {error && <Alert>{errorMessage(t, error)}</Alert>}
           <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
+            {m.requestedByName && (
+              <>
+                <dt className="text-muted">{t('movies.requestedByLabel')}</dt>
+                <dd>{m.requestedByName}</dd>
+              </>
+            )}
             {m.releaseTitle && (
               <>
                 <dt className="text-muted">{t('movies.release')}</dt>

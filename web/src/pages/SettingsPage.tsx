@@ -8,16 +8,19 @@ import { PlexSettings } from '../components/settings/PlexSettings'
 import { ProfileSettings } from '../components/settings/ProfileSettings'
 import { TmdbForm } from '../components/settings/TmdbForm'
 import { UsenetSettings } from '../components/settings/UsenetSettings'
-import { useSystemStatus } from '../api/hooks'
+import { UserSettings } from '../components/settings/UserSettings'
+import { useMe, useSystemStatus } from '../api/hooks'
 import { Card, SectionTitle } from '../components/ui'
 
-const tabs = ['general', 'usenet', 'indexers', 'plex', 'notifications', 'profile', 'passwords'] as const
+const tabs = ['general', 'users', 'usenet', 'indexers', 'plex', 'notifications', 'profile', 'passwords'] as const
 type Tab = (typeof tabs)[number]
 
 export function SettingsPage() {
   const { t } = useTranslation()
   const { tab } = useParams()
+  const { data: user } = useMe()
   if (!tabs.includes(tab as Tab)) return <Navigate to="/settings/general" replace />
+  if (user && user.role !== 'admin') return <Navigate to="/" replace />
 
   return (
     <div className="space-y-6">
@@ -49,6 +52,11 @@ export function SettingsPage() {
                 <SystemInfo />
               </Card>
             </>
+          )}
+          {tab === 'users' && (
+            <Card>
+              <UserSettings />
+            </Card>
           )}
           {tab === 'usenet' && (
             <Card>

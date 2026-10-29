@@ -18,6 +18,10 @@ export function AccountPage() {
           <dd>{user.username}</dd>
           <dt className="text-muted">{t('account.role')}</dt>
           <dd>{t(`account.roles.${user.role}`)}</dd>
+          <dt className="text-muted">{t('account.quotaRequests')}</dt>
+          <dd>{user.quotaRequests > 0 ? user.quotaRequests : t('account.unlimited')}</dd>
+          <dt className="text-muted">{t('account.quotaGb')}</dt>
+          <dd>{user.quotaGb > 0 ? `${user.quotaGb} GB` : t('account.unlimited')}</dd>
           <dt className="text-muted">{t('account.memberSince')}</dt>
           <dd>{new Date(user.createdAt).toLocaleDateString(i18n.resolvedLanguage)}</dd>
         </dl>

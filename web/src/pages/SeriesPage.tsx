@@ -173,6 +173,9 @@ function SeriesCard({ series }: { series: Series }) {
         <p className="line-clamp-2 text-sm font-medium">
           {series.title} {series.year > 0 && <span className="text-muted">({series.year})</span>}
         </p>
+        {series.requestedByName && (
+          <p className="truncate text-xs text-muted">{t('series.requestedBy', { name: series.requestedByName })}</p>
+        )}
         <div className="flex flex-wrap gap-1">
           <Badge tone="ok">{t('series.ready', { count: ready })}</Badge>
           {loading > 0 && <Badge>{t('series.loading', { count: loading })}</Badge>}

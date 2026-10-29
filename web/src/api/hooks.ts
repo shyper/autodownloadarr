@@ -8,8 +8,27 @@ export type User = {
   id: number
   username: string
   role: Role
+  /** 0 = unlimited */
+  quotaRequests: number
+  /** GB, 0 = unlimited */
+  quotaGb: number
   createdAt: string
   lastLoginAt?: string
+}
+
+export type NewUser = {
+  username: string
+  password: string
+  role: Role
+  quotaRequests: number
+  quotaGb: number
+}
+
+export type UserChange = {
+  id: number
+  role: Role
+  quotaRequests: number
+  quotaGb: number
 }
 
 export type SystemStatus = {
@@ -92,5 +111,49 @@ export function useChangePassword() {
   return useMutation({
     mutationFn: (body: { currentPassword: string; newPassword: string }) =>
       api<void>('/auth/password', { method: 'POST', body }),
+  })
+}
+
+export const userKeys = {
+  all: ['users'] as const,
+}
+
+/** All accounts (administrators only). */
+export function useUsers(enabled = true) {
+  return useQuery({
+    queryKey: userKeys.all,
+    queryFn: ({ signal }) => api<User[]>('/users', { signal }),
+    enabled,
+  })
+}
+
+export function useCreateUser() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: NewUser) => api<User>('/users', { method: 'POST', body }),
+    onSettled: () => qc.invalidateQueries({ queryKey: userKeys.all }),
+  })
+}
+
+export function useUpdateUser() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }: UserChange) => api<User>(`/users/${id}`, { method: 'PUT', body }),
+    onSettled: () => qc.invalidateQueries({ queryKey: userKeys.all }),
+  })
+}
+
+export function useDeleteUser() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => api<void>(`/users/${id}`, { method: 'DELETE' }),
+    onSettled: () => qc.invalidateQueries({ queryKey: userKeys.all }),
+  })
+}
+
+export function useResetUserPassword() {
+  return useMutation({
+    mutationFn: ({ id, newPassword }: { id: number; newPassword: string }) =>
+      api<void>(`/users/${id}/password`, { method: 'POST', body: { newPassword } }),
   })
 }

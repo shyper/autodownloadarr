@@ -84,6 +84,9 @@ function Header({ s }: { s: SeriesDetail }) {
             )}
           </div>
         )}
+        {s.requestedByName && (
+          <p className="text-xs text-muted">{t('series.requestedBy', { name: s.requestedByName })}</p>
+        )}
       </div>
     </div>
   )
