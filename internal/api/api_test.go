@@ -77,8 +77,9 @@ func newEnvWith(t *testing.T, configure func(*movies.Services)) *env {
 		Version:    "test",
 		Done:       done,
 		Static: fstest.MapFS{
-			"index.html":       {Data: []byte("<!doctype html><title>AutoDownloadarr</title>")},
-			"assets/app-1a.js": {Data: []byte("console.log(1)")},
+			"index.html":           {Data: []byte("<!doctype html><title>AutoDownloadarr</title>")},
+			"assets/app-1a.js":     {Data: []byte("console.log(1)")},
+			"manifest.webmanifest": {Data: []byte(`{"name":"AutoDownloadarr"}`)},
 		},
 	})
 	srv := httptest.NewServer(h)
@@ -325,6 +326,9 @@ func TestStaticFiles(t *testing.T) {
 	}
 	if resp.Header.Get("Content-Security-Policy") == "" {
 		t.Error("security headers missing")
+	}
+	if resp, _ := get("/manifest.webmanifest"); resp.Header.Get("Content-Type") != "application/manifest+json" {
+		t.Errorf("manifest content type %q", resp.Header.Get("Content-Type"))
 	}
 }
 

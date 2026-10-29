@@ -22,6 +22,9 @@ func spaHandler(fsys fs.FS) http.Handler {
 					// Vite puts a content hash into every asset file name.
 					w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 				}
+				if path.Ext(name) == ".webmanifest" {
+					w.Header().Set("Content-Type", "application/manifest+json") // unknown to Go's MIME table
+				}
 				files.ServeHTTP(w, r)
 				return
 			}

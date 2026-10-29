@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react'
+import { useId, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from 'react'
 
 const cx = (...classes: (string | false | undefined)[]) => classes.filter(Boolean).join(' ')
 
@@ -158,18 +158,21 @@ export function Spinner({ className = 'size-5' }: { className?: string }) {
   )
 }
 
+/** The app icon: a download arrow in a progress ring on a blue-green tile. */
 export function Logo({ className = 'size-8' }: { className?: string }) {
+  const id = useId()
   return (
-    <svg className={className} viewBox="0 0 32 32" aria-hidden="true">
-      <rect width="32" height="32" rx="8" className="fill-accent" />
-      <path
-        d="M16 7v12m0 0-5-5m5 5 5-5M9 24h14"
-        fill="none"
-        stroke="white"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+    <svg className={className} viewBox="0 0 48 48" aria-hidden="true">
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#0ea5e9" />
+          <stop offset="1" stopColor="#10b981" />
+        </linearGradient>
+      </defs>
+      <rect width="48" height="48" rx="12" fill={`url(#${id})`} />
+      <circle cx="24" cy="24" r="13" fill="none" stroke="#fff" strokeOpacity=".35" strokeWidth="4" />
+      <circle cx="24" cy="24" r="13" fill="none" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeDasharray="57 82" transform="rotate(-90 24 24)" />
+      <path d="M24 17.5v12m-5-5 5 5 5-5" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }

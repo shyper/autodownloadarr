@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/images/banner.svg" alt="AutoDownloadarr" width="720"></p>
+
 # AutoDownloadarr
 
 **Watch once, then let it go.** AutoDownloadarr fetches movies and series from
