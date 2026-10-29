@@ -46,11 +46,15 @@ const sessionTouchInterval = time.Hour
 
 // User is an account as exposed to the rest of the application.
 type User struct {
-	ID          int64      `json:"id"`
-	Username    string     `json:"username"`
-	Role        Role       `json:"role"`
-	CreatedAt   time.Time  `json:"createdAt"`
-	LastLoginAt *time.Time `json:"lastLoginAt,omitempty"`
+	ID       int64  `json:"id"`
+	Username string `json:"username"`
+	Role     Role   `json:"role"`
+	// QuotaRequests and QuotaGB limit what the user may request (0: no
+	// limit). The API enforces them when a new request is added.
+	QuotaRequests int        `json:"quotaRequests"`
+	QuotaGB       int        `json:"quotaGb"`
+	CreatedAt     time.Time  `json:"createdAt"`
+	LastLoginAt   *time.Time `json:"lastLoginAt,omitempty"`
 }
 
 // Session is a login session. The token itself is never stored.
@@ -162,9 +166,9 @@ func (s *Service) Authenticate(ctx context.Context, username, password string) (
 		lastLogin sql.NullInt64
 	)
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, username, role, password_hash, created_at, last_login_at FROM users WHERE username = ?`,
+		`SELECT id, username, role, quota_requests, quota_gb, password_hash, created_at, last_login_at FROM users WHERE username = ?`,
 		username,
-	).Scan(&u.ID, &u.Username, &u.Role, &hash, &createdAt, &lastLogin)
+	).Scan(&u.ID, &u.Username, &u.Role, &u.QuotaRequests, &u.QuotaGB, &hash, &createdAt, &lastLogin)
 	if errors.Is(err, sql.ErrNoRows) {
 		_, _ = VerifyPassword(password, s.dummyHash)
 		return User{}, ErrInvalidCredentials
@@ -226,10 +230,10 @@ func (s *Service) ValidateSession(ctx context.Context, token string) (User, Sess
 		lastLogin                      sql.NullInt64
 	)
 	err := s.db.QueryRowContext(ctx, `
-		SELECT s.id, s.expires_at, s.last_seen_at, u.id, u.username, u.role, u.created_at, u.last_login_at
+		SELECT s.id, s.expires_at, s.last_seen_at, u.id, u.username, u.role, u.quota_requests, u.quota_gb, u.created_at, u.last_login_at
 		FROM sessions s JOIN users u ON u.id = s.user_id
 		WHERE s.token_hash = ?`, hashToken(token),
-	).Scan(&sess.ID, &expiresAt, &lastSeen, &u.ID, &u.Username, &u.Role, &createdAt, &lastLogin)
+	).Scan(&sess.ID, &expiresAt, &lastSeen, &u.ID, &u.Username, &u.Role, &u.QuotaRequests, &u.QuotaGB, &createdAt, &lastLogin)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, Session{}, ErrInvalidSession
 	}

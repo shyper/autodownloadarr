@@ -10,9 +10,10 @@ import (
 
 // Errors returned by the user management methods.
 var (
-	ErrUserExists  = errors.New("username is already taken")
-	ErrInvalidRole = errors.New("role must be admin or user")
-	ErrLastAdmin   = errors.New("the last administrator cannot be removed")
+	ErrUserExists   = errors.New("username is already taken")
+	ErrInvalidRole  = errors.New("role must be admin or user")
+	ErrLastAdmin    = errors.New("the last administrator cannot be removed")
+	ErrInvalidQuota = errors.New("quotas must not be negative")
 )
 
 // ValidRole reports whether role is one of the known roles.
@@ -21,7 +22,7 @@ func ValidRole(role Role) bool { return role == RoleAdmin || role == RoleUser }
 // Users lists all accounts, sorted by name.
 func (s *Service) Users(ctx context.Context) ([]User, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, username, role, created_at, last_login_at FROM users ORDER BY username COLLATE NOCASE`)
+		`SELECT id, username, role, quota_requests, quota_gb, created_at, last_login_at FROM users ORDER BY username COLLATE NOCASE`)
 	if err != nil {
 		return nil, err
 	}
@@ -40,7 +41,7 @@ func (s *Service) Users(ctx context.Context) ([]User, error) {
 // User returns one account.
 func (s *Service) User(ctx context.Context, id int64) (User, error) {
 	u, err := scanUser(s.db.QueryRowContext(ctx,
-		`SELECT id, username, role, created_at, last_login_at FROM users WHERE id = ?`, id))
+		`SELECT id, username, role, quota_requests, quota_gb, created_at, last_login_at FROM users WHERE id = ?`, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, ErrUserNotFound
 	}
@@ -117,6 +118,26 @@ func (s *Service) UpdateRole(ctx context.Context, id int64, role Role) (User, er
 	return s.User(ctx, id)
 }
 
+// SetQuotas changes the optional limits of an account. Zero disables a
+// limit.
+func (s *Service) SetQuotas(ctx context.Context, id int64, requests, gb int) (User, error) {
+	if requests < 0 || gb < 0 {
+		return User{}, ErrInvalidQuota
+	}
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE users SET quota_requests = ?, quota_gb = ?, updated_at = ? WHERE id = ?`,
+		requests, gb, s.now().UnixMilli(), id)
+	if err != nil {
+		return User{}, err
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return User{}, err
+	} else if n == 0 {
+		return User{}, ErrUserNotFound
+	}
+	return s.User(ctx, id)
+}
+
 // DeleteUser removes an account. Its sessions and requests are removed or
 // detached; the last administrator cannot be deleted.
 func (s *Service) DeleteUser(ctx context.Context, id int64) error {
@@ -176,7 +197,7 @@ func scanUser(row scanner) (User, error) {
 		createdAt int64
 		lastLogin sql.NullInt64
 	)
-	if err := row.Scan(&u.ID, &u.Username, &u.Role, &createdAt, &lastLogin); err != nil {
+	if err := row.Scan(&u.ID, &u.Username, &u.Role, &u.QuotaRequests, &u.QuotaGB, &createdAt, &lastLogin); err != nil {
 		return User{}, err
 	}
 	u.CreatedAt = time.UnixMilli(createdAt)

@@ -145,6 +145,9 @@ func (m *Manager) Request(ctx context.Context, tmdbID int, userID int64, opts Re
 	} else if !errors.Is(err, store.ErrNotFound) {
 		return store.Series{}, err
 	}
+	if err := m.store.CheckUserQuota(ctx, userID); err != nil {
+		return store.Series{}, err
+	}
 	client, err := m.svc.TMDB(ctx)
 	if err != nil {
 		return store.Series{}, err

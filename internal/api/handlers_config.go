@@ -32,6 +32,8 @@ func (s *server) writeStoreError(w http.ResponseWriter, what string, err error) 
 		writeError(w, http.StatusNotFound, "not_found", err.Error())
 	case errors.Is(err, store.ErrInvalid):
 		writeError(w, http.StatusBadRequest, "invalid_input", err.Error())
+	case errors.Is(err, store.ErrQuotaExceeded):
+		writeError(w, http.StatusConflict, "quota_exceeded", err.Error())
 	case errors.Is(err, movies.ErrNotConfigured):
 		writeError(w, http.StatusConflict, "not_configured", err.Error())
 	case errors.Is(err, httpx.ErrUnauthorized), errors.Is(err, nntp.ErrAuthFailed):

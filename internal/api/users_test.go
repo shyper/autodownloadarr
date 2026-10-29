@@ -75,8 +75,10 @@ func TestUserManagementAPI(t *testing.T) {
 	}
 
 	// Promote, reset the password and remove the second account again.
-	resp, body = e.do(t, c, "PUT", "/api/v1/users/"+itoa(bobID), map[string]string{"role": "admin"})
-	if resp.StatusCode != http.StatusOK || body["role"] != "admin" {
+	resp, body = e.do(t, c, "PUT", "/api/v1/users/"+itoa(bobID), map[string]any{
+		"role": "admin", "quotaRequests": 5, "quotaGb": 10,
+	})
+	if resp.StatusCode != http.StatusOK || body["role"] != "admin" || body["quotaRequests"] != float64(5) || body["quotaGb"] != float64(10) {
 		t.Fatalf("promote bob: %d %v", resp.StatusCode, body)
 	}
 	if resp, _ := e.do(t, c, "POST", "/api/v1/users/"+itoa(bobID)+"/password",

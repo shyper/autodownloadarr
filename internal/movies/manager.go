@@ -158,6 +158,9 @@ func (m *Manager) Request(ctx context.Context, tmdbID int, userID, profileID int
 	case !errors.Is(err, store.ErrNotFound):
 		return store.Movie{}, err
 	}
+	if err := m.store.CheckUserQuota(ctx, userID); err != nil {
+		return store.Movie{}, err
+	}
 
 	client, err := m.svc.TMDB(ctx)
 	if err != nil {

@@ -8,13 +8,17 @@ import (
 )
 
 type createUserRequest struct {
-	Username string    `json:"username"`
-	Password string    `json:"password"`
-	Role     auth.Role `json:"role"`
+	Username      string    `json:"username"`
+	Password      string    `json:"password"`
+	Role          auth.Role `json:"role"`
+	QuotaRequests *int      `json:"quotaRequests"`
+	QuotaGB       *int      `json:"quotaGb"`
 }
 
 type updateUserRequest struct {
-	Role auth.Role `json:"role"`
+	Role          auth.Role `json:"role"`
+	QuotaRequests *int      `json:"quotaRequests"`
+	QuotaGB       *int      `json:"quotaGb"`
 }
 
 type resetUserPasswordRequest struct {
@@ -40,6 +44,13 @@ func (s *server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		s.writeUserError(w, err)
 		return
 	}
+	if req.QuotaRequests != nil || req.QuotaGB != nil {
+		u, err = s.Auth.SetQuotas(r.Context(), u.ID, quotaValue(req.QuotaRequests), quotaValue(req.QuotaGB))
+		if err != nil {
+			s.writeUserError(w, err)
+			return
+		}
+	}
 	writeJSON(w, http.StatusCreated, u)
 }
 
@@ -57,6 +68,13 @@ func (s *server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.writeUserError(w, err)
 		return
+	}
+	if req.QuotaRequests != nil || req.QuotaGB != nil {
+		u, err = s.Auth.SetQuotas(r.Context(), id, quotaValue(req.QuotaRequests), quotaValue(req.QuotaGB))
+		if err != nil {
+			s.writeUserError(w, err)
+			return
+		}
 	}
 	writeJSON(w, http.StatusOK, u)
 }
@@ -91,6 +109,13 @@ func (s *server) handleResetUserPassword(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func quotaValue(v *int) int {
+	if v == nil {
+		return 0
+	}
+	return *v
+}
+
 func (s *server) writeUserError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, auth.ErrUserNotFound):
@@ -99,7 +124,8 @@ func (s *server) writeUserError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusConflict, "username_taken", err.Error())
 	case errors.Is(err, auth.ErrLastAdmin):
 		writeError(w, http.StatusConflict, "last_admin", err.Error())
-	case errors.Is(err, auth.ErrInvalidUsername), errors.Is(err, auth.ErrWeakPassword), errors.Is(err, auth.ErrInvalidRole):
+	case errors.Is(err, auth.ErrInvalidUsername), errors.Is(err, auth.ErrWeakPassword), errors.Is(err, auth.ErrInvalidRole),
+		errors.Is(err, auth.ErrInvalidQuota):
 		writeError(w, http.StatusBadRequest, "invalid_input", err.Error())
 	default:
 		s.internalError(w, "user management", err)

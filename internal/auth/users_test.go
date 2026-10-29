@@ -63,6 +63,19 @@ func TestUserManagement(t *testing.T) {
 	if _, err := svc.User(ctx, 999); !errors.Is(err, ErrUserNotFound) {
 		t.Errorf("missing user: got %v", err)
 	}
+	if _, err := svc.SetQuotas(ctx, alice.ID, -1, 0); !errors.Is(err, ErrInvalidQuota) {
+		t.Errorf("negative quota: got %v", err)
+	}
+	withQuota, err := svc.SetQuotas(ctx, alice.ID, 10, 50)
+	if err != nil {
+		t.Fatalf("SetQuotas: %v", err)
+	}
+	if withQuota.QuotaRequests != 10 || withQuota.QuotaGB != 50 {
+		t.Errorf("quotas = %+v", withQuota)
+	}
+	if u, err := svc.Authenticate(ctx, "alice", "longenough"); err != nil || u.QuotaRequests != 10 || u.QuotaGB != 50 {
+		t.Errorf("Authenticate quotas = %+v, %v", u, err)
+	}
 	if _, err := svc.UpdateRole(ctx, 999, RoleUser); !errors.Is(err, ErrUserNotFound) {
 		t.Errorf("update missing user: got %v", err)
 	}
