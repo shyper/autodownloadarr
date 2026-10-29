@@ -15,7 +15,7 @@ const empty: Partial<UsenetServer> = {
   connections: 20,
   priority: 0,
   enabled: true,
-  fullCheck: true,
+  fullCheck: false,
 }
 
 export function UsenetSettings() {
@@ -133,7 +133,7 @@ function UsenetServerForm({ initial, onDone }: { initial: Partial<UsenetServer>;
         <Checkbox
           label={t('settings.usenet.fullCheck')}
           hint={t('settings.usenet.fullCheckHint')}
-          checked={u.fullCheck ?? true}
+          checked={u.fullCheck ?? false}
           onChange={(e) => set('fullCheck', e.target.checked)}
         />
       </div>

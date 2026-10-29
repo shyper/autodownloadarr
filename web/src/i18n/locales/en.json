@@ -289,7 +289,7 @@
       "name": "Name",
       "tls": "Use SSL/TLS",
       "fullCheck": "Check completely before downloading",
-      "fullCheckHint": "Asks for every article (takes a few seconds) and only downloads releases that are complete or repairable. Off: a sample only."
+      "fullCheckHint": "Asks for every article (takes several minutes for large releases) and only downloads releases that are complete or repairable. Off: a sample only."
     },
     "indexers": {
       "title": "Indexers",

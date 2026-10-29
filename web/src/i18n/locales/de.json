@@ -289,7 +289,7 @@
       "name": "Name",
       "tls": "SSL/TLS verwenden",
       "fullCheck": "Vor dem Download vollständig prüfen",
-      "fullCheckHint": "Fragt jeden Artikel ab (dauert einige Sekunden) und lädt nur Releases, die vollständig oder reparierbar sind. Aus: nur eine Stichprobe."
+      "fullCheckHint": "Fragt jeden Artikel ab (dauert bei großen Releases mehrere Minuten) und lädt nur Releases, die vollständig oder reparierbar sind. Aus: nur eine Stichprobe."
     },
     "indexers": {
       "title": "Indexer",
