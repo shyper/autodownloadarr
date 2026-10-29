@@ -6,6 +6,7 @@ import type {
   General,
   Indexer,
   MediaServer,
+  NotificationSettings,
   Onboarding,
   PlexConfig,
   PlexLibraries,
@@ -24,6 +25,7 @@ export const configKeys = {
   plexLibraries: ['config', 'plex', 'libraries'] as const,
   profiles: ['config', 'profiles'] as const,
   passwords: ['config', 'passwords'] as const,
+  notifications: ['config', 'notifications'] as const,
   onboarding: ['config', 'onboarding'] as const,
 }
 
@@ -187,6 +189,26 @@ export function useDeletePassword() {
   return useMutation({
     mutationFn: (id: number) => api<void>(`/archive-passwords/${id}`, { method: 'DELETE' }),
     onSuccess: () => qc.invalidateQueries({ queryKey: configKeys.passwords }),
+  })
+}
+
+export function useNotification() {
+  return useQuery({ queryKey: configKeys.notifications, queryFn: () => api<NotificationSettings>('/notifications') })
+}
+
+export function useSaveNotification() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (n: NotificationSettings & { token?: string }) =>
+      api<NotificationSettings>('/notifications', { method: 'PUT', body: n }),
+    onSuccess: (n) => qc.setQueryData(configKeys.notifications, n),
+  })
+}
+
+export function useTestNotification() {
+  return useMutation({
+    mutationFn: (n: NotificationSettings & { token?: string }) =>
+      api<{ ok: boolean }>('/notifications/test', { method: 'POST', body: n }),
   })
 }
 

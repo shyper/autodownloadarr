@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shyper/autodownloadarr/internal/events"
 	"github.com/shyper/autodownloadarr/internal/indexer/newznab"
 	"github.com/shyper/autodownloadarr/internal/movies"
 	"github.com/shyper/autodownloadarr/internal/release"
@@ -245,6 +246,11 @@ func (m *Manager) fail(ctx context.Context, e store.Episode, code, detail string
 	}
 	m.log.Warn("episode needs attention", "episode", e.ID, "reason", e.LastError)
 	m.publishEpisode(e)
+	title := fmt.Sprintf("S%02dE%02d failed", e.Season, e.Episode)
+	if se, err := m.store.Series(ctx, e.SeriesID); err == nil {
+		title = fmt.Sprintf("%s S%02dE%02d failed", se.Title, e.Season, e.Episode)
+	}
+	m.notify(events.Notification{Event: "episode.failed", Title: title, Body: e.LastError})
 	m.startQueued() // later episodes no longer wait for this one
 	return nil
 }

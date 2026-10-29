@@ -24,6 +24,7 @@ import (
 	"github.com/shyper/autodownloadarr/internal/db"
 	"github.com/shyper/autodownloadarr/internal/events"
 	"github.com/shyper/autodownloadarr/internal/movies"
+	"github.com/shyper/autodownloadarr/internal/notify"
 	"github.com/shyper/autodownloadarr/internal/scheduler"
 	"github.com/shyper/autodownloadarr/internal/secrets"
 	"github.com/shyper/autodownloadarr/internal/series"
@@ -117,6 +118,7 @@ func runServer(cfg config.Config, log *slog.Logger) error {
 	}
 	limiter := auth.NewLimiter(10, 15*time.Minute)
 	bus := events.New(log)
+	notify.New(st, log).Start(ctx, bus)
 
 	sched := scheduler.New(sqldb, log)
 	sched.Every("purge-expired-sessions", time.Hour, authSvc.PurgeExpiredSessions)

@@ -352,3 +352,48 @@ func TestReleaseOrder(t *testing.T) {
 		t.Errorf("order = %v, want %s", got, want)
 	}
 }
+
+func TestNotification(t *testing.T) {
+	s, ctx := newStore(t), context.Background()
+	n, err := s.Notification(ctx)
+	if err != nil || n.Provider != "" || n.Enabled {
+		t.Fatalf("default notification = %+v, %v", n, err)
+	}
+
+	n = Notification{Enabled: true, Provider: "telegram", ChatID: "42", Token: "secret-token"}
+	if err := s.SetNotification(ctx, n); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Notification(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Enabled || got.Provider != "telegram" || got.ChatID != "42" || got.Token != "secret-token" || !got.HasToken {
+		t.Errorf("notification = %+v", got)
+	}
+
+	// An empty token keeps the stored one.
+	got.Token = ""
+	got.ChatID = "43"
+	if err := s.SetNotification(ctx, got); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := s.Notification(ctx); again.Token != "secret-token" || again.ChatID != "43" {
+		t.Errorf("after update = %+v", again)
+	}
+
+	var raw string
+	if err := s.db.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = 'notifications'`).Scan(&raw); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(raw, "secret-token") {
+		t.Errorf("token is stored in plain text: %s", raw)
+	}
+
+	if err := s.SetNotification(ctx, Notification{Provider: "webhook"}); !errors.Is(err, ErrInvalid) {
+		t.Errorf("missing URL error = %v", err)
+	}
+	if err := s.SetNotification(ctx, Notification{Provider: "carrier-pigeon"}); !errors.Is(err, ErrInvalid) {
+		t.Errorf("unknown provider error = %v", err)
+	}
+}

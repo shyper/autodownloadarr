@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { Navigate, NavLink, useParams } from 'react-router'
 import { GeneralForm } from '../components/settings/GeneralForm'
 import { IndexerSettings } from '../components/settings/IndexerSettings'
+import { NotificationSettings } from '../components/settings/NotificationSettings'
 import { PasswordSettings } from '../components/settings/PasswordSettings'
 import { PlexSettings } from '../components/settings/PlexSettings'
 import { ProfileSettings } from '../components/settings/ProfileSettings'
@@ -10,7 +11,7 @@ import { UsenetSettings } from '../components/settings/UsenetSettings'
 import { useSystemStatus } from '../api/hooks'
 import { Card, SectionTitle } from '../components/ui'
 
-const tabs = ['general', 'usenet', 'indexers', 'plex', 'profile', 'passwords'] as const
+const tabs = ['general', 'usenet', 'indexers', 'plex', 'notifications', 'profile', 'passwords'] as const
 type Tab = (typeof tabs)[number]
 
 export function SettingsPage() {
@@ -62,6 +63,11 @@ export function SettingsPage() {
           {tab === 'plex' && (
             <Card>
               <PlexSettings />
+            </Card>
+          )}
+          {tab === 'notifications' && (
+            <Card>
+              <NotificationSettings />
             </Card>
           )}
           {tab === 'profile' && (

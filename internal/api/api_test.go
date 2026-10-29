@@ -382,3 +382,47 @@ func decodeBody(resp *http.Response, dst any) error {
 	defer resp.Body.Close()
 	return json.NewDecoder(resp.Body).Decode(dst)
 }
+
+func TestNotificationSettings(t *testing.T) {
+	e := newEnv(t)
+	c := e.client(t)
+	e.completeSetup(t, c)
+
+	var got map[string]any
+	hook := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&got)
+	}))
+	defer hook.Close()
+
+	resp, body := e.do(t, c, "GET", "/api/v1/notifications", nil)
+	if resp.StatusCode != http.StatusOK || body["provider"] != "" {
+		t.Fatalf("default settings: %d %v", resp.StatusCode, body)
+	}
+
+	resp, body = e.do(t, c, "PUT", "/api/v1/notifications", map[string]any{
+		"enabled": true, "provider": "webhook", "url": hook.URL,
+	})
+	if resp.StatusCode != http.StatusOK || body["enabled"] != true || body["url"] != hook.URL {
+		t.Fatalf("save: %d %v", resp.StatusCode, body)
+	}
+	if _, ok := body["token"]; ok {
+		t.Errorf("token is returned to the client: %v", body)
+	}
+
+	resp, body = e.do(t, c, "POST", "/api/v1/notifications/test", map[string]any{
+		"enabled": true, "provider": "webhook", "url": hook.URL,
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("test: %d %v", resp.StatusCode, body)
+	}
+	if got["event"] != "test" || got["message"] == "" {
+		t.Errorf("test payload = %v", got)
+	}
+
+	resp, body = e.do(t, c, "PUT", "/api/v1/notifications", map[string]any{
+		"enabled": true, "provider": "webhook", "url": "ftp://example.invalid",
+	})
+	if resp.StatusCode != http.StatusBadRequest || errorCode(body) != "invalid_input" {
+		t.Errorf("invalid URL: %d %v", resp.StatusCode, body)
+	}
+}

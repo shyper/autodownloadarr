@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/shyper/autodownloadarr/internal/secrets"
@@ -48,10 +49,11 @@ func (s *Store) decrypt(v string) string {
 
 // Setting keys.
 const (
-	keyGeneral    = "general"
-	keyTMDB       = "tmdb"
-	keyOnboarding = "onboarding"
-	keyPlexClient = "plex.client_id"
+	keyGeneral       = "general"
+	keyTMDB          = "tmdb"
+	keyOnboarding    = "onboarding"
+	keyPlexClient    = "plex.client_id"
+	keyNotifications = "notifications"
 )
 
 // General holds the application settings.
@@ -133,6 +135,89 @@ func (s *Store) SetTMDBKey(ctx context.Context, key string) error {
 		return err
 	}
 	return s.setSetting(ctx, keyTMDB, enc)
+}
+
+// Notification is the configured notification channel.
+type Notification struct {
+	Enabled  bool   `json:"enabled"`
+	Provider string `json:"provider"` // webhook, discord, ntfy or telegram
+	URL      string `json:"url"`
+	ChatID   string `json:"chatId"`
+	// Token is the Telegram bot token. It is write-only: handlers clear it
+	// before sending the configuration to the UI.
+	Token    string `json:"token,omitempty"`
+	HasToken bool   `json:"hasToken"`
+}
+
+// notificationConfig is how the channel is stored: the token is encrypted
+// next to the other fields.
+type notificationConfig struct {
+	Enabled  bool   `json:"enabled"`
+	Provider string `json:"provider"`
+	URL      string `json:"url"`
+	ChatID   string `json:"chatId"`
+	TokenEnc string `json:"tokenEnc,omitempty"`
+}
+
+// Validate checks the fields of a notification channel. An empty token is
+// allowed here; SetNotification keeps the stored one in that case.
+func (n *Notification) Validate() error {
+	n.Provider = strings.TrimSpace(n.Provider)
+	n.URL = strings.TrimSpace(n.URL)
+	n.ChatID = strings.TrimSpace(n.ChatID)
+	switch n.Provider {
+	case "webhook", "discord", "ntfy":
+		if !strings.HasPrefix(n.URL, "http://") && !strings.HasPrefix(n.URL, "https://") {
+			return fmt.Errorf("%w: URL must start with http:// or https://", ErrInvalid)
+		}
+	case "telegram":
+		if n.ChatID == "" {
+			return fmt.Errorf("%w: chat ID is required", ErrInvalid)
+		}
+	case "":
+		return fmt.Errorf("%w: provider is required", ErrInvalid)
+	default:
+		return fmt.Errorf("%w: unknown provider %q", ErrInvalid, n.Provider)
+	}
+	return nil
+}
+
+// Notification returns the notification channel. Nothing is configured yet
+// when no provider is set.
+func (s *Store) Notification(ctx context.Context) (Notification, error) {
+	var c notificationConfig
+	if _, err := s.getSetting(ctx, keyNotifications, &c); err != nil {
+		return Notification{}, err
+	}
+	n := Notification{Enabled: c.Enabled, Provider: c.Provider, URL: c.URL, ChatID: c.ChatID}
+	n.Token = s.decrypt(c.TokenEnc)
+	n.HasToken = n.Token != ""
+	return n, nil
+}
+
+// SetNotification stores the channel. An empty Token keeps the stored one.
+func (s *Store) SetNotification(ctx context.Context, n Notification) error {
+	cur, err := s.Notification(ctx)
+	if err != nil {
+		return err
+	}
+	if err := n.Validate(); err != nil {
+		return err
+	}
+	token := n.Token
+	if token == "" {
+		token = cur.Token
+	}
+	if n.Provider == "telegram" && token == "" {
+		return fmt.Errorf("%w: bot token is required", ErrInvalid)
+	}
+	c := notificationConfig{Enabled: n.Enabled, Provider: n.Provider, URL: n.URL, ChatID: n.ChatID}
+	if token != "" {
+		if c.TokenEnc, err = s.encrypt(token); err != nil {
+			return err
+		}
+	}
+	return s.setSetting(ctx, keyNotifications, c)
 }
 
 // Onboarding is the progress of the setup wizard.

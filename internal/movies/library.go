@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shyper/autodownloadarr/internal/events"
 	"github.com/shyper/autodownloadarr/internal/fetch"
 	"github.com/shyper/autodownloadarr/internal/mediaserver/plex"
 	"github.com/shyper/autodownloadarr/internal/scheduler"
@@ -38,6 +39,7 @@ func (m *Manager) available(ctx context.Context, mv store.Movie, rel store.Relea
 	}
 	m.log.Info("movie available", "movie", mv.Title, "file", video)
 	m.publish(mv)
+	m.notify(events.Notification{Event: "movie.available", Title: "Movie ready: " + mv.Title, Body: rel.Title})
 	m.scan(ctx, mv.Folder)
 	return m.scheduleDeletion(ctx, mv)
 }

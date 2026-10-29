@@ -117,6 +117,9 @@ func New(opts Options) http.Handler {
 			r.Put("/settings/general", s.handlePutGeneral)
 			r.Get("/settings/tmdb", s.handleGetTMDB)
 			r.Put("/settings/tmdb", s.handlePutTMDB)
+			r.Get("/notifications", s.handleGetNotification)
+			r.Put("/notifications", s.handlePutNotification)
+			r.Post("/notifications/test", s.handleTestNotification)
 			r.Get("/onboarding", s.handleGetOnboarding)
 			r.Put("/onboarding", s.handlePutOnboarding)
 

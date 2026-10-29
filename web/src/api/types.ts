@@ -20,6 +20,16 @@ export type General = {
   minFreeGB: number
 }
 
+/** The configured notification channel. */
+export type NotificationSettings = {
+  enabled: boolean
+  provider: 'webhook' | 'discord' | 'ntfy' | 'telegram'
+  url: string
+  chatId: string
+  /** A token is stored; the token itself is never sent to the browser. */
+  hasToken: boolean
+}
+
 export type UsenetServer = {
   id: number
   name: string

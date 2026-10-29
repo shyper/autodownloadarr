@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"github.com/shyper/autodownloadarr/internal/events"
 	"github.com/shyper/autodownloadarr/internal/fetch"
 	"github.com/shyper/autodownloadarr/internal/httpx"
 	"github.com/shyper/autodownloadarr/internal/movies"
@@ -222,6 +223,11 @@ func (m *Manager) finish(ctx, dctx context.Context, se store.Series, e store.Epi
 		}
 		m.log.Info("episode available", "series", se.Title, "file", path)
 		m.publishEpisode(e)
+		m.notify(events.Notification{
+			Event: "episode.available",
+			Title: fmt.Sprintf("%s S%02dE%02d is ready", se.Title, e.Season, e.Episode),
+			Body:  rel.Title,
+		})
 		m.scan(ctx, filepath.Dir(path))
 		return m.Reconcile(ctx, se.ID)
 

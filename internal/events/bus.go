@@ -19,6 +19,22 @@ type Event struct {
 	Data any       `json:"data,omitempty"`
 }
 
+// TypeNotification is the event type of user-facing notifications. The
+// notifier subscribes to it and forwards the message to the configured
+// channel (webhook, Discord, ntfy or Telegram).
+const TypeNotification = "notification"
+
+// Notification is a human-readable message for the notification channel.
+type Notification struct {
+	// Event is the machine-readable kind, e.g. "movie.available".
+	Event string `json:"event"`
+	Title string `json:"title"`
+	Body  string `json:"body"`
+}
+
+// Notify publishes a notification.
+func (b *Bus) Notify(n Notification) { b.Publish(TypeNotification, n) }
+
 // Bus fans events out to subscribers.
 type Bus struct {
 	log  *slog.Logger

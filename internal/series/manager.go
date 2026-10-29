@@ -373,6 +373,7 @@ func (m *Manager) Delete(ctx context.Context, id int64) error {
 	m.cleanupFolder(ctx, se)
 	removed = true
 	m.bus.Publish(EventSeriesRemoved, map[string]int64{"id": id})
+	m.notify(events.Notification{Event: "series.deleted", Title: "Series deleted: " + se.Title})
 	return nil
 }
 
@@ -450,6 +451,13 @@ func (m *Manager) Downloads() []Download {
 }
 
 func (m *Manager) publishEpisode(e store.Episode) { m.bus.Publish(EventEpisodeUpdated, e) }
+
+// notify queues a user-facing notification (if a channel is configured).
+func (m *Manager) notify(n events.Notification) {
+	if m.bus != nil {
+		m.bus.Notify(n)
+	}
+}
 
 type searchPayload struct {
 	EpisodeID int64 `json:"episodeId"`

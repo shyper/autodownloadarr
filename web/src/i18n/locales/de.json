@@ -231,7 +231,8 @@
       "indexers": "Indexer",
       "plex": "Plex",
       "profile": "Qualität",
-      "passwords": "Passwörter"
+      "passwords": "Passwörter",
+      "notifications": "Benachrichtigungen"
     },
     "saved": "Gespeichert.",
     "unchanged": "unverändert",
@@ -378,6 +379,35 @@
     "system": {
       "title": "System",
       "version": "Version"
+    },
+    "notifications": {
+      "title": "Benachrichtigungen",
+      "description": "Meldung senden, wenn ein Film oder eine Folge bereit ist, etwas fehlschlägt oder Dateien gelöscht werden.",
+      "enabled": "Benachrichtigungen aktivieren",
+      "enabledHint": "Wird nur genutzt, wenn ein Kanal eingerichtet ist.",
+      "provider": "Kanal",
+      "providers": {
+        "webhook": "Webhook (JSON)",
+        "discord": "Discord",
+        "ntfy": "ntfy",
+        "telegram": "Telegram"
+      },
+      "url": {
+        "webhook": "Webhook-URL",
+        "discord": "Discord-Webhook-URL",
+        "ntfy": "ntfy-Themen-URL"
+      },
+      "urlHint": {
+        "webhook": "Empfängt ein POST mit event, title, message und time.",
+        "discord": "Servereinstellungen → Integrationen → Webhooks.",
+        "ntfy": "Zum Beispiel https://ntfy.sh/dein-thema."
+      },
+      "token": "Bot-Token",
+      "tokenHint": "Von @BotFather; wird verschlüsselt gespeichert.",
+      "chatId": "Chat-ID",
+      "chatIdHint": "Der Chat oder Kanal, der die Meldungen erhält.",
+      "sendTest": "Test senden",
+      "testSent": "Testbenachrichtigung gesendet."
     }
   },
   "account": {
