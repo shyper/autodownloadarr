@@ -20,7 +20,6 @@ import (
 // Rejection codes for TV releases.
 const (
 	RejectWrongEpisode = "wrong_episode"
-	RejectSeasonPack   = "season_pack"
 )
 
 var searchDelays = []time.Duration{time.Hour, 6 * time.Hour, 24 * time.Hour}
@@ -67,8 +66,34 @@ func (m *Manager) handleSearch(ctx context.Context, t scheduler.Task) error {
 	return m.pickNext(ctx, e, p.Round)
 }
 
-// search queries all indexers for one episode.
+// search queries all indexers for one episode. If no release contains the
+// episode, it asks for the whole season and keeps season packs as a fallback.
 func (m *Manager) search(ctx context.Context, se store.Series, e store.Episode) ([]store.Release, error) {
+	out, err := m.searchReleases(ctx, se, e, false, nil)
+	if hasUsable(out) {
+		return out, err
+	}
+	seen := make(map[string]bool, len(out))
+	for _, r := range out {
+		seen[r.Fingerprint] = true
+	}
+	packs, packErr := m.searchReleases(ctx, se, e, true, seen)
+	return append(out, packs...), errors.Join(err, packErr)
+}
+
+// hasUsable reports whether a search found a release that may be downloaded.
+func hasUsable(rels []store.Release) bool {
+	for _, r := range rels {
+		if r.Rejected == "" {
+			return true
+		}
+	}
+	return false
+}
+
+// searchReleases queries all indexers, either for the episode or for its
+// whole season (the fallback that also returns season packs).
+func (m *Manager) searchReleases(ctx context.Context, se store.Series, e store.Episode, season bool, seen map[string]bool) ([]store.Release, error) {
 	indexers, err := m.svc.Indexers(ctx)
 	if err != nil {
 		return nil, err
@@ -81,15 +106,17 @@ func (m *Manager) search(ctx context.Context, se store.Series, e store.Episode) 
 	if runtime == 0 {
 		runtime = se.Runtime
 	}
+	if seen == nil {
+		seen = map[string]bool{}
+	}
 	var errs []error
-	seen := map[string]bool{}
 	var out []store.Release
 	for _, ic := range indexers {
 		if ok, until := m.svc.IndexerAvailable(ic.Config.ID); !ok {
 			errs = append(errs, fmt.Errorf("%s: %w until %s", ic.Config.Name, movies.ErrIndexerPaused, until.Format(time.TimeOnly)))
 			continue
 		}
-		items, textSearch, err := m.searchIndexer(ctx, ic, se, e)
+		items, textSearch, err := m.searchIndexer(ctx, ic, se, e, season)
 		if ctx.Err() == nil {
 			m.svc.IndexerResult(ic.Config.ID, err)
 		}
@@ -125,27 +152,34 @@ func (m *Manager) search(ctx context.Context, se store.Series, e store.Episode) 
 	return out, errors.Join(errs...)
 }
 
-// matchEpisode checks that a release contains the wanted episode.
+// matchEpisode checks that a release contains the wanted episode or the
+// whole season it belongs to.
 func matchEpisode(info release.Info, se store.Series, e store.Episode, textSearch bool) string {
-	switch {
-	case info.SeasonPack():
-		return RejectSeasonPack
-	case info.Season != e.Season || !slices.Contains(info.Episodes, e.Episode):
+	if info.SeasonPack() {
+		if info.Season != e.Season {
+			return RejectWrongEpisode
+		}
+	} else if info.Season != e.Season || !slices.Contains(info.Episodes, e.Episode) {
 		return RejectWrongEpisode
-	case textSearch && !release.MatchesMovie(release.Info{Title: info.Title}, titles(se), 0):
+	}
+	if textSearch && !release.MatchesMovie(release.Info{Title: info.Title}, titles(se), 0) {
 		return release.RejectWrongMovie
 	}
 	return ""
 }
 
-func (m *Manager) searchIndexer(ctx context.Context, ic movies.IndexerClient, se store.Series, e store.Episode) ([]newznab.Item, bool, error) {
+func (m *Manager) searchIndexer(ctx context.Context, ic movies.IndexerClient, se store.Series, e store.Episode, seasonOnly bool) ([]newznab.Item, bool, error) {
 	caps, err := m.svc.Caps(ctx, ic)
 	if err != nil {
 		return nil, false, fmt.Errorf("%s: %w", ic.Config.Name, err)
 	}
 	idSearch := caps.TVSearch && slices.Contains(caps.TVParams, "season") &&
 		((se.TVDBID != 0 && slices.Contains(caps.TVParams, "tvdbid")) || (se.IMDbID != "" && slices.Contains(caps.TVParams, "imdbid")))
-	q := newznab.EpisodeQuery{TVDBID: se.TVDBID, IMDbID: se.IMDbID, Title: se.Title, Season: e.Season, Episode: e.Episode,
+	episode := e.Episode
+	if seasonOnly {
+		episode = 0
+	}
+	q := newznab.EpisodeQuery{TVDBID: se.TVDBID, IMDbID: se.IMDbID, Title: se.Title, Season: e.Season, Episode: episode,
 		Categories: ic.Config.TVCategories}
 	items, err := ic.Client.SearchEpisode(ctx, caps, q)
 	if err != nil {
@@ -211,10 +245,24 @@ func (m *Manager) chooseRelease(ctx context.Context, episodeID, forced int64) (s
 	if err != nil {
 		return store.Release{}, false, err
 	}
+	// Prefer a release for the single episode; a season pack is the
+	// fallback when nothing else is left.
+	var pack *store.Release
 	for _, r := range rels {
-		if r.Rejected == "" && !r.Blocklisted {
-			return r, true, nil
+		if r.Rejected != "" || r.Blocklisted {
+			continue
 		}
+		if release.Parse(r.Title).SeasonPack() {
+			if pack == nil {
+				rr := r
+				pack = &rr
+			}
+			continue
+		}
+		return r, true, nil
+	}
+	if pack != nil {
+		return *pack, true, nil
 	}
 	return store.Release{}, false, nil
 }
@@ -256,11 +304,25 @@ func (m *Manager) fail(ctx context.Context, e store.Episode, code, detail string
 }
 
 func (m *Manager) enqueue(ctx context.Context, e store.Episode) error {
-	e.State, e.NextSearchAt = store.MovieQueued, nil
-	if err := m.store.UpdateEpisode(ctx, e); err != nil {
+	// A season pack may have filled this episode while its own search was
+	// still running, so only queue it if it really still needs a file.
+	cur, err := m.store.Episode(ctx, e.ID)
+	if errors.Is(err, store.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
 		return err
 	}
-	m.publishEpisode(e)
+	switch cur.State {
+	case store.MovieSearching, store.MovieWaiting, store.MovieFailed, store.MovieDownloading:
+	default:
+		return nil
+	}
+	cur.State, cur.NextSearchAt = store.MovieQueued, nil
+	if err := m.store.UpdateEpisode(ctx, cur); err != nil {
+		return err
+	}
+	m.publishEpisode(cur)
 	m.startQueued()
 	return nil
 }

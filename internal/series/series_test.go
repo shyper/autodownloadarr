@@ -24,6 +24,7 @@ import (
 	"github.com/shyper/autodownloadarr/internal/mediaserver/pathmap"
 	"github.com/shyper/autodownloadarr/internal/metadata/tmdb"
 	"github.com/shyper/autodownloadarr/internal/movies"
+	"github.com/shyper/autodownloadarr/internal/release"
 	"github.com/shyper/autodownloadarr/internal/scheduler"
 	"github.com/shyper/autodownloadarr/internal/secrets"
 	"github.com/shyper/autodownloadarr/internal/store"
@@ -48,7 +49,23 @@ type world struct {
 	old      map[int]bool          // episode → the Plex history is from long ago
 	views    map[int]int           // episode → earlier complete viewings
 	seasons  int                   // seasons TMDB knows (episodes of later ones air in 2020-02)
-	fetched  []int                 // episodes in the order their NZB was fetched
+	fetched  []int                 // episodes (or 0 for a pack) in fetch order
+	packOnly bool                  // the indexer offers only a season pack
+}
+
+// addNZB registers raw as the NZB stored under key, where 0 is the season
+// pack and any other number an episode.
+func (w *world) addNZB(t *testing.T, key int, name string, raw []byte) {
+	t.Helper()
+	n := &nzb.NZB{}
+	f := nzb.File{Subject: fmt.Sprintf("%q yEnc (1/1)", name)}
+	id := fmt.Sprintf("e%d@test", key)
+	w.usenet.AddPart(id, yenc.Part{Name: name, FileSize: int64(len(raw)), Number: 1, Total: 1, Data: raw})
+	f.Segments = []nzb.Segment{{Number: 1, Bytes: int64(len(raw)), MessageID: id}}
+	n.Files = []nzb.File{f}
+	var buf bytes.Buffer
+	_ = n.WriteXML(&buf)
+	w.nzbs[key] = buf.Bytes()
 }
 
 func (w *world) post(t *testing.T, ep int) {
@@ -59,16 +76,25 @@ func (w *world) post(t *testing.T, ep int) {
 		t.Fatal(err)
 	}
 	raw, _ := os.ReadFile(vols[0])
-	name := filepath.Base(vols[0])
-	n := &nzb.NZB{}
-	f := nzb.File{Subject: fmt.Sprintf("%q yEnc (1/1)", name)}
-	id := fmt.Sprintf("e%d@test", ep)
-	w.usenet.AddPart(id, yenc.Part{Name: name, FileSize: int64(len(raw)), Number: 1, Total: 1, Data: raw})
-	f.Segments = []nzb.Segment{{Number: 1, Bytes: int64(len(raw)), MessageID: id}}
-	n.Files = []nzb.File{f}
-	var buf bytes.Buffer
-	_ = n.WriteXML(&buf)
-	w.nzbs[ep] = buf.Bytes()
+	w.addNZB(t, ep, filepath.Base(vols[0]), raw)
+}
+
+// postPack registers a season pack that contains the given episodes.
+func (w *world) postPack(t *testing.T, name string, eps []int) {
+	t.Helper()
+	files := make([]rar5.File, len(eps))
+	for i, ep := range eps {
+		files[i] = rar5.File{
+			Name: fmt.Sprintf("show.s01e%02d.mkv", ep),
+			Data: bytes.Repeat([]byte(fmt.Sprintf("pack episode %d ", ep)), 3000),
+		}
+	}
+	vols, err := rar5.Write(t.TempDir(), name, files, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(vols[0])
+	w.addNZB(t, 0, filepath.Base(vols[0]), raw)
 }
 
 func (w *world) setProgress(ep int, p float64) {
@@ -112,13 +138,37 @@ func (w *world) handler(t *testing.T, base *string) http.Handler {
 			return
 		}
 		ep, _ := strconv.Atoi(q.Get("ep"))
-		if q.Get("tvdbid") != "99" || q.Get("season") != "1" || ep == 0 {
+		if q.Get("t") == "search" {
+			// The client falls back to "Show S01E02" if the ID search
+			// found nothing.
+			info := release.Parse(q.Get("q"))
+			if len(info.Episodes) > 0 {
+				ep = info.Episodes[0]
+			}
+		} else if q.Get("tvdbid") != "99" || q.Get("season") != "1" {
 			t.Errorf("unexpected search %s", r.URL.RawQuery)
+			return
 		}
 		w.mu.Lock()
+		packOnly, hasPack := w.packOnly, w.nzbs[0] != nil
 		d := w.delay[ep]
 		w.mu.Unlock()
 		time.Sleep(d)
+		if ep == 0 {
+			// The season query only finds a pack if the world has one.
+			if !hasPack {
+				_, _ = rw.Write([]byte(`<rss><channel></channel></rss>`))
+				return
+			}
+			_, _ = fmt.Fprintf(rw, `<rss><channel><item><title>Show.S01.German.1080p.WEB.h264-GRP</title><guid>pack</guid>
+			<link>%s/indexer/getnzb/0</link><attr name="size" value="40000"/></item></channel></rss>`, *base)
+			return
+		}
+		if packOnly {
+			// No single episode releases; only the pack exists.
+			_, _ = rw.Write([]byte(`<rss><channel></channel></rss>`))
+			return
+		}
 		_, _ = fmt.Fprintf(rw, `<rss><channel><item><title>Show.S01E%02d.German.720p.WEB.h264-GRP</title><guid>e%d</guid>
 			<link>%s/indexer/getnzb/%d</link><attr name="size" value="40000"/></item></channel></rss>`, ep, ep, *base, ep)
 	})
@@ -662,5 +712,91 @@ func TestDeleteWhileDownloadingLeavesNoFiles(t *testing.T) {
 	})
 	if len(left) > 0 {
 		t.Errorf("files left after deleting the series: %v", left)
+	}
+}
+
+// When no single episode release is available, the whole season is searched
+// and the pack fills every slot of the window. The pack is downloaded once
+// and its other video files are removed again.
+func TestSeasonPackFillsWindow(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w := newWorld(t)
+	w.packOnly = true
+	w.postPack(t, "Show.S01.German.1080p.WEB-GRP", []int{1, 2, 3, 4, 5})
+	m, st, root := setup(ctx, t, w, nil)
+
+	se, err := m.Request(ctx, 7, 0, RequestOptions{WindowSize: 2, Trigger: store.TriggerProgress, TriggerValue: 10})
+	must(t, err)
+	eventually(t, "pack filled the window", func() bool {
+		eps, _ := st.Episodes(ctx, se.ID)
+		n := 0
+		for _, e := range eps {
+			if e.State == store.MovieAvailable {
+				n++
+			}
+		}
+		return n == 2
+	})
+
+	folder := filepath.Join(root, "Show (2020) {tvdb-99}")
+	for ep := 1; ep <= 2; ep++ {
+		path := filepath.Join(folder, "Season 01", fmt.Sprintf("Show (2020) - S01E%02d - Folge %d.mkv", ep, ep))
+		data, err := os.ReadFile(path)
+		if err != nil || !bytes.HasPrefix(data, []byte(fmt.Sprintf("pack episode %d ", ep))) {
+			t.Errorf("episode %d file: %v", ep, err)
+		}
+	}
+	// Nothing outside the window is kept from the pack.
+	var videos []string
+	_ = filepath.Walk(folder, func(path string, info os.FileInfo, err error) error {
+		if err == nil && info != nil && !info.IsDir() && strings.HasSuffix(path, ".mkv") {
+			videos = append(videos, filepath.Base(path))
+		}
+		return nil
+	})
+	if len(videos) != 2 {
+		t.Errorf("videos left from the pack: %v", videos)
+	}
+	w.mu.Lock()
+	fetched := fmt.Sprint(w.fetched)
+	w.mu.Unlock()
+	if fetched != "[0]" {
+		t.Errorf("fetched = %s, want the pack exactly once", fetched)
+	}
+}
+
+// A single episode release always wins over a season pack.
+func TestChooseReleasePrefersEpisodeOverPack(t *testing.T) {
+	ctx := context.Background()
+	sqldb, err := db.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
+	must(t, err)
+	t.Cleanup(func() { _ = sqldb.Close() })
+	box, _ := secrets.New(make([]byte, 32))
+	st := store.New(sqldb, box)
+	se, err := st.CreateSeries(ctx, store.Series{TMDBID: 7, Title: "Show", Year: 2020, WindowSize: 1}, 0)
+	must(t, err)
+	must(t, st.UpsertEpisodes(ctx, se.ID, []store.Episode{{Season: 1, Episode: 1, State: store.MovieSearching}}))
+	eps, err := st.Episodes(ctx, se.ID)
+	must(t, err)
+	id := eps[0].ID
+	must(t, st.ReplaceReleasesOf(ctx, store.ForEpisode(id), []store.Release{
+		{EpisodeID: id, Title: "Show.S01.German.1080p.WEB-GRP", Fingerprint: "pack"},
+		{EpisodeID: id, Title: "Show.S01E01.German.720p.WEB-GRP", Fingerprint: "single"},
+	}))
+
+	m := &Manager{store: st}
+	rel, ok, err := m.chooseRelease(ctx, id, 0)
+	if err != nil || !ok || rel.Fingerprint != "single" {
+		t.Fatalf("chooseRelease = %+v, %v, %v; want the single episode", rel, ok, err)
+	}
+
+	// Without a single release the pack is the fallback.
+	must(t, st.ReplaceReleasesOf(ctx, store.ForEpisode(id), []store.Release{
+		{EpisodeID: id, Title: "Show.S01.German.1080p.WEB-GRP", Fingerprint: "pack"},
+	}))
+	rel, ok, err = m.chooseRelease(ctx, id, 0)
+	if err != nil || !ok || rel.Fingerprint != "pack" {
+		t.Fatalf("chooseRelease = %+v, %v, %v; want the pack", rel, ok, err)
 	}
 }

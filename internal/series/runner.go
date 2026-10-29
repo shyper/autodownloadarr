@@ -14,6 +14,7 @@ import (
 	"github.com/shyper/autodownloadarr/internal/fetch"
 	"github.com/shyper/autodownloadarr/internal/httpx"
 	"github.com/shyper/autodownloadarr/internal/movies"
+	"github.com/shyper/autodownloadarr/internal/release"
 	"github.com/shyper/autodownloadarr/internal/store"
 	"github.com/shyper/autodownloadarr/internal/usenet/download"
 )
@@ -63,6 +64,13 @@ func (m *Manager) runDownload(ctx context.Context, e store.Episode, rel store.Re
 	m.publishEpisode(e)
 	m.log.Info("episode download started", "series", se.Title, "season", e.Season, "episode", e.Episode, "release", rel.Title)
 
+	if release.Parse(rel.Title).SeasonPack() {
+		videos, kind, dlErr := m.downloadPack(ctx, se, rel)
+		if err := m.finishPack(bg, ctx, se, e, rel, attemptID, videos, kind, dlErr); err != nil {
+			m.log.Error("finish season pack download", "err", err)
+		}
+		return
+	}
 	path, kind, dlErr := m.download(ctx, se, e, rel)
 	if err := m.finish(bg, ctx, se, e, rel, attemptID, path, kind, dlErr); err != nil {
 		m.log.Error("finish download", "err", err)
@@ -78,69 +86,24 @@ func (m *Manager) download(ctx context.Context, se store.Series, e store.Episode
 	if g.SeriesPath == "" {
 		return "", CodeNoSeriesPath, nil
 	}
-	pool, err := m.svc.Pool(ctx)
-	if errors.Is(err, movies.ErrNotConfigured) {
-		return "", CodeNoUsenet, nil
-	} else if err != nil {
-		return "", fetch.KindDownloadError, err
-	}
-	ic, err := m.svc.Indexer(ctx, rel.IndexerID)
-	if err != nil {
-		return "", kindNZBUnavailable, err
-	}
-	data, nzbName, err := ic.Client.FetchNZB(ctx, rel.NZBURL)
-	switch {
-	case ctx.Err() != nil:
-		return "", fetch.KindCancelled, context.Cause(ctx)
-	case errors.Is(err, httpx.ErrRateLimited), errors.Is(err, httpx.ErrUnavailable), errors.Is(err, httpx.ErrUnauthorized):
-		return "", CodeIndexerError, err
-	case err != nil:
-		return "", kindNZBUnavailable, err
-	}
-	list, err := m.store.ArchivePasswords(ctx)
-	if err != nil {
-		return "", fetch.KindDiskError, err
-	}
-	passwords := make([]string, len(list))
-	for i, p := range list {
-		passwords[i] = p.Password
-	}
-	m.limiter.SetRate(int64(g.MaxDownloadMBps * (1 << 20)))
-
-	root := g.SeriesPath
-	folder := filepath.Join(root, SeriesFolder(se), SeasonFolder(e.Season))
+	folder := filepath.Join(g.SeriesPath, SeriesFolder(se), SeasonFolder(e.Season))
 	// Plex learns about the episode as soon as the first part is extracted,
 	// so that it can be watched while the rest is still downloading.
 	var visible atomic.Bool
-	res, err := m.fetcher.Fetch(ctx, fetch.Request{
-		Pool: pool, NZB: data, NZBName: nzbName, ReleaseTitle: rel.Title, Root: root,
-		WorkDir:   filepath.Join(root, fetch.WorkDirName, "incomplete", "e"+strconv.FormatInt(e.ID, 10)),
-		Folder:    folder,
-		VideoName: EpisodeFileName(se, e),
-		FullCheck: m.svc.FullCheck(ctx),
-		OnVisible: func(path string) {
+	res, kind, err := m.fetchRelease(ctx, g, se, rel, folder, EpisodeFileName(se, e),
+		"e"+strconv.FormatInt(e.ID, 10), func(path string) {
 			visible.Store(true)
 			m.markPlayable(e.ID)
 			m.log.Info("episode playable while downloading", "series", se.Title, "file", path)
 			go m.scan(context.WithoutCancel(ctx), folder)
-		},
-		Passwords: passwords,
-		Limiter:   m.limiter,
-		OnProgress: func(p download.Progress) {
+		}, func(p download.Progress) {
 			m.progress(e, p)
-		},
-	})
+		})
 	if err != nil && visible.Load() {
-		m.scan(context.WithoutCancel(ctx), filepath.Join(root, SeriesFolder(se))) // the file is gone again
+		m.scan(context.WithoutCancel(ctx), filepath.Join(g.SeriesPath, SeriesFolder(se))) // the file is gone again
 	}
-	var fe *fetch.Error
-	if errors.As(err, &fe) {
-		return "", fe.Kind, fe.Err
-	} else if err != nil {
-		return "", fetch.KindDiskError, err
-	}
-	if res.Password != "" {
-		_ = m.store.ArchivePasswordHit(ctx, res.Password)
+	if err != nil {
+		return "", kind, err
 	}
 	main := fetch.LargestVideo(res.Videos)
 	final := filepath.Join(folder, EpisodeFileName(se, e)+strings.ToLower(filepath.Ext(main)))
@@ -156,6 +119,191 @@ func (m *Manager) download(ctx context.Context, se store.Series, e store.Episode
 		}
 	}
 	return final, "", nil
+}
+
+// downloadPack fetches a whole season and returns its video files. They keep
+// their original names until the episodes they contain are known.
+func (m *Manager) downloadPack(ctx context.Context, se store.Series, rel store.Release) ([]string, string, error) {
+	g, err := m.store.General(ctx)
+	if err != nil {
+		return nil, fetch.KindDiskError, err
+	}
+	if g.SeriesPath == "" {
+		return nil, CodeNoSeriesPath, nil
+	}
+	folder := filepath.Join(g.SeriesPath, SeriesFolder(se))
+	res, kind, err := m.fetchRelease(ctx, g, se, rel, folder, "",
+		"pack"+strconv.FormatInt(rel.ID, 10), nil, nil)
+	if err != nil {
+		return nil, kind, err
+	}
+	return res.Videos, "", nil
+}
+
+// fetchRelease downloads and extracts a release into folder. videoName is
+// the final name of a single video (empty keeps the original names).
+func (m *Manager) fetchRelease(ctx context.Context, g store.General, se store.Series, rel store.Release,
+	folder, videoName, work string, onVisible func(string), onProgress func(download.Progress)) (fetch.Result, string, error) {
+	pool, err := m.svc.Pool(ctx)
+	if errors.Is(err, movies.ErrNotConfigured) {
+		return fetch.Result{}, CodeNoUsenet, nil
+	} else if err != nil {
+		return fetch.Result{}, fetch.KindDownloadError, err
+	}
+	ic, err := m.svc.Indexer(ctx, rel.IndexerID)
+	if err != nil {
+		return fetch.Result{}, kindNZBUnavailable, err
+	}
+	data, nzbName, err := ic.Client.FetchNZB(ctx, rel.NZBURL)
+	switch {
+	case ctx.Err() != nil:
+		return fetch.Result{}, fetch.KindCancelled, context.Cause(ctx)
+	case errors.Is(err, httpx.ErrRateLimited), errors.Is(err, httpx.ErrUnavailable), errors.Is(err, httpx.ErrUnauthorized):
+		return fetch.Result{}, CodeIndexerError, err
+	case err != nil:
+		return fetch.Result{}, kindNZBUnavailable, err
+	}
+	list, err := m.store.ArchivePasswords(ctx)
+	if err != nil {
+		return fetch.Result{}, fetch.KindDiskError, err
+	}
+	passwords := make([]string, len(list))
+	for i, p := range list {
+		passwords[i] = p.Password
+	}
+	m.limiter.SetRate(int64(g.MaxDownloadMBps * (1 << 20)))
+
+	res, err := m.fetcher.Fetch(ctx, fetch.Request{
+		Pool: pool, NZB: data, NZBName: nzbName, ReleaseTitle: rel.Title, Root: g.SeriesPath,
+		WorkDir:   filepath.Join(g.SeriesPath, fetch.WorkDirName, "incomplete", work),
+		Folder:    folder,
+		VideoName: videoName,
+		FullCheck: m.svc.FullCheck(ctx),
+		OnVisible: onVisible,
+		Passwords: passwords,
+		Limiter:   m.limiter,
+		OnProgress: func(p download.Progress) {
+			if onProgress != nil {
+				onProgress(p)
+			}
+		},
+	})
+	var fe *fetch.Error
+	if errors.As(err, &fe) {
+		return fetch.Result{}, fe.Kind, fe.Err
+	} else if err != nil {
+		return fetch.Result{}, fetch.KindDiskError, err
+	}
+	if res.Password != "" {
+		_ = m.store.ArchivePasswordHit(ctx, res.Password)
+	}
+	return res, "", nil
+}
+
+// finishPack stores the episodes that a downloaded season pack contains.
+// Only episodes that are still waiting for a source are filled; the rest of
+// the pack is removed so the temporary library does not fill up.
+func (m *Manager) finishPack(ctx, dctx context.Context, se store.Series, e store.Episode, rel store.Release, attemptID int64,
+	videos []string, kind string, dlErr error) error {
+	msg := ""
+	if dlErr != nil {
+		msg = dlErr.Error()
+	}
+	if kind != "" {
+		return m.finishFailure(ctx, dctx, e, rel, attemptID, kind, msg)
+	}
+
+	// The series may have been deleted while the pack was downloading.
+	if _, err := m.store.Series(ctx, se.ID); errors.Is(err, store.ErrNotFound) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	g, err := m.store.General(ctx)
+	if err != nil {
+		return err
+	}
+	all, err := m.store.Episodes(ctx, se.ID)
+	if err != nil {
+		return err
+	}
+	byNumber := make(map[[2]int]*store.Episode, len(all))
+	for i := range all {
+		byNumber[[2]int{all[i].Season, all[i].Episode}] = &all[i]
+	}
+
+	now := m.now()
+	used := map[[2]int]bool{}
+	matched := 0
+	for _, path := range videos {
+		info := release.Parse(filepath.Base(path))
+		if info.Season != e.Season || len(info.Episodes) == 0 {
+			_ = os.Remove(path)
+			continue
+		}
+		key := [2]int{info.Season, info.Episodes[0]}
+		ep, ok := byNumber[key]
+		if !ok || used[key] || !fillableFromPack(ep.State) {
+			_ = os.Remove(path)
+			continue
+		}
+		ext := strings.ToLower(filepath.Ext(path))
+		final := filepath.Join(g.SeriesPath, SeriesFolder(se), SeasonFolder(ep.Season), EpisodeFileName(se, *ep)+ext)
+		if err := os.MkdirAll(filepath.Dir(final), 0o755); err != nil {
+			m.log.Error("create season folder", "err", err)
+			_ = os.Remove(path)
+			continue
+		}
+		if path != final {
+			if err := os.Rename(path, final); err != nil {
+				m.log.Error("rename pack video", "file", path, "err", err)
+				_ = os.Remove(path)
+				continue
+			}
+		}
+		st, err := os.Stat(final)
+		if err != nil {
+			m.log.Error("stat pack video", "file", final, "err", err)
+			continue
+		}
+		if err := m.store.TrackFileOf(ctx, store.ForEpisode(ep.ID), final, st.Size()); err != nil {
+			return err
+		}
+		used[key] = true
+		matched++
+		ep.State, ep.File, ep.AvailableAt, ep.Attempts, ep.LastError = store.MovieAvailable, final, &now, 0, ""
+		ep.ReleaseTitle = rel.Title
+		ep.Progress, ep.StartedAt, ep.WatchedAt, ep.DeleteAt, ep.Base = 0, nil, nil, nil, store.WatchBase{}
+		if err := m.store.UpdateEpisode(ctx, *ep); err != nil {
+			return err
+		}
+		m.log.Info("episode available from season pack", "series", se.Title, "season", ep.Season, "episode", ep.Episode, "file", final)
+		m.publishEpisode(*ep)
+		m.notify(events.Notification{
+			Event: "episode.available",
+			Title: fmt.Sprintf("%s S%02dE%02d is ready", se.Title, ep.Season, ep.Episode),
+			Body:  rel.Title,
+		})
+	}
+	if matched == 0 {
+		return m.finishFailure(ctx, dctx, e, rel, attemptID, fetch.KindNoVideo,
+			"the season pack contains none of the wanted episodes")
+	}
+	if err := m.store.FinishAttempt(ctx, attemptID, "success", "", ""); err != nil {
+		return err
+	}
+	m.scan(ctx, filepath.Join(g.SeriesPath, SeriesFolder(se)))
+	return m.Reconcile(ctx, se.ID)
+}
+
+// fillableFromPack reports whether an episode still needs a file, so that a
+// pack does not overwrite episodes outside the rolling window.
+func fillableFromPack(state string) bool {
+	switch state {
+	case store.MovieSearching, store.MovieWaiting, store.MovieQueued, store.MovieDownloading, store.MovieFailed:
+		return true
+	}
+	return false
 }
 
 func (m *Manager) progress(e store.Episode, p download.Progress) {
@@ -201,8 +349,7 @@ func (m *Manager) finish(ctx, dctx context.Context, se store.Series, e store.Epi
 	}
 	e = cur
 
-	switch {
-	case kind == "":
+	if kind == "" {
 		if err := m.store.FinishAttempt(ctx, attemptID, "success", "", ""); err != nil {
 			return err
 		}
@@ -230,7 +377,15 @@ func (m *Manager) finish(ctx, dctx context.Context, se store.Series, e store.Epi
 		})
 		m.scan(ctx, filepath.Dir(path))
 		return m.Reconcile(ctx, se.ID)
+	}
+	return m.finishFailure(ctx, dctx, e, rel, attemptID, kind, msg)
+}
 
+// finishFailure handles a download that did not produce an episode, shared
+// by single releases and season packs.
+func (m *Manager) finishFailure(ctx, dctx context.Context, e store.Episode, rel store.Release, attemptID int64,
+	kind, msg string) error {
+	switch {
 	case kind == fetch.KindCancelled && !errors.Is(context.Cause(dctx), errSkipped):
 		return m.store.FinishAttempt(ctx, attemptID, "cancelled", kind, msg)
 
@@ -250,7 +405,7 @@ func (m *Manager) finish(ctx, dctx context.Context, se store.Series, e store.Epi
 	if kind == fetch.KindCancelled {
 		kind = "skipped"
 	}
-	m.log.Warn("episode release failed", "release", rel.Title, "kind", kind, "err", dlErr)
+	m.log.Warn("episode release failed", "release", rel.Title, "kind", kind, "err", msg)
 	if err := m.store.FinishAttempt(ctx, attemptID, "failed", kind, msg); err != nil {
 		return err
 	}
