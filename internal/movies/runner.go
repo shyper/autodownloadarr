@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"github.com/shyper/autodownloadarr/internal/fetch"
 	"github.com/shyper/autodownloadarr/internal/httpx"
@@ -116,6 +117,9 @@ func (m *Manager) download(ctx context.Context, mv store.Movie, rel store.Releas
 
 	root := g.MoviesPath
 	folder := filepath.Join(root, FolderName(mv))
+	// Plex learns about the movie as soon as the first part is extracted,
+	// so that it can be watched while the rest is still downloading.
+	var visible atomic.Bool
 	res, err := m.fetcher.Fetch(ctx, fetch.Request{
 		Pool:         pool,
 		NZB:          data,
@@ -124,10 +128,19 @@ func (m *Manager) download(ctx context.Context, mv store.Movie, rel store.Releas
 		Root:         root,
 		WorkDir:      filepath.Join(root, fetch.WorkDirName, "incomplete", strconv.FormatInt(mv.ID, 10)),
 		Folder:       folder,
-		Passwords:    passwords,
-		Limiter:      m.limiter,
-		OnProgress:   func(p download.Progress) { m.progress(mv.ID, p) },
+		VideoName:    FolderName(mv),
+		OnVisible: func(path string) {
+			visible.Store(true)
+			m.log.Info("movie playable while downloading", "movie", mv.Title, "file", path)
+			go m.scan(context.WithoutCancel(ctx), folder)
+		},
+		Passwords:  passwords,
+		Limiter:    m.limiter,
+		OnProgress: func(p download.Progress) { m.progress(mv.ID, p) },
 	})
+	if err != nil && visible.Load() {
+		m.scan(context.WithoutCancel(ctx), root) // the file is gone again
+	}
 	var fe *fetch.Error
 	if errors.As(err, &fe) {
 		return outcome{kind: fe.Kind, err: fe.Err}

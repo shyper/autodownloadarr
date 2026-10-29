@@ -125,3 +125,71 @@ func TestCancel(t *testing.T) {
 		t.Error("cancelled extraction succeeded")
 	}
 }
+
+func TestExtractVisibleEarly(t *testing.T) {
+	files := []rar5.File{
+		{Name: "Release/release.mkv", Data: movie()},
+		{Name: "Release/extra.mkv", Data: []byte("extra")},
+	}
+	src, dest := t.TempDir(), t.TempDir()
+	volumes, err := rar5.Write(src, "Release", files, 12_000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var seen []string
+	opts := Options{
+		Visible: func(name string) string {
+			if name == "Release/release.mkv" {
+				return "Movie (2024).mkv"
+			}
+			return ""
+		},
+		VisibleAfter: 20_000,
+		OnVisible: func(target string) {
+			// Called while extracting: the file is already there under its
+			// final name, only partly written.
+			info, err := os.Stat(target)
+			if err != nil || info.Size() < 20_000 || info.Size() >= int64(len(files[0].Data)) {
+				t.Errorf("at OnVisible: %v, %v", info, err)
+			}
+			seen = append(seen, target)
+		},
+	}
+	res, err := ExtractRARFS(context.Background(), os.DirFS(src), filepath.Base(volumes[0]), dest, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	final := filepath.Join(dest, "Movie (2024).mkv")
+	if !slices.Equal(seen, []string{final}) {
+		t.Errorf("OnVisible calls = %v", seen)
+	}
+	if got, _ := os.ReadFile(final); !bytes.Equal(got, files[0].Data) {
+		t.Error("visible file differs")
+	}
+	if want := []string{"Movie (2024).mkv", filepath.Join("Release", "extra.mkv")}; !slices.Equal(res.Files, want) {
+		t.Errorf("Files = %v, want %v", res.Files, want)
+	}
+	if left, _ := filepath.Glob(filepath.Join(dest, "*", "*.partial")); len(left) > 0 {
+		t.Errorf("partial files left: %v", left)
+	}
+}
+
+func TestExtractVisibleRemovedOnError(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	src, dest := t.TempDir(), t.TempDir()
+	volumes, err := rar5.Write(src, "Release", []rar5.File{{Name: "release.mkv", Data: movie()}}, 12_000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	opts := Options{
+		Visible:      func(string) string { return "Movie.mkv" },
+		VisibleAfter: 1,
+		OnVisible:    func(string) { cancel() }, // abort halfway
+	}
+	if _, err := ExtractRARFS(ctx, os.DirFS(src), filepath.Base(volumes[0]), dest, opts); err == nil {
+		t.Fatal("cancelled extraction succeeded")
+	}
+	if _, err := os.Stat(filepath.Join(dest, "Movie.mkv")); !os.IsNotExist(err) {
+		t.Errorf("visible file not removed: %v", err)
+	}
+}

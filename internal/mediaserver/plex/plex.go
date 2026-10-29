@@ -270,7 +270,11 @@ func (c *Client) items(ctx context.Context, libraryKey, typ string) ([]Item, err
 						File string `json:"file"`
 					} `json:"Part"`
 				} `json:"Media"`
-				GUID []struct {
+				// Plex sends "guid" (its own ID, a string) next to "Guid" (the
+				// external IDs). encoding/json matches keys case-insensitively,
+				// so "guid" needs a field of its own or it lands in GUID.
+				PlexGUID string `json:"guid"`
+				GUID     []struct {
 					ID string `json:"id"`
 				} `json:"Guid"`
 			} `json:"Metadata"`

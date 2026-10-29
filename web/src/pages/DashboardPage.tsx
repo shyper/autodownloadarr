@@ -4,7 +4,7 @@ import { useOnboarding } from '../api/config'
 import { useMe, useSystemStatus } from '../api/hooks'
 import { useDownloads, useMovies } from '../api/movies'
 import { useEpisodeDownloads, useSeriesList } from '../api/series'
-import type { MovieState } from '../api/types'
+import type { EpisodeDownload, MovieState } from '../api/types'
 import { DownloadProgress } from '../components/MovieBits'
 import { Card } from '../components/ui'
 
@@ -23,6 +23,12 @@ export function DashboardPage() {
 
   const count = (s: MovieState) => movies.data?.filter((m) => m.state === s).length ?? 0
   const titleOf = (id: number) => movies.data?.find((m) => m.id === id)?.title ?? ''
+  const episodeLabel = (d: EpisodeDownload) =>
+    `${series.data?.find((s) => s.id === d.seriesId)?.title ?? ''} · S${String(d.season).padStart(2, '0')}E${String(d.episode).padStart(2, '0')}`
+  const active = [
+    ...(downloads.data ?? []).map((d) => ({ key: `m${d.movieId}`, to: `/movies/${d.movieId}`, label: titleOf(d.movieId), download: d })),
+    ...(episodeDownloads.data ?? []).map((d) => ({ key: `e${d.episodeId}`, to: `/series/${d.seriesId}`, label: episodeLabel(d), download: d })),
+  ]
 
   return (
     <div className="space-y-8">
@@ -53,15 +59,15 @@ export function DashboardPage() {
 
       <Card className="space-y-4">
         <h2 className="font-semibold">{t('dashboard.downloads')}</h2>
-        {downloads.data?.length ? (
+        {active.length ? (
           <ul className="space-y-4">
-            {downloads.data.map((d) => (
-              <li key={d.movieId} className="space-y-1">
-                <Link to={`/movies/${d.movieId}`} className="text-sm font-medium hover:underline">
-                  {titleOf(d.movieId)}
+            {active.map((a) => (
+              <li key={a.key} className="space-y-1">
+                <Link to={a.to} className="text-sm font-medium hover:underline">
+                  {a.label}
                 </Link>
-                <p className="font-mono text-xs break-all text-muted">{d.releaseTitle}</p>
-                <DownloadProgress download={d} />
+                <p className="font-mono text-xs break-all text-muted">{a.download.releaseTitle}</p>
+                <DownloadProgress download={a.download} />
               </li>
             ))}
           </ul>
@@ -81,12 +87,6 @@ export function DashboardPage() {
           <p className="text-sm text-muted">
             {t('dashboard.seriesSummary', { count: series.data?.length ?? 0, ready: readyEpisodes })}
           </p>
-          {episodeDownloads.data?.map((d) => (
-            <div key={d.episodeId} className="space-y-1">
-              <p className="font-mono text-xs break-all text-muted">{d.releaseTitle}</p>
-              <DownloadProgress download={d} />
-            </div>
-          ))}
         </Card>
         <Card className="space-y-2">
           <h2 className="font-semibold">{t('dashboard.system.title')}</h2>

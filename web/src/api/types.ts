@@ -234,7 +234,14 @@ export type Episode = {
 
 export type SeriesDetail = Series & { episodes: Episode[] }
 export type EpisodeDetail = Episode & { releases: Release[]; attempts: Attempt[]; blocklist: BlocklistEntry[] }
-export type EpisodeDownload = { episodeId: number; releaseTitle: string; progress: Progress }
+export type EpisodeDownload = {
+  episodeId: number
+  seriesId: number
+  season: number
+  episode: number
+  releaseTitle: string
+  progress: Progress
+}
 
 export type SeriesSettings = {
   seasons: number[]

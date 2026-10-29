@@ -228,7 +228,11 @@ func (m *Manager) wait(ctx context.Context, e store.Episode, round int, code, de
 		return err
 	}
 	m.publishEpisode(e)
-	return m.scheduleSearch(ctx, e.ID, round+1, next)
+	if err := m.scheduleSearch(ctx, e.ID, round+1, next); err != nil {
+		return err
+	}
+	m.startQueued() // later episodes no longer wait for this one
+	return nil
 }
 
 func (m *Manager) fail(ctx context.Context, e store.Episode, code, detail string) error {
@@ -241,6 +245,7 @@ func (m *Manager) fail(ctx context.Context, e store.Episode, code, detail string
 	}
 	m.log.Warn("episode needs attention", "episode", e.ID, "reason", e.LastError)
 	m.publishEpisode(e)
+	m.startQueued() // later episodes no longer wait for this one
 	return nil
 }
 
@@ -254,8 +259,10 @@ func (m *Manager) enqueue(ctx context.Context, e store.Episode) error {
 	return nil
 }
 
-// startQueued starts queued episodes in broadcast order up to the number of
-// parallel downloads.
+// startQueued starts queued episodes up to the number of parallel
+// downloads. The episodes of a series are downloaded one after another in
+// broadcast order, so that the next one to watch is ready first: while an
+// earlier episode is still being searched, the later ones wait for it.
 func (m *Manager) startQueued() {
 	ctx := m.ctx
 	g, err := m.store.General(ctx)
@@ -268,13 +275,31 @@ func (m *Manager) startQueued() {
 		m.log.Error("list queued episodes", "err", err)
 		return
 	}
+	searching, err := m.store.EpisodesInState(ctx, store.MovieSearching)
+	if err != nil {
+		m.log.Error("list searching episodes", "err", err)
+		return
+	}
+	firstSearching := map[int64]store.Episode{}
+	for _, e := range searching {
+		if f, ok := firstSearching[e.SeriesID]; !ok || e.Before(f) {
+			firstSearching[e.SeriesID] = e
+		}
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	busy := map[int64]bool{}
+	for _, a := range m.active {
+		busy[a.episode.SeriesID] = true
+	}
 	for _, e := range queued {
 		if len(m.active) >= max(g.ParallelDownloads, 1) {
 			return
 		}
 		if _, running := m.active[e.ID]; running {
+			continue
+		}
+		if f, ok := firstSearching[e.SeriesID]; busy[e.SeriesID] || (ok && f.Before(e)) {
 			continue
 		}
 		rel, ok, err := m.chooseRelease(ctx, e.ID, m.forced[e.ID])
@@ -283,7 +308,8 @@ func (m *Manager) startQueued() {
 			continue
 		}
 		dctx, cancel := context.WithCancelCause(ctx)
-		m.active[e.ID] = &activeDownload{cancel: cancel, release: rel}
+		m.active[e.ID] = &activeDownload{episode: e, cancel: cancel, release: rel}
+		busy[e.SeriesID] = true
 		delete(m.forced, e.ID)
 		go m.runDownload(dctx, e, rel)
 	}

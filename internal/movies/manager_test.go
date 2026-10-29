@@ -99,7 +99,7 @@ func (w *fakeWorld) handler(t *testing.T, base func() string) http.Handler {
 		if w.watched.Load() {
 			views = 1
 		}
-		_, _ = fmt.Fprintf(rw, `{"MediaContainer":{"Metadata":[{"ratingKey":"7","title":"Film","viewCount":%d,"lastViewedAt":%d,
+		_, _ = fmt.Fprintf(rw, `{"MediaContainer":{"Metadata":[{"ratingKey":"7","guid":"plex://movie/5d77","title":"Film","viewCount":%d,"lastViewedAt":%d,
 			"Media":[{"Part":[{"file":"/remote/movies/Film (2024) {tmdb-42}/Film (2024) {tmdb-42}.mkv"}]}]}]}}`,
 			views, time.Now().Add(-time.Hour).Unix())
 	})
@@ -215,12 +215,19 @@ func TestMovieLifecycle(t *testing.T) {
 	if len(bl) != 1 || bl[0].Title != "Film.2024.German.720p.BluRay.x264-BAD" {
 		t.Errorf("blocklist = %+v", bl)
 	}
-	world.mu.Lock()
-	scanned := strings.Join(world.scanned, "|")
-	world.mu.Unlock()
-	if !strings.Contains(scanned, "/remote/movies/Film (2024) {tmdb-42}") {
-		t.Errorf("plex scans = %q", scanned)
-	}
+	// Plex is told twice: once the start of the file is extracted (it can
+	// be played while downloading) and when it is complete.
+	eventually(t, "early and final plex scan", func() bool {
+		world.mu.Lock()
+		defer world.mu.Unlock()
+		n := 0
+		for _, p := range world.scanned {
+			if p == "/remote/movies/Film (2024) {tmdb-42}" {
+				n++
+			}
+		}
+		return n >= 2
+	})
 
 	// Not watched yet: nothing happens.
 	must(t, m.PollWatched(ctx))

@@ -89,14 +89,14 @@ func TestServerAPI(t *testing.T) {
 			if r.URL.Query().Get("type") != "4" {
 				t.Error("episodes not requested")
 			}
-			_, _ = w.Write([]byte(`{"MediaContainer":{"Metadata":[{"ratingKey":"9","grandparentTitle":"Dark","parentIndex":1,"index":2,
+			_, _ = w.Write([]byte(`{"MediaContainer":{"Metadata":[{"ratingKey":"9","guid":"plex://episode/5d9c","grandparentTitle":"Dark","parentIndex":1,"index":2,
 				"viewOffset":600000,"duration":3000000,"Media":[{"Part":[{"file":"/tv/Dark/Season 01/e.mkv"}]}]}]}}`))
 		case "/library/sections/3/all":
 			if r.URL.Query().Get("includeGuids") != "1" {
 				t.Error("GUIDs not requested")
 			}
 			_, _ = w.Write([]byte(`{"MediaContainer":{"Metadata":[
-				{"ratingKey":"101","title":"Dune: Part Two","year":2024,"viewCount":1,"lastViewedAt":1730000000,"duration":10020000,
+				{"ratingKey":"101","guid":"plex://movie/5d77","title":"Dune: Part Two","year":2024,"viewCount":1,"lastViewedAt":1730000000,"duration":10020000,
 				 "Media":[{"Part":[{"file":"/mnt/hdd/temp/filme/Dune (2024)/Dune (2024).mkv"}]}],"Guid":[{"id":"tmdb://693134"}]},
 				{"ratingKey":"102","title":"Other","viewOffset":60000}]}}`))
 		default:

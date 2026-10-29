@@ -40,7 +40,9 @@ type world struct {
 	nzbs   map[int][]byte // episode → NZB
 
 	mu       sync.Mutex
-	progress map[int]float64 // episode → Plex progress (1 = watched)
+	progress map[int]float64       // episode → Plex progress (1 = watched)
+	delay    map[int]time.Duration // episode → how long its search takes
+	fetched  []int                 // episodes in the order their NZB was fetched
 }
 
 func (w *world) post(t *testing.T, ep int) {
@@ -92,11 +94,18 @@ func (w *world) handler(t *testing.T, base *string) http.Handler {
 		if q.Get("tvdbid") != "99" || q.Get("season") != "1" || ep == 0 {
 			t.Errorf("unexpected search %s", r.URL.RawQuery)
 		}
+		w.mu.Lock()
+		d := w.delay[ep]
+		w.mu.Unlock()
+		time.Sleep(d)
 		_, _ = fmt.Fprintf(rw, `<rss><channel><item><title>Show.S01E%02d.German.720p.WEB.h264-GRP</title><guid>e%d</guid>
 			<link>%s/indexer/getnzb/%d</link><attr name="size" value="40000"/></item></channel></rss>`, ep, ep, *base, ep)
 	})
 	mux.HandleFunc("/indexer/getnzb/", func(rw http.ResponseWriter, r *http.Request) {
 		ep, _ := strconv.Atoi(strings.TrimPrefix(r.URL.Path, "/indexer/getnzb/"))
+		w.mu.Lock()
+		w.fetched = append(w.fetched, ep)
+		w.mu.Unlock()
 		_, _ = rw.Write(w.nzbs[ep])
 	})
 	mux.HandleFunc("/plex/library/sections/2/refresh", func(http.ResponseWriter, *http.Request) {})
@@ -111,9 +120,9 @@ func (w *world) handler(t *testing.T, base *string) http.Handler {
 				views, offset = 1, 0
 			}
 			file := fmt.Sprintf("/remote/tv/Show (2020) {tvdb-99}/Season 01/Show (2020) - S01E%02d - Folge %d.mkv", ep, ep)
-			parts = append(parts, fmt.Sprintf(`{"ratingKey":"%d","grandparentTitle":"Show","parentIndex":1,"index":%d,"viewCount":%d,
+			parts = append(parts, fmt.Sprintf(`{"ratingKey":"%d","guid":"plex://episode/%d","grandparentTitle":"Show","parentIndex":1,"index":%d,"viewCount":%d,
 				"viewOffset":%d,"duration":2700000,"lastViewedAt":%d,"Media":[{"Part":[{"file":%q}]}]}`,
-				100+ep, ep, views, offset, time.Now().Add(-time.Minute).Unix(), file))
+				100+ep, ep, ep, views, offset, time.Now().Add(-time.Minute).Unix(), file))
 		}
 		_, _ = fmt.Fprintf(rw, `{"MediaContainer":{"Metadata":[%s]}}`, strings.Join(parts, ","))
 	})
@@ -138,28 +147,30 @@ func eventually(t *testing.T, what string, cond func() bool) {
 	}
 }
 
-func TestRollingWindow(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+// setup starts a manager against the fake world; general settings can be
+// adjusted with tune. It returns the manager, its store and the series root.
+func setup(ctx context.Context, t *testing.T, w *world, tune func(*store.General)) (*Manager, *store.Store, string) {
+	t.Helper()
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-
-	w := &world{usenet: nntptest.New(t), nzbs: map[int][]byte{}, progress: map[int]float64{}}
 	for ep := 1; ep <= episodes; ep++ {
 		w.post(t, ep)
 	}
 	var base string
 	srv := httptest.NewServer(w.handler(t, &base))
-	defer srv.Close()
+	t.Cleanup(srv.Close)
 	base = srv.URL
 
 	sqldb, err := db.Open(ctx, filepath.Join(t.TempDir(), "test.db"))
 	must(t, err)
-	defer sqldb.Close()
+	t.Cleanup(func() { _ = sqldb.Close() })
 	box, _ := secrets.New(make([]byte, 32))
 	st := store.New(sqldb, box)
 	root := t.TempDir()
 	g := store.DefaultGeneral()
 	g.SeriesPath = root
+	if tune != nil {
+		tune(&g)
+	}
 	must(t, st.SetGeneral(ctx, g))
 	must(t, st.SetTMDBKey(ctx, "key"))
 	host, port, _ := net.SplitHostPort(w.usenet.Addr())
@@ -177,12 +188,25 @@ func TestRollingWindow(t *testing.T) {
 
 	sched := scheduler.New(sqldb, log, scheduler.WithPollInterval(20*time.Millisecond))
 	svc := &movies.Services{Store: st, Log: log, TMDBBaseURL: srv.URL + "/tmdb"}
-	defer svc.Close()
+	t.Cleanup(svc.Close)
 	m := NewManager(st, svc, sched, events.New(log), log, download.NewRateLimiter(0))
 	must(t, m.Start(ctx))
+	sctx, stop := context.WithCancel(ctx)
 	done := make(chan struct{})
-	go func() { _ = sched.Run(ctx); close(done) }()
-	defer func() { cancel(); <-done }()
+	go func() { _ = sched.Run(sctx); close(done) }()
+	t.Cleanup(func() { stop(); <-done })
+	return m, st, root
+}
+
+func newWorld(t *testing.T) *world {
+	return &world{usenet: nntptest.New(t), nzbs: map[int][]byte{}, progress: map[int]float64{}, delay: map[int]time.Duration{}}
+}
+
+func TestRollingWindow(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w := newWorld(t)
+	m, st, root := setup(ctx, t, w, nil)
 
 	se, err := m.Request(ctx, 7, 0, RequestOptions{WindowSize: 2, Trigger: store.TriggerProgress, TriggerValue: 10})
 	must(t, err)
@@ -241,6 +265,35 @@ func TestRollingWindow(t *testing.T) {
 	w.setProgress(4, 0.2)
 	must(t, m.PollWatched(ctx))
 	waitStates("last episode", map[int]string{3: store.MovieDeleted, 4: store.MovieAvailable, 5: store.MovieAvailable})
+}
+
+// The searches for the window run in parallel; even when a later episode's
+// search finishes first, the episodes are downloaded in broadcast order,
+// one after another.
+func TestEpisodesDownloadInOrder(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w := newWorld(t)
+	w.delay[1], w.delay[2] = 400*time.Millisecond, 200*time.Millisecond
+	m, st, _ := setup(ctx, t, w, func(g *store.General) { g.ParallelDownloads = 3 })
+
+	se, err := m.Request(ctx, 7, 0, RequestOptions{WindowSize: 3, Trigger: store.TriggerProgress, TriggerValue: 10})
+	must(t, err)
+	eventually(t, "window downloaded", func() bool {
+		eps, _ := st.Episodes(ctx, se.ID)
+		n := 0
+		for _, e := range eps {
+			if e.State == store.MovieAvailable {
+				n++
+			}
+		}
+		return n == 3
+	})
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if fmt.Sprint(w.fetched) != "[1 2 3]" {
+		t.Errorf("download order = %v, want [1 2 3]", w.fetched)
+	}
 }
 
 func TestDeletionDue(t *testing.T) {

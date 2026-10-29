@@ -30,7 +30,8 @@ var (
 )
 
 // partialSuffix marks files that are still being extracted, so that media
-// servers ignore them until they are complete.
+// servers ignore them until they are complete (unless Options.Visible
+// wants them seen early).
 const partialSuffix = ".partial"
 
 var (
@@ -110,6 +111,14 @@ type Options struct {
 	// Include, if set, selects the files to extract by their name in the
 	// archive; others are skipped.
 	Include func(name string) bool
+	// Visible, if set, is asked for every extracted file. A non-empty
+	// result is a path relative to dest: the file is written there under
+	// its final name right away (no .partial), so that a media server can
+	// play it while it is still being extracted. OnVisible is called once
+	// the first VisibleAfter bytes of such a file are on disk.
+	Visible      func(name string) string
+	VisibleAfter int64
+	OnVisible    func(target string)
 }
 
 // ExtractRAR extracts the archive whose first volume is at path into dest.
@@ -125,7 +134,8 @@ func ExtractRAR(ctx context.Context, path, dest, password string) (Result, error
 // ExtractRARFS extracts the archive whose first volume is firstVolume in
 // fsys into dest. With a download.Job as fsys, extraction proceeds as the
 // volumes arrive. Entries that would end up outside dest and links are
-// skipped; files are written as name.partial and renamed when complete.
+// skipped; files are written as name.partial and renamed when complete,
+// except those chosen by opts.Visible.
 func ExtractRARFS(ctx context.Context, fsys fs.FS, firstVolume, dest string, opts Options) (res Result, err error) {
 	password := opts.Password
 	rarOpts := []rardecode.Option{rardecode.FileSystem(fsys), rardecode.BufferSize(1 << 20)}
@@ -156,7 +166,14 @@ func ExtractRARFS(ctx context.Context, fsys fs.FS, firstVolume, dest string, opt
 		if !h.IsDir && opts.Include != nil && !opts.Include(h.Name) {
 			continue
 		}
-		target, err := safeJoin(dest, h.Name)
+		name := h.Name
+		direct := false
+		if !h.IsDir && opts.Visible != nil {
+			if v := opts.Visible(h.Name); v != "" {
+				name, direct = filepath.ToSlash(v), true
+			}
+		}
+		target, err := safeJoin(dest, name)
 		if err != nil {
 			return res, err
 		}
@@ -166,34 +183,87 @@ func ExtractRARFS(ctx context.Context, fsys fs.FS, firstVolume, dest string, opt
 			}
 			continue
 		}
-		if err := extractFile(ctx, rc, target); err != nil {
+		var w writeOptions
+		if direct {
+			w = writeOptions{direct: true, after: opts.VisibleAfter, notify: opts.OnVisible}
+		}
+		if err := extractFile(ctx, rc, target, w); err != nil {
 			return res, rarError(err, password)
 		}
-		res.Files = append(res.Files, filepath.FromSlash(h.Name))
+		res.Files = append(res.Files, filepath.FromSlash(name))
 	}
 	return res, nil
 }
 
-func extractFile(ctx context.Context, r io.Reader, target string) error {
+// writeOptions control how extractFile writes: direct writes to the final
+// name and calls notify once after bytes are written (or at the end, for
+// smaller files).
+type writeOptions struct {
+	direct bool
+	after  int64
+	notify func(target string)
+}
+
+func extractFile(ctx context.Context, r io.Reader, target string, w writeOptions) error {
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return err
 	}
-	partial := target + partialSuffix
-	f, err := os.OpenFile(partial, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	path := target + partialSuffix
+	if w.direct {
+		path = target
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 	if err != nil {
 		return err
 	}
-	_, err = io.Copy(f, ctxReader{ctx: ctx, r: r})
+	out := io.Writer(f)
+	nw := &notifyWriter{w: f, after: w.after, notify: func() {
+		if w.notify != nil {
+			w.notify(target)
+		}
+	}}
+	if w.direct {
+		out = nw
+	}
+	_, err = io.Copy(out, ctxReader{ctx: ctx, r: r})
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}
-	if err == nil {
-		err = os.Rename(partial, target)
+	if err == nil && w.direct {
+		nw.fire() // smaller than the threshold
+	}
+	if err == nil && !w.direct {
+		err = os.Rename(path, target)
 	}
 	if err != nil {
-		_ = os.Remove(partial)
+		_ = os.Remove(path)
 	}
 	return err
+}
+
+// notifyWriter calls notify once after a number of bytes went through.
+type notifyWriter struct {
+	w        io.Writer
+	n        int64
+	after    int64
+	notify   func()
+	notified bool
+}
+
+func (nw *notifyWriter) Write(p []byte) (int, error) {
+	n, err := nw.w.Write(p)
+	nw.n += int64(n)
+	if err == nil && nw.n >= nw.after {
+		nw.fire()
+	}
+	return n, err
+}
+
+func (nw *notifyWriter) fire() {
+	if !nw.notified {
+		nw.notified = true
+		nw.notify()
+	}
 }
 
 // safeJoin resolves an archive entry name below dest.

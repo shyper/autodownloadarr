@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"github.com/shyper/autodownloadarr/internal/fetch"
 	"github.com/shyper/autodownloadarr/internal/httpx"
@@ -106,10 +107,19 @@ func (m *Manager) download(ctx context.Context, se store.Series, e store.Episode
 
 	root := g.SeriesPath
 	folder := filepath.Join(root, SeriesFolder(se), SeasonFolder(e.Season))
+	// Plex learns about the episode as soon as the first part is extracted,
+	// so that it can be watched while the rest is still downloading.
+	var visible atomic.Bool
 	res, err := m.fetcher.Fetch(ctx, fetch.Request{
 		Pool: pool, NZB: data, NZBName: nzbName, ReleaseTitle: rel.Title, Root: root,
 		WorkDir:   filepath.Join(root, fetch.WorkDirName, "incomplete", "e"+strconv.FormatInt(e.ID, 10)),
 		Folder:    folder,
+		VideoName: EpisodeFileName(se, e),
+		OnVisible: func(path string) {
+			visible.Store(true)
+			m.log.Info("episode playable while downloading", "series", se.Title, "file", path)
+			go m.scan(context.WithoutCancel(ctx), folder)
+		},
 		Passwords: passwords,
 		Limiter:   m.limiter,
 		OnProgress: func(p download.Progress) {
@@ -118,9 +128,13 @@ func (m *Manager) download(ctx context.Context, se store.Series, e store.Episode
 				a.progress = p
 			}
 			m.mu.Unlock()
-			m.bus.Publish(movies.EventDownloadProgress, Download{EpisodeID: e.ID, Progress: p})
+			m.bus.Publish(movies.EventDownloadProgress, Download{EpisodeID: e.ID, SeriesID: e.SeriesID, Season: e.Season,
+				Episode: e.Episode, Progress: p})
 		},
 	})
+	if err != nil && visible.Load() {
+		m.scan(context.WithoutCancel(ctx), filepath.Join(root, SeriesFolder(se))) // the file is gone again
+	}
 	var fe *fetch.Error
 	if errors.As(err, &fe) {
 		return "", fe.Kind, fe.Err

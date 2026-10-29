@@ -199,7 +199,7 @@ Zusätzlicher Zwischenzustand `PasswordRequired` (nur im Passwort-Modus „warte
 2. Vorab-Check: Liegt der Film bereits im Medienserver (z. B. über Radarr)? → Hinweis statt Download.
 3. Suche bei allen aktiven Indexern (ID-basiert, Fallback Freitext) → Parser → Profil filtert → Scoring → Kandidatenliste.
 4. Bester Kandidat → optional Verfügbarkeits-Check (NNTP `STAT` auf Stichprobe der Artikel) → Download.
-5. Stream-Entpacken direkt in den Zielordner (`.partial`), danach Umbenennen und `NotifyAdded`.
+5. Stream-Entpacken direkt in den Zielordner unter dem endgültigen Namen; nach den ersten 32 MB `NotifyAdded` (schaubar während des Downloads), nach Abschluss erneut.
 6. Watch-Tracker meldet „gesehen“ → Löschzeitpunkt = jetzt + `movie_delete_after` (Standard 48 h) → Benachrichtigung „wird am … gelöscht“.
 7. Timer läuft ab → Dateien löschen (nur aus `files`-Tabelle), `NotifyRemoved`, Status `Deleted`.
 
@@ -265,21 +265,21 @@ NZB ─▶ Parser ─▶ Dateiliste (Volumes, PAR2, Sonstiges) ─▶ Priorisier
                                          ▼
            Stream-Unpacker liest Volumes sequenziell (blockiert, bis Daten da sind)
                                          ▼
-                    Zieldatei im Medienordner (.partial → final)
+                    Zieldatei im Medienordner (endgültiger Name, wächst)
 ```
 
 **Entpacken während des Ladens**
 
 - **Umgesetzt in Phase 1.** Volumes werden in Archivreihenfolge geladen (PAR2-Index zuerst, dann `part1, part2, …` bzw. `.rar, .r00, …`, dann der Rest).
 - Der laufende Download stellt seine Dateien als Dateisystem (`fs.FS`) bereit. Lesezugriffe blockieren, bis die Bytes zusammenhängend auf der Platte liegen; `rardecode` liest darüber und schreibt die Zieldatei, während weitere Volumes noch laden. Ist das letzte Volume da, ist der Film praktisch sofort fertig.
-- Zieldateien heißen beim Schreiben `name.partial` und werden erst nach erfolgreicher CRC-Prüfung umbenannt – der Medienserver sieht nur fertige Dateien.
+- Das Video wird gleich unter seinem endgültigen Namen geschrieben. Sobald die ersten 32 MB auf der Platte liegen (Container-Kopf mit Laufzeit und Codecs), bekommt der Medienserver einen Teil-Scan – der Titel ist schaubar, während der Rest noch lädt. Nach Abschluss folgt ein zweiter Scan. Andere Dateien (Extras, Samples werden gar nicht entpackt) heißen beim Schreiben `name.partial`. Scheitert der Versuch, wird die Datei gelöscht und erneut gescannt.
 - Fehlt ein Artikel endgültig, bricht das Stream-Entpacken mit „Daten fehlen“ ab statt zu hängen (Rückfall auf Reparatur siehe unten).
 - Sonderfall *Store-Modus* (RAR m0, bei Scene-Releases üblich): Nutzdaten liegen unkomprimiert im Archiv → wir könnten Segmente direkt an den richtigen Offset der Zieldatei schreiben und die RAR-Volumes gar nicht erst speichern. Spart Plattenplatz und I/O. (Optimierung für später.)
 - Nach dem Entpacken: Prüfung über CRC aus dem RAR-Header bzw. PAR2-Hashes.
 
-**Schauen, bevor der Download fertig ist (offene Entscheidung)**
+**Schauen, bevor der Download fertig ist (Variante A umgesetzt)**
 
-Das Stream-Entpacken spart die Entpack-Phase; geschaut werden kann aber erst, wenn die Datei fertig ist. Damit man schon *während* des Downloads schauen kann, gibt es zwei Wege:
+Damit man schon *während* des Downloads schauen kann, gibt es zwei Wege. Umgesetzt ist A (wachsende Datei, siehe oben); B bleibt eine Option für später, falls Spulen in noch nicht geladene Teile wichtig wird:
 
 | | A: Wachsende Datei | B: Virtuelles Dateisystem |
 |---|---|---|
@@ -613,7 +613,7 @@ Beim ersten Start (noch kein Konto vorhanden) führt die Weboberfläche durch di
 | Risiko | Gegenmaßnahme |
 |---|---|
 | Stream-Entpacken bei fehlenden Artikeln | Optimistisch streamen, bei Fehler auf „Laden → PAR2 → Entpacken“ zurückfallen |
-| Medienserver erkennt wachsende Dateien schlecht | Erst nach Fertigstellung umbenennen und scannen (`.partial` wird ignoriert) |
+| Medienserver erkennt wachsende Dateien schlecht | Erster Scan erst nach 32 MB (Container-Kopf vollständig), zweiter Scan nach Abschluss; Spulen nur in bereits geladene Teile (MKV-Index am Dateiende) |
 | Watch-Status-Erkennung (Mehrbenutzer, Plex Pass) | WebSocket/Polling statt Webhooks; klare Benutzerzuordnung in den Einstellungen |
 | Indexer-API-Limits | Caching der Suchergebnisse, RSS-Feed statt wiederholter Suche, Limits je Indexer konfigurierbar |
 | Release-Namen-Vielfalt (deutsche Releases) | Großes Test-Korpus echter Namen, Parser tabellengetrieben testen |
@@ -636,7 +636,8 @@ Beim ersten Start (noch kein Konto vorhanden) führt die Weboberfläche durch di
 | Pfad-Mapping | Mapping-Tabelle lokaler Pfad ↔ Medienserver-Pfad, in beide Richtungen, mit Vorschlägen aus den Plex-Bibliotheken (ab MVP) |
 | Passwörter | Mehrere Passwortquellen (NZB-Meta, NZB-Name, Titel, Liste, Betreff, NFO, Archiv-Kommentar, manuell); Quelle gilt erst als unbrauchbar, wenn kein Passwort passt |
 | Entpacken | Entpacken **während** des Downloads ist Kernfunktion (ab Phase 1); klassisches Entpacken nur als Rückfall nach einer Reparatur |
-| Schauen während des Downloads | offen: A (wachsende Datei) oder B (virtuelles Dateisystem), siehe Abschnitt 6 |
+| Schauen während des Downloads | A (wachsende Datei): Video unter endgültigem Namen, Plex-Scan nach 32 MB und nach Abschluss; B (virtuelles Dateisystem) später, siehe Abschnitt 6 |
+| Reihenfolge der Folgen | Folgen einer Serie laden nacheinander in Ausstrahlungsreihenfolge; eine frühere Folge, die noch gesucht wird, hält die späteren zurück. Freie Plätze nutzen andere Serien und Filme |
 | Einrichtung | Einrichtungsassistent beim ersten Start: Konto → Plex → Indexer → Usenet → Standards; Schritte testen vor dem Speichern, überspringbar, später erneut aufrufbar |
 | Lizenz | GPL-3.0 |
 | Konfiguration | Env-Variablen mit Präfix `AUTODOWNLOADARR_` nur für den Start (Port, Config-Ordner, Logging, Proxy); alles andere in der UI |

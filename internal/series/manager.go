@@ -71,6 +71,7 @@ type Manager struct {
 }
 
 type activeDownload struct {
+	episode  store.Episode
 	cancel   context.CancelCauseFunc
 	release  store.Release
 	progress download.Progress
@@ -345,6 +346,9 @@ func (m *Manager) DownloadRelease(ctx context.Context, episodeID, releaseID int6
 // Download is a running episode download for the UI.
 type Download struct {
 	EpisodeID    int64             `json:"episodeId"`
+	SeriesID     int64             `json:"seriesId"`
+	Season       int               `json:"season"`
+	Episode      int               `json:"episode"`
 	ReleaseTitle string            `json:"releaseTitle"`
 	Progress     download.Progress `json:"progress"`
 }
@@ -355,7 +359,8 @@ func (m *Manager) Downloads() []Download {
 	defer m.mu.Unlock()
 	out := []Download{}
 	for id, a := range m.active {
-		out = append(out, Download{EpisodeID: id, ReleaseTitle: a.release.Title, Progress: a.progress})
+		out = append(out, Download{EpisodeID: id, SeriesID: a.episode.SeriesID, Season: a.episode.Season, Episode: a.episode.Episode,
+			ReleaseTitle: a.release.Title, Progress: a.progress})
 	}
 	return out
 }

@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/shyper/autodownloadarr/internal/usenet/download"
 	"github.com/shyper/autodownloadarr/internal/usenet/nntp"
@@ -41,6 +42,10 @@ const (
 // WorkDirName is the hidden folder inside a library that holds incomplete
 // downloads. Plex and Jellyfin are told to ignore it.
 const WorkDirName = ".autodownloadarr"
+
+// visibleAfter is how much of the video must be extracted before the media
+// server is told about it: enough for the container headers.
+const visibleAfter = 32 << 20
 
 // Pre-check: articles sampled with STAT before downloading, and the share
 // that may be missing (a repair can still fix a few).
@@ -90,6 +95,12 @@ type Request struct {
 	// Root is the library root, WorkDir the folder for the raw download
 	// (below Root/WorkDirName) and Folder where the videos end up.
 	Root, WorkDir, Folder string
+	// VideoName is the final file name of the video, without extension.
+	// While streaming, the video is extracted under this name right away
+	// and OnVisible is called once a media server can read it, so that
+	// playback can start before the download is complete.
+	VideoName string
+	OnVisible func(path string)
 	// Passwords from the password list, tried after the release's own.
 	Passwords  []string
 	Limiter    *download.RateLimiter
@@ -165,9 +176,13 @@ func (f *Fetcher) Fetch(ctx context.Context, req Request) (Result, error) {
 	var password string
 	var exErr error
 	firsts := unpack.FirstVolumes(job.Names())
+	name := req.VideoName
 	for _, first := range firsts {
-		files, pw, err := extract(jctx, job, first, req.Folder, &src)
+		files, pw, err := extract(jctx, job, first, req.Folder, &src, name, req.OnVisible)
 		for _, file := range files {
+			if name != "" && strings.TrimSuffix(file, filepath.Ext(file)) == name {
+				name = "" // only one file gets the name
+			}
 			extracted = append(extracted, filepath.Join(req.Folder, file))
 		}
 		if err != nil {

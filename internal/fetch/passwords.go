@@ -83,13 +83,29 @@ func looksLikeText(data []byte) bool {
 
 // extract extracts an archive from the running download. Without a
 // password it tries the candidates in turn and returns the one that worked.
-func extract(ctx context.Context, job *download.Job, first, folder string, src *passwordSource) ([]string, string, error) {
-	res, err := unpack.ExtractRARFS(ctx, job, first, folder, unpack.Options{Include: wanted})
+func extract(ctx context.Context, job *download.Job, first, folder string, src *passwordSource,
+	videoName string, onVisible func(string)) ([]string, string, error) {
+	opts := func(pw string) unpack.Options {
+		o := unpack.Options{Password: pw, Include: wanted}
+		if videoName != "" {
+			named := false
+			o.Visible = func(name string) string {
+				if named || !wanted(name) {
+					return ""
+				}
+				named = true
+				return videoName + strings.ToLower(filepath.Ext(name))
+			}
+			o.VisibleAfter, o.OnVisible = visibleAfter, onVisible
+		}
+		return o
+	}
+	res, err := unpack.ExtractRARFS(ctx, job, first, folder, opts(""))
 	if err == nil || !errors.Is(err, unpack.ErrPasswordRequired) {
 		return res.Files, "", err
 	}
 	for _, pw := range src.all() {
-		res, err = unpack.ExtractRARFS(ctx, job, first, folder, unpack.Options{Password: pw, Include: wanted})
+		res, err = unpack.ExtractRARFS(ctx, job, first, folder, opts(pw))
 		if err == nil {
 			return res.Files, pw, nil
 		}
