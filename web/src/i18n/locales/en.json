@@ -76,9 +76,9 @@
         "description": "Where temporary movies are stored, and the TMDB key used to search for movies."
       },
       "mediaServer": {
-        "label": "Plex",
-        "title": "Connect Plex",
-        "description": "New movies appear in your Plex library as soon as they are ready; watched ones are cleaned up automatically."
+        "label": "Media server",
+        "title": "Connect a media server",
+        "description": "New movies appear in your Plex, Jellyfin or Emby library as soon as they are ready; watched ones are cleaned up automatically."
       },
       "done": {
         "label": "Done",
@@ -229,7 +229,7 @@
       "general": "General",
       "usenet": "Usenet",
       "indexers": "Indexers",
-      "plex": "Plex",
+      "plex": "Media server",
       "profile": "Quality",
       "passwords": "Passwords",
       "notifications": "Notifications"

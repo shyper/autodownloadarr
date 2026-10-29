@@ -76,9 +76,9 @@
         "description": "Wo temporäre Filme gespeichert werden und der TMDB-Schlüssel für die Filmsuche."
       },
       "mediaServer": {
-        "label": "Plex",
-        "title": "Plex verbinden",
-        "description": "Neue Filme erscheinen in deiner Plex-Bibliothek, sobald sie fertig sind; Gesehenes wird automatisch aufgeräumt."
+        "label": "Medienserver",
+        "title": "Medienserver verbinden",
+        "description": "Neue Filme erscheinen sofort in deiner Plex-, Jellyfin- oder Emby-Bibliothek; angesehene werden automatisch aufgeräumt."
       },
       "done": {
         "label": "Fertig",
@@ -229,7 +229,7 @@
       "general": "Allgemein",
       "usenet": "Usenet",
       "indexers": "Indexer",
-      "plex": "Plex",
+      "plex": "Medienserver",
       "profile": "Qualität",
       "passwords": "Passwörter",
       "notifications": "Benachrichtigungen"
