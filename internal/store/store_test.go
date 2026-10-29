@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -318,5 +319,36 @@ func TestHistoryAndQueue(t *testing.T) {
 	all, _ = s.History(ctx, HistoryFilter{})
 	if len(all) != 2 || all[1].Label != "Dune (2024)" || all[1].MovieID != 0 || all[0].SeriesID != 0 {
 		t.Errorf("history after removal = %+v", all)
+	}
+}
+
+// Equal scores: the newest upload first (older ones are more often taken
+// down), releases without a date after dated ones, then grabs.
+func TestReleaseOrder(t *testing.T) {
+	s, ctx := newStore(t), context.Background()
+	m, err := s.CreateMovie(ctx, Movie{TMDBID: 1, Title: "Dune", State: MovieSearching}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	day := func(d int) *time.Time {
+		v := time.Date(2026, 1, d, 0, 0, 0, 0, time.UTC)
+		return &v
+	}
+	if err := s.ReplaceReleases(ctx, m.ID, []Release{
+		{Title: "old-popular", Fingerprint: "1", Score: 10, PublishedAt: day(1), Grabs: 900, NZBURL: "u"},
+		{Title: "undated", Fingerprint: "2", Score: 10, Grabs: 999, NZBURL: "u"},
+		{Title: "new", Fingerprint: "3", Score: 10, PublishedAt: day(20), Grabs: 1, NZBURL: "u"},
+		{Title: "better", Fingerprint: "4", Score: 20, PublishedAt: day(2), NZBURL: "u"},
+		{Title: "rejected", Fingerprint: "5", Score: 99, PublishedAt: day(25), Rejected: "too_large", NZBURL: "u"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	rels, _ := s.Releases(ctx, m.ID)
+	var got []string
+	for _, r := range rels {
+		got = append(got, r.Title)
+	}
+	if want := "better new old-popular undated rejected"; strings.Join(got, " ") != want {
+		t.Errorf("order = %v, want %s", got, want)
 	}
 }

@@ -255,10 +255,11 @@ func (s *Store) Releases(ctx context.Context, movieID int64) ([]Release, error) 
 	return s.ReleasesOf(ctx, ForMovie(movieID))
 }
 
-// ReleasesOf returns the stored results of a movie or episode, best first.
+// ReleasesOf returns the stored results of a movie or episode, best first:
+// by score, then the newest upload (less likely taken down), then grabs.
 func (s *Store) ReleasesOf(ctx context.Context, o Owner) ([]Release, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT `+releaseColumns+` FROM releases r WHERE r.`+o.col+` = ?
-		ORDER BY r.rejected != '', r.score DESC, r.grabs DESC, r.id`, o.ID)
+		ORDER BY r.rejected != '', r.score DESC, r.published_at IS NULL, r.published_at DESC, r.grabs DESC, r.id`, o.ID)
 	if err != nil {
 		return nil, err
 	}

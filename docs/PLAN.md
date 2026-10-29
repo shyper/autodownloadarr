@@ -643,6 +643,7 @@ Beim ersten Start (noch kein Konto vorhanden) führt die Weboberfläche durch di
 | Übersprungene Folgen | Gelten bei allen Löschauslösern als gesehen: gelöscht, sobald eine spätere Folge den Auslöser erreicht |
 | Plex-Scan | Fehlgeschlagene Teil-Scans werden bis zu sechsmal mit Backoff wiederholt und bis zum nächsten erfolgreichen Scan als Warnung im Dashboard angezeigt |
 | Download-Verlauf | Jeder Versuch mit Titel, Release, Größe, Indexer, Dauer und Ergebnis; bleibt erhalten, wenn Film oder Serie entfernt werden. Seite „Downloads“ mit Laufend, Warteschlange und Verlauf (Filter, Seiten à 50) |
+| Reihenfolge der Releases | Nicht abgelehnte zuerst, dann nach Punktzahl des Profils (Auflösung, Quelle, Bonuswörter, Codec, PROPER, Grabs); bei gleicher Punktzahl das neueste Upload zuerst (ältere werden häufiger gelöscht), Releases ohne Datum danach, dann mehr Grabs |
 | Reihenfolge der Folgen | Folgen einer Serie laden nacheinander in Ausstrahlungsreihenfolge; eine frühere Folge, die noch gesucht wird, hält die späteren zurück. Freie Plätze nutzen andere Serien und Filme |
 | Einrichtung | Einrichtungsassistent beim ersten Start: Konto → Plex → Indexer → Usenet → Standards; Schritte testen vor dem Speichern, überspringbar, später erneut aufrufbar |
 | Lizenz | GPL-3.0 |
