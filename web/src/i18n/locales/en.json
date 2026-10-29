@@ -259,7 +259,11 @@
       "maxDownloadMBpsHint": "0 means unlimited.",
       "seriesPath": "Series folder",
       "seriesPathHint": "Path inside the container. Add it to Plex as a separate TV library.",
-      "seriesDefaults": "Defaults for new series"
+      "seriesDefaults": "Defaults for new series",
+      "maxLibraryGB": "Temporary library limit (GB)",
+      "maxLibraryGBHint": "Downloads wait while the movies and series folders together are larger than this. 0 means unlimited.",
+      "minFreeGB": "Keep free disk space (GB)",
+      "minFreeGBHint": "No download starts if the disk would drop below this. 0 means off."
     },
     "tmdb": {
       "title": "TMDB",
@@ -486,7 +490,8 @@
   },
   "warnings": {
     "plex_scan_movies": "Plex could not scan the movie library ({{detail}}). It is retried automatically.",
-    "plex_scan_tv": "Plex could not scan the TV library ({{detail}}). It is retried automatically."
+    "plex_scan_tv": "Plex could not scan the TV library ({{detail}}). It is retried automatically.",
+    "no_space": "Downloads are waiting for free space: {{detail}}."
   },
   "downloads": {
     "title": "Downloads",

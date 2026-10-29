@@ -265,6 +265,22 @@ func (m *Manager) enqueue(ctx context.Context, mv store.Movie) error {
 	return nil
 }
 
+// taskSpace retries downloads that wait for free space.
+const taskSpace = "movie.space"
+
+// spaceRetryDelay is how long to wait before checking for space again.
+var spaceRetryDelay = 5 * time.Minute
+
+// retrySpace schedules another startQueued call for when the space situation
+// may have changed.
+func (m *Manager) retrySpace(ctx context.Context) {
+	if _, err := m.sched.Schedule(context.WithoutCancel(ctx), scheduler.Spec{
+		Type: taskSpace, Key: "movie-space", RunAt: m.now().Add(spaceRetryDelay), MaxAttempts: 1,
+	}); err != nil {
+		m.log.Error("schedule space retry", "err", err)
+	}
+}
+
 // startQueued starts queued movies, oldest first, up to the configured
 // number of parallel downloads.
 func (m *Manager) startQueued() {
@@ -281,8 +297,13 @@ func (m *Manager) startQueued() {
 	}
 	slices.Reverse(queued) // Movies() is newest first
 
+	// Space limits apply to the whole temporary library. Check them before
+	// taking the lock: walking the folders can take a moment.
+	budget := m.svc.SpaceBudget(g, g.MoviesPath)
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	retryScheduled := false
 	for _, mv := range queued {
 		if m.deleting[mv.ID] {
 			continue // the movie is being removed
@@ -298,6 +319,16 @@ func (m *Manager) startQueued() {
 			go func() { _ = m.pickNext(ctx, mv, 0) }()
 			continue
 		}
+		if rel.Size > budget {
+			m.svc.WarnNoSpace(fmt.Sprintf("%s needs %s, but only %s fit", mv.Title, FormatSize(rel.Size), FormatSize(budget)))
+			if !retryScheduled {
+				m.retrySpace(ctx)
+				retryScheduled = true
+			}
+			continue // stays queued; the queue is retried periodically
+		}
+		budget -= rel.Size
+		m.svc.ClearNoSpace()
 		dctx, cancel := context.WithCancelCause(ctx)
 		done := make(chan struct{})
 		m.active[mv.ID] = &activeDownload{cancel: cancel, release: rel, done: done}

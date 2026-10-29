@@ -326,8 +326,8 @@ func deleteTestManager(t *testing.T) (context.Context, *Manager, *store.Store, s
 	g.MoviesPath = root
 	must(t, st.SetGeneral(ctx, g))
 	m := &Manager{
-		store: st, sched: scheduler.New(sqldb, log), bus: events.New(log), log: log.With("component", "movies"),
-		now: time.Now, ctx: ctx,
+		store: st, svc: &Services{Store: st, Log: log}, sched: scheduler.New(sqldb, log), bus: events.New(log),
+		log: log.With("component", "movies"), now: time.Now, ctx: ctx,
 		active: map[int64]*activeDownload{}, forced: map[int64]int64{}, deleting: map[int64]bool{},
 	}
 	return ctx, m, st, root

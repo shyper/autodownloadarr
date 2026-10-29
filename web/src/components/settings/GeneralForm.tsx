@@ -88,6 +88,12 @@ function GeneralFormInner({ initial, fields, onSaved }: Props & { initial: Gener
             <Field id="max-rate" label={t('settings.general.maxDownloadMBps')} hint={t('settings.general.maxDownloadMBpsHint')}>
               <Input id="max-rate" type="number" min={0} step="1" value={g.maxDownloadMBps} onChange={num('maxDownloadMBps')} />
             </Field>
+            <Field id="max-library" label={t('settings.general.maxLibraryGB')} hint={t('settings.general.maxLibraryGBHint')}>
+              <Input id="max-library" type="number" min={0} step="1" value={g.maxLibraryGB} onChange={num('maxLibraryGB')} />
+            </Field>
+            <Field id="min-free" label={t('settings.general.minFreeGB')} hint={t('settings.general.minFreeGBHint')}>
+              <Input id="min-free" type="number" min={0} step="1" value={g.minFreeGB} onChange={num('minFreeGB')} />
+            </Field>
             <Field id="language" label={t('settings.general.language')} hint={t('settings.general.languageHint')}>
               <Select id="language" value={g.language} onChange={(e) => set('language', e.target.value)}>
                 <option value="de-DE">Deutsch</option>

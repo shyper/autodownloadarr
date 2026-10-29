@@ -14,6 +14,10 @@ export type General = {
   language: string
   /** MiB/s, 0 = unlimited */
   maxDownloadMBps: number
+  /** Temporary library cap in GB, 0 = unlimited */
+  maxLibraryGB: number
+  /** Free space to keep in GB, 0 = off */
+  minFreeGB: number
 }
 
 export type UsenetServer = {

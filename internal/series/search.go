@@ -259,6 +259,22 @@ func (m *Manager) enqueue(ctx context.Context, e store.Episode) error {
 	return nil
 }
 
+// taskSpace retries downloads that wait for free space.
+const taskSpace = "series.space"
+
+// spaceRetryDelay is how long to wait before checking for space again.
+var spaceRetryDelay = 5 * time.Minute
+
+// retrySpace schedules another startQueued call for when the space situation
+// may have changed.
+func (m *Manager) retrySpace(ctx context.Context) {
+	if _, err := m.sched.Schedule(context.WithoutCancel(ctx), scheduler.Spec{
+		Type: taskSpace, Key: "series-space", RunAt: m.now().Add(spaceRetryDelay), MaxAttempts: 1,
+	}); err != nil {
+		m.log.Error("schedule space retry", "err", err)
+	}
+}
+
 // startQueued starts queued episodes up to the number of parallel
 // downloads. The episodes of a series are downloaded one after another in
 // broadcast order, so that the next one to watch is ready first: while an
@@ -292,6 +308,10 @@ func (m *Manager) startQueued() {
 	for _, a := range m.active {
 		busy[a.episode.SeriesID] = true
 	}
+	// Space limits apply to the whole temporary library. Check them once
+	// before the loop: walking the folders can take a moment.
+	budget := m.svc.SpaceBudget(g, g.SeriesPath)
+	retryScheduled := false
 	for _, e := range queued {
 		if m.deleting[e.SeriesID] {
 			continue // the series is being removed
@@ -310,6 +330,16 @@ func (m *Manager) startQueued() {
 			go func() { _ = m.pickNext(ctx, e, 0) }()
 			continue
 		}
+		if rel.Size > budget {
+			m.svc.WarnNoSpace(fmt.Sprintf("S%02dE%02d needs %s, but only %s fit", e.Season, e.Episode, movies.FormatSize(rel.Size), movies.FormatSize(budget)))
+			if !retryScheduled {
+				m.retrySpace(ctx)
+				retryScheduled = true
+			}
+			continue // stays queued; the queue is retried later
+		}
+		budget -= rel.Size
+		m.svc.ClearNoSpace()
 		dctx, cancel := context.WithCancelCause(ctx)
 		done := make(chan struct{})
 		m.active[e.ID] = &activeDownload{episode: e, cancel: cancel, release: rel, done: done}

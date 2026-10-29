@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"sync"
 	"time"
 
+	"github.com/shyper/autodownloadarr/internal/disk"
 	"github.com/shyper/autodownloadarr/internal/indexer/newznab"
 	"github.com/shyper/autodownloadarr/internal/mediaserver/pathmap"
 	"github.com/shyper/autodownloadarr/internal/mediaserver/plex"
@@ -238,6 +240,44 @@ func (s *Services) FullCheck(ctx context.Context) bool {
 		}
 	}
 	return false
+}
+
+// gib is one gigabyte as used by the size limits in the settings.
+const gib = 1 << 30
+
+// SpaceBudget returns how many more bytes may be written below path without
+// exceeding the library size cap or the free space reserve. Both limits cover
+// the temporary library as a whole; free space is measured on the file system
+// of path. A budget of 0 means that no further download fits.
+func (s *Services) SpaceBudget(g store.General, path string) int64 {
+	budget := int64(math.MaxInt64)
+	if g.MaxLibraryGB > 0 {
+		used := disk.Size(g.MoviesPath) + disk.Size(g.SeriesPath)
+		budget = min(budget, int64(g.MaxLibraryGB*float64(gib))-used)
+	}
+	if g.MinFreeGB > 0 && path != "" {
+		free, err := disk.Free(path)
+		if err != nil {
+			if s.Log != nil {
+				s.Log.Debug("free space check failed", "path", path, "err", err)
+			}
+		} else {
+			budget = min(budget, int64(free)-int64(g.MinFreeGB*float64(gib)))
+		}
+	}
+	return max(budget, 0)
+}
+
+// FormatSize renders a number of bytes for warnings and notifications.
+func FormatSize(n int64) string {
+	switch {
+	case n >= gib:
+		return fmt.Sprintf("%.1f GB", float64(n)/gib)
+	case n >= 1<<20:
+		return fmt.Sprintf("%.0f MB", float64(n)/(1<<20))
+	default:
+		return fmt.Sprintf("%d KB", n/(1<<10))
+	}
 }
 
 // PlexTarget is the configured Plex library for movies.

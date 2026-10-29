@@ -38,7 +38,26 @@ type Warning struct {
 const (
 	WarnPlexScanMovies = "plex_scan_movies"
 	WarnPlexScanTV     = "plex_scan_tv"
+	WarnNoSpace        = "no_space"
 )
+
+// WarnNoSpace reports that downloads wait for free space. detail is shown to
+// the user (for example which movie is waiting and how much space is needed).
+func (s *Services) WarnNoSpace(detail string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.warnings == nil {
+		s.warnings = map[string]Warning{}
+	}
+	s.warnings[WarnNoSpace] = Warning{Code: WarnNoSpace, Detail: detail, At: time.Now()}
+}
+
+// ClearNoSpace removes the waiting-for-space warning.
+func (s *Services) ClearNoSpace() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.warnings, WarnNoSpace)
+}
 
 // Scan asks Plex to scan a folder of the movie (or, with tv, the TV)
 // library. A failure is logged, shown as a warning and retried later.

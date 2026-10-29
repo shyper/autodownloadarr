@@ -82,6 +82,12 @@ type General struct {
 	Language string `json:"language"`
 	// MaxDownloadMBps limits the download speed in MiB/s (0: unlimited).
 	MaxDownloadMBps float64 `json:"maxDownloadMBps"`
+	// MaxLibraryGB caps the size of the temporary library (0: unlimited).
+	// Downloads wait while the cap is reached.
+	MaxLibraryGB float64 `json:"maxLibraryGB"`
+	// MinFreeGB keeps at least this much space free on the download folder's
+	// file system (0: off).
+	MinFreeGB float64 `json:"minFreeGB"`
 }
 
 // DefaultGeneral returns the defaults.

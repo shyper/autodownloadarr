@@ -259,7 +259,11 @@
       "maxDownloadMBpsHint": "0 bedeutet unbegrenzt.",
       "seriesPath": "Serienordner",
       "seriesPathHint": "Pfad im Container. Lege ihn in Plex als eigene Serien-Bibliothek an.",
-      "seriesDefaults": "Standards für neue Serien"
+      "seriesDefaults": "Standards für neue Serien",
+      "maxLibraryGB": "Obergrenze der temporären Bibliothek (GB)",
+      "maxLibraryGBHint": "Downloads warten, solange die Film- und Serienordner zusammen größer sind. 0 bedeutet unbegrenzt.",
+      "minFreeGB": "Freien Speicherplatz behalten (GB)",
+      "minFreeGBHint": "Es startet kein Download, wenn die Platte darunter fallen würde. 0 bedeutet aus."
     },
     "tmdb": {
       "title": "TMDB",
@@ -486,7 +490,8 @@
   },
   "warnings": {
     "plex_scan_movies": "Plex konnte die Filmbibliothek nicht scannen ({{detail}}). Es wird automatisch erneut versucht.",
-    "plex_scan_tv": "Plex konnte die Serienbibliothek nicht scannen ({{detail}}). Es wird automatisch erneut versucht."
+    "plex_scan_tv": "Plex konnte die Serienbibliothek nicht scannen ({{detail}}). Es wird automatisch erneut versucht.",
+    "no_space": "Downloads warten auf freien Speicherplatz: {{detail}}."
   },
   "downloads": {
     "title": "Downloads",
