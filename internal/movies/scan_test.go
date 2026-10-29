@@ -56,7 +56,7 @@ func TestScanRetry(t *testing.T) {
 	defer func() { cancel(); <-done }()
 
 	svc.Scan(ctx, false, "/movies/Film")
-	if w := svc.Warnings(); len(w) != 1 || w[0].Code != WarnPlexScanMovies {
+	if w := svc.Warnings(); len(w) != 1 || w[0].Code != WarnScanMovies {
 		t.Fatalf("warnings after failed scan = %+v", w)
 	}
 	eventually(t, "successful retry", func() bool { return calls.Load() == 3 && len(svc.Warnings()) == 0 })

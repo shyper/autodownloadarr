@@ -519,8 +519,8 @@
     }
   },
   "warnings": {
-    "plex_scan_movies": "Plex konnte die Filmbibliothek nicht scannen ({{detail}}). Es wird automatisch erneut versucht.",
-    "plex_scan_tv": "Plex konnte die Serienbibliothek nicht scannen ({{detail}}). Es wird automatisch erneut versucht.",
+    "media_scan_movies": "Der Medienserver konnte die Filmbibliothek nicht scannen ({{detail}}). Es wird automatisch erneut versucht.",
+    "media_scan_tv": "Der Medienserver konnte die Serienbibliothek nicht scannen ({{detail}}). Es wird automatisch erneut versucht.",
     "no_space": "Downloads warten auf freien Speicherplatz: {{detail}}."
   },
   "downloads": {

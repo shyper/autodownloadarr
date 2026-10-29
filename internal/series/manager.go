@@ -98,7 +98,7 @@ func NewManager(st *store.Store, svc *movies.Services, sched *scheduler.Schedule
 	sched.Handle(taskSearch, m.handleSearch)
 	sched.Handle(taskRefresh, m.handleRefresh)
 	sched.Handle(taskCheck, m.handleCheck)
-	sched.Every("plex-episode-poll", time.Minute, m.pollWatched)
+	sched.Every("media-episode-poll", time.Minute, m.pollWatched)
 	sched.Handle(taskSpace, func(ctx context.Context, _ scheduler.Task) error {
 		m.startQueued() // episodes that waited for space
 		return nil

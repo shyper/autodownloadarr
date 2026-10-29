@@ -12,7 +12,7 @@ import (
 
 	"github.com/shyper/autodownloadarr/internal/events"
 	"github.com/shyper/autodownloadarr/internal/fetch"
-	"github.com/shyper/autodownloadarr/internal/mediaserver/plex"
+	"github.com/shyper/autodownloadarr/internal/mediaserver"
 	"github.com/shyper/autodownloadarr/internal/scheduler"
 	"github.com/shyper/autodownloadarr/internal/store"
 )
@@ -50,7 +50,7 @@ func (m *Manager) available(ctx context.Context, mv store.Movie, rel store.Relea
 // that playback counts. Marking the item unwatched in Plex lowers the
 // baseline again. It returns whether the file was watched since and how
 // far (0..1).
-func Observe(base *store.WatchBase, it plex.Item, since time.Time) (watched bool, progress float64) {
+func Observe(base *store.WatchBase, it mediaserver.Item, since time.Time) (watched bool, progress float64) {
 	switch {
 	case !base.Set && !since.IsZero() && !it.LastViewedAt.Before(since.Truncate(time.Second)): // Plex has seconds
 		views := it.ViewCount
@@ -61,7 +61,7 @@ func Observe(base *store.WatchBase, it plex.Item, since time.Time) (watched bool
 	case !base.Set || it.ViewCount < base.Views:
 		*base = store.WatchBase{Set: true, Views: it.ViewCount, Offset: it.ViewOffset.Milliseconds()}
 	}
-	b := plex.Baseline{Views: base.Views, Offset: time.Duration(base.Offset) * time.Millisecond}
+	b := mediaserver.Baseline{Views: base.Views, Offset: time.Duration(base.Offset) * time.Millisecond}
 	return it.WatchedSince(b), it.ProgressSince(b)
 }
 
@@ -159,7 +159,7 @@ func within(root, p string) bool {
 	return err == nil && rel != "." && !filepath.IsAbs(rel) && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
-// pollWatched reads the watch state from Plex. It runs every minute and
+// pollWatched reads the watch state from the media server. It runs every minute and
 // does the actual work at the configured interval.
 func (m *Manager) pollWatched(ctx context.Context) error {
 	g, err := m.store.General(ctx)
@@ -178,9 +178,9 @@ func (m *Manager) pollWatched(ctx context.Context) error {
 	return m.PollWatched(ctx)
 }
 
-// PollWatched compares the available and watched movies with Plex now.
+// PollWatched compares the available and watched movies with the media server now.
 func (m *Manager) PollWatched(ctx context.Context) error {
-	target, err := m.svc.Plex(ctx)
+	target, err := m.svc.Media(ctx)
 	if err != nil || target == nil {
 		return err
 	}
@@ -188,15 +188,15 @@ func (m *Manager) PollWatched(ctx context.Context) error {
 	if err != nil || len(list) == 0 {
 		return err
 	}
-	items, err := target.Client.Movies(ctx, target.Library)
+	items, err := target.Server.Movies(ctx, target.Library)
 	if err != nil {
 		return err
 	}
 	// Matched by our own file only: another copy of the movie (e.g. from
 	// Radarr) has a watch state of its own.
-	byKey, byDir := map[string]plex.Item{}, map[string]plex.Item{}
+	byKey, byDir := map[string]mediaserver.Item{}, map[string]mediaserver.Item{}
 	for _, it := range items {
-		byKey[it.RatingKey] = it
+		byKey[it.Key] = it
 		for _, f := range it.Files {
 			byDir[filepath.Dir(target.Mapper.ToLocal(f))] = it
 		}
@@ -216,9 +216,9 @@ func (m *Manager) PollWatched(ctx context.Context) error {
 		}
 		base := mv.Base
 		watched, progress := Observe(&mv.Base, it, m.fileSince(ctx, store.ForMovie(mv.ID), mv.Base))
-		changed := mv.MediaKey != it.RatingKey || mv.Base != base || math.Abs(progress-mv.Progress) >= 0.01 ||
+		changed := mv.MediaKey != it.Key || mv.Base != base || math.Abs(progress-mv.Progress) >= 0.01 ||
 			(progress != mv.Progress && (progress == 0 || progress == 1))
-		mv.MediaKey, mv.Progress = it.RatingKey, progress
+		mv.MediaKey, mv.Progress = it.Key, progress
 		switch {
 		case watched && mv.State == store.MovieAvailable:
 			now := m.now()

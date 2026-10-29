@@ -8,21 +8,21 @@ import (
 	"strings"
 
 	"github.com/shyper/autodownloadarr/internal/fetch"
-	"github.com/shyper/autodownloadarr/internal/mediaserver/plex"
+	"github.com/shyper/autodownloadarr/internal/mediaserver"
 	"github.com/shyper/autodownloadarr/internal/movies"
 	"github.com/shyper/autodownloadarr/internal/store"
 )
 
-// pollWatched reads progress and watch state of the episodes from Plex. It
+// pollWatched reads progress and watch state of the episodes from the media server. It
 // runs every minute so that the next episode is fetched soon after the
 // current one was started.
 func (m *Manager) pollWatched(ctx context.Context) error {
 	return m.PollWatched(ctx)
 }
 
-// PollWatched compares the episodes on disk with Plex now.
+// PollWatched compares the episodes on disk with the media server now.
 func (m *Manager) PollWatched(ctx context.Context) error {
-	target, err := m.svc.PlexTV(ctx)
+	target, err := m.svc.MediaTV(ctx)
 	if err != nil || target == nil {
 		return err
 	}
@@ -30,13 +30,13 @@ func (m *Manager) PollWatched(ctx context.Context) error {
 	if err != nil || len(eps) == 0 {
 		return err
 	}
-	items, err := target.Client.Episodes(ctx, target.Library)
+	items, err := target.Server.Episodes(ctx, target.Library)
 	if err != nil {
 		return err
 	}
-	byKey, byFile := map[string]plex.Item{}, map[string]plex.Item{}
+	byKey, byFile := map[string]mediaserver.Item{}, map[string]mediaserver.Item{}
 	for _, it := range items {
-		byKey[it.RatingKey] = it
+		byKey[it.Key] = it
 		for _, f := range it.Files {
 			byFile[filepath.Clean(target.Mapper.ToLocal(f))] = it
 		}
@@ -54,8 +54,8 @@ func (m *Manager) PollWatched(ctx context.Context) error {
 		}
 		base := e.Base
 		watched, progress := movies.Observe(&e.Base, it, movies.FileSince(ctx, m.store, store.ForEpisode(e.ID), e.Base))
-		changed := e.MediaKey != it.RatingKey || e.Base != base
-		e.MediaKey = it.RatingKey
+		changed := e.MediaKey != it.Key || e.Base != base
+		e.MediaKey = it.Key
 		if progress != e.Progress {
 			e.Progress, changed = progress, true
 		}
@@ -85,7 +85,7 @@ func (m *Manager) PollWatched(ctx context.Context) error {
 	return nil
 }
 
-// scan asks Plex to look at a folder of the TV library.
+// scan asks the media server to look at a folder of the TV library.
 func (m *Manager) scan(ctx context.Context, folder string) { m.svc.Scan(ctx, true, folder) }
 
 // removeFiles deletes the tracked files of an episode, only inside the

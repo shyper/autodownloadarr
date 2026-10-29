@@ -519,8 +519,8 @@
     }
   },
   "warnings": {
-    "plex_scan_movies": "Plex could not scan the movie library ({{detail}}). It is retried automatically.",
-    "plex_scan_tv": "Plex could not scan the TV library ({{detail}}). It is retried automatically.",
+    "media_scan_movies": "The media server could not scan the movie library ({{detail}}). It is retried automatically.",
+    "media_scan_tv": "The media server could not scan the TV library ({{detail}}). It is retried automatically.",
     "no_space": "Downloads are waiting for free space: {{detail}}."
   },
   "downloads": {

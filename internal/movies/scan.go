@@ -10,10 +10,10 @@ import (
 	"github.com/shyper/autodownloadarr/internal/scheduler"
 )
 
-// Plex scans that fail are retried by a task. Until one succeeds again the
+// media server scans that fail are retried by a task. Until one succeeds again the
 // failure is listed as a warning in the UI.
 
-const taskPlexScan = "plex.scan"
+const taskMediaScan = "media.scan"
 
 // scanAttempts bounds the retries of a failed scan (with the scheduler's
 // backoff that is roughly an hour).
@@ -36,9 +36,9 @@ type Warning struct {
 
 // Warning codes.
 const (
-	WarnPlexScanMovies = "plex_scan_movies"
-	WarnPlexScanTV     = "plex_scan_tv"
-	WarnNoSpace        = "no_space"
+	WarnScanMovies = "media_scan_movies"
+	WarnScanTV     = "media_scan_tv"
+	WarnNoSpace    = "no_space"
 )
 
 // WarnNoSpace reports that downloads wait for free space. detail is shown to
@@ -59,49 +59,49 @@ func (s *Services) ClearNoSpace() {
 	delete(s.warnings, WarnNoSpace)
 }
 
-// Scan asks Plex to scan a folder of the movie (or, with tv, the TV)
+// Scan asks the media server to scan a folder of the movie (or, with tv, the TV)
 // library. A failure is logged, shown as a warning and retried later.
 func (s *Services) Scan(ctx context.Context, tv bool, folder string) {
 	if err := s.scan(ctx, tv, folder); err != nil {
-		s.Log.Warn("plex scan failed, will retry", "folder", folder, "err", err)
+		s.Log.Warn("media server scan failed, will retry", "folder", folder, "err", err)
 		s.mu.Lock()
 		sched := s.sched
 		s.mu.Unlock()
 		if sched == nil {
 			return
 		}
-		if _, err := sched.Schedule(context.WithoutCancel(ctx), scheduler.Spec{Type: taskPlexScan, Key: scanKey(tv, folder),
+		if _, err := sched.Schedule(context.WithoutCancel(ctx), scheduler.Spec{Type: taskMediaScan, Key: scanKey(tv, folder),
 			RunAt: time.Now().Add(scanRetryDelay), MaxAttempts: scanAttempts, Payload: scanPayload{TV: tv, Folder: folder}}); err != nil {
-			s.Log.Error("schedule plex scan", "err", err)
+			s.Log.Error("schedule media server scan", "err", err)
 		}
 	}
 }
 
 func scanKey(tv bool, folder string) string {
 	if tv {
-		return "plex-scan:tv:" + folder
+		return "media-scan:tv:" + folder
 	}
-	return "plex-scan:movies:" + folder
+	return "media-scan:movies:" + folder
 }
 
 func (s *Services) scan(ctx context.Context, tv bool, folder string) error {
-	target, err := s.Plex(ctx)
+	target, err := s.Media(ctx)
 	if tv {
-		target, err = s.PlexTV(ctx)
+		target, err = s.MediaTV(ctx)
 	}
 	if err == nil && target == nil {
-		s.Log.Debug("plex scan skipped: no library configured", "folder", folder, "tv", tv)
+		s.Log.Debug("media server scan skipped: no library configured", "folder", folder, "tv", tv)
 		return nil // no library chosen: nothing to tell
 	}
 	remote := folder
 	if err == nil {
 		remote = target.Mapper.ToRemote(folder)
-		s.Log.Debug("plex scan requested", "folder", folder, "remote", remote, "tv", tv)
-		err = target.Client.Scan(ctx, target.Library, remote)
+		s.Log.Debug("media server scan requested", "folder", folder, "remote", remote, "tv", tv)
+		err = target.Server.Scan(ctx, target.Library, remote)
 	}
-	code := WarnPlexScanMovies
+	code := WarnScanMovies
 	if tv {
-		code = WarnPlexScanTV
+		code = WarnScanTV
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -111,7 +111,7 @@ func (s *Services) scan(ctx context.Context, tv bool, folder string) error {
 	if err != nil && !errors.Is(err, context.Canceled) {
 		s.warnings[code] = Warning{Code: code, Detail: remote + ": " + err.Error(), At: time.Now()}
 	} else if err == nil {
-		s.Log.Debug("plex scan completed", "remote", remote, "tv", tv)
+		s.Log.Debug("media server scan completed", "remote", remote, "tv", tv)
 		delete(s.warnings, code)
 	}
 	return err
@@ -126,7 +126,7 @@ func (s *Services) HandleScanRetries(sched *scheduler.Scheduler) {
 		return
 	}
 	s.sched = sched
-	sched.Handle(taskPlexScan, func(ctx context.Context, t scheduler.Task) error {
+	sched.Handle(taskMediaScan, func(ctx context.Context, t scheduler.Task) error {
 		p, err := decode[scanPayload](t)
 		if err != nil {
 			return err

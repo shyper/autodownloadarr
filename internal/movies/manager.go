@@ -103,7 +103,7 @@ func NewManager(st *store.Store, svc *Services, sched *scheduler.Scheduler, bus 
 	m.fetcher = &fetch.Fetcher{Log: m.log}
 	sched.Handle(taskSearch, m.handleSearch)
 	sched.Handle(taskDelete, m.handleDelete)
-	sched.Every("plex-watch-poll", time.Minute, m.pollWatched)
+	sched.Every("media-watch-poll", time.Minute, m.pollWatched)
 	sched.Handle(taskSpace, func(ctx context.Context, _ scheduler.Task) error {
 		m.startQueued() // downloads that waited for space
 		return nil

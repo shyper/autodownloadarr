@@ -12,6 +12,7 @@ import (
 
 	"github.com/shyper/autodownloadarr/internal/disk"
 	"github.com/shyper/autodownloadarr/internal/indexer/newznab"
+	"github.com/shyper/autodownloadarr/internal/mediaserver"
 	"github.com/shyper/autodownloadarr/internal/mediaserver/pathmap"
 	"github.com/shyper/autodownloadarr/internal/mediaserver/plex"
 	"github.com/shyper/autodownloadarr/internal/metadata/tmdb"
@@ -280,35 +281,53 @@ func FormatSize(n int64) string {
 	}
 }
 
-// PlexTarget is the configured Plex library for movies.
-type PlexTarget struct {
-	Client  *plex.Client
+// Target is a configured library of the media server for movies or series.
+type Target struct {
+	Server  mediaserver.Server
 	Library string
 	Mapper  pathmap.Mapper
 }
 
-// Plex returns the Plex movie library, or nil if none is configured.
-func (s *Services) Plex(ctx context.Context) (*PlexTarget, error) {
-	return s.plexLibrary(ctx, func(ms store.MediaServer) string { return ms.MovieLibrary })
+// Media returns the movie library, or nil if none is configured.
+func (s *Services) Media(ctx context.Context) (*Target, error) {
+	return s.mediaTarget(ctx, func(ms store.MediaServer) string { return ms.MovieLibrary })
 }
 
-// PlexTV returns the Plex TV library, or nil if none is configured.
-func (s *Services) PlexTV(ctx context.Context) (*PlexTarget, error) {
-	return s.plexLibrary(ctx, func(ms store.MediaServer) string { return ms.TVLibrary })
+// MediaTV returns the TV library, or nil if none is configured.
+func (s *Services) MediaTV(ctx context.Context) (*Target, error) {
+	return s.mediaTarget(ctx, func(ms store.MediaServer) string { return ms.TVLibrary })
 }
 
-func (s *Services) plexLibrary(ctx context.Context, library func(store.MediaServer) string) (*PlexTarget, error) {
+// MediaServer returns a client for the configured media server, whether or
+// not a library is selected. It returns nil if none is configured.
+func (s *Services) MediaServer(ctx context.Context) (mediaserver.Server, error) {
+	ms, found, err := s.Store.MediaServer(ctx)
+	if err != nil || !found || ms.Token == "" {
+		return nil, err
+	}
+	return s.serverClient(ctx, ms)
+}
+
+func (s *Services) mediaTarget(ctx context.Context, library func(store.MediaServer) string) (*Target, error) {
 	ms, found, err := s.Store.MediaServer(ctx)
 	if err != nil || !found || !ms.Enabled || library(ms) == "" || ms.Token == "" {
 		return nil, err
 	}
+	c, err := s.serverClient(ctx, ms)
+	if err != nil {
+		return nil, err
+	}
+	return &Target{Server: c, Library: library(ms), Mapper: pathmap.New(ms.Mappings)}, nil
+}
+
+func (s *Services) serverClient(ctx context.Context, ms store.MediaServer) (mediaserver.Server, error) {
 	clientID, err := s.Store.PlexClientID(ctx)
 	if err != nil {
 		return nil, err
 	}
 	c := plex.NewClient(ms.URL, ms.Token, clientID)
 	c.HTTP = s.httpClient()
-	return &PlexTarget{Client: c, Library: library(ms), Mapper: pathmap.New(ms.Mappings)}, nil
+	return c, nil
 }
 
 // PlexAccount returns a plex.tv client for sign-in and server discovery.
