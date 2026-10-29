@@ -439,7 +439,6 @@
       "name": "Name",
       "apiKey": "API-Schlüssel",
       "apiKeyHint": "Jellyfin/Emby: Dashboard → API-Schlüssel.",
-      "watchlistTitle": "Plex-Watchlist",
       "watchlist": "Plex-Watchlist übernehmen",
       "watchlistHint": "Filme und Serien auf deiner Plex-Watchlist werden automatisch angefragt. Dafür muss das Plex-Konto-Token gespeichert sein (Anmeldung über Plex).",
       "watchlistPollMinutes": "Watchlist prüfen alle (Minuten)",

@@ -6,10 +6,10 @@ import {
   useConnectPlex,
   useDeletePlex,
   useGeneral,
-  useSaveGeneral,
   usePlex,
   usePlexLibraries,
   useSavePlex,
+  useSaveGeneral,
 } from '../../api/config'
 import type { MediaServer, MediaServerKind, PathMapping, PlexServer } from '../../api/types'
 import { errorMessage } from '../../i18n'
@@ -33,7 +33,6 @@ export function PlexSettings({ onSaved }: { onSaved?: () => void }) {
       ) : (
         <PlexConnect />
       )}
-      {plex.data.configured && plex.data.server.kind === 'plex' && <PlexWatchlistSettings />}
     </div>
   )
 }
@@ -204,7 +203,12 @@ function ServerPicker({ servers, busy, onPick }: { servers: PlexServer[]; busy: 
 function PlexLibrarySettings({ server, onSaved }: { server: MediaServer; onSaved?: () => void }) {
   const { t } = useTranslation()
   const libs = usePlexLibraries(true)
+  const general = useGeneral()
   const save = useSavePlex()
+  const saveGeneral = useSaveGeneral()
+  const plexKind = server.kind === 'plex'
+  const [watchlist, setWatchlist] = useState<boolean | null>(null)
+  const [pollMinutes, setPollMinutes] = useState<number | null>(null)
   const disconnect = useDeletePlex()
   const [library, setLibrary] = useState(server.movieLibrary)
   const [tvLibrary, setTVLibrary] = useState(server.tvLibrary)
@@ -215,10 +219,13 @@ function PlexLibrarySettings({ server, onSaved }: { server: MediaServer; onSaved
   const setMapping = (i: number, m: PathMapping) => setMappings((all) => all.map((x, j) => (i === j ? m : x)))
   const addMapping = (m: PathMapping = { local: '', remote: '' }) => setMappings((all) => [...all, m])
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault()
-    save.mutate(
-      {
+    if (plexKind && !general.data) return
+    save.reset()
+    saveGeneral.reset()
+    try {
+      await save.mutateAsync({
         kind: server.kind,
         name: server.name,
         url: server.url,
@@ -226,9 +233,18 @@ function PlexLibrarySettings({ server, onSaved }: { server: MediaServer; onSaved
         tvLibrary,
         mappings: mappings.filter((m) => m.local && m.remote),
         enabled: true,
-      },
-      { onSuccess: () => onSaved?.() },
-    )
+      })
+      if (plexKind && general.data) {
+        await saveGeneral.mutateAsync({
+          ...general.data,
+          watchlist: watchlist ?? general.data.watchlist,
+          watchlistPollMinutes: pollMinutes ?? general.data.watchlistPollMinutes,
+        })
+      }
+      onSaved?.()
+    } catch {
+      // The mutation errors are displayed in the form; keep edits for retrying.
+    }
   }
 
   return (
@@ -244,8 +260,10 @@ function PlexLibrarySettings({ server, onSaved }: { server: MediaServer; onSaved
           {t('settings.plex.disconnect')}
         </Button>
       </div>
-      {(libs.isError || save.isError) && <Alert>{errorMessage(t, libs.error ?? save.error)}</Alert>}
-      {save.isSuccess && <Alert tone="success">{t('settings.saved')}</Alert>}
+      {(libs.isError || save.isError || (plexKind && (general.isError || saveGeneral.isError))) && (
+        <Alert>{errorMessage(t, libs.error ?? save.error ?? general.error ?? saveGeneral.error)}</Alert>
+      )}
+      {save.isSuccess && (!plexKind || saveGeneral.isSuccess) && <Alert tone="success">{t('settings.saved')}</Alert>}
       {libs.isPending ? (
         <Spinner />
       ) : (
@@ -308,50 +326,23 @@ function PlexLibrarySettings({ server, onSaved }: { server: MediaServer; onSaved
             ),
         )}
       </fieldset>
+      {plexKind && (general.data ? (
+        <>
+          <Checkbox
+            label={t('settings.mediaServer.watchlist')}
+            hint={t('settings.mediaServer.watchlistHint')}
+            checked={watchlist ?? general.data.watchlist}
+            onChange={(e) => setWatchlist(e.target.checked)}
+          />
+          <Field id="watchlist-poll" label={t('settings.mediaServer.watchlistPollMinutes')} hint={t('settings.mediaServer.watchlistPollMinutesHint')}>
+            <Input id="watchlist-poll" type="number" required min={1} value={pollMinutes ?? general.data.watchlistPollMinutes} onChange={(e) => setPollMinutes(Number(e.target.value))} />
+          </Field>
+        </>
+      ) : general.isPending ? <Spinner /> : null)}
       <div className="flex justify-end">
-        <Button type="submit" loading={save.isPending}>
+        <Button type="submit" loading={save.isPending || saveGeneral.isPending} disabled={plexKind && !general.data}>
           {t('common.save')}
         </Button>
-      </div>
-    </form>
-  )
-}
-
-/** Watchlist preferences keep using the existing general settings API. */
-function PlexWatchlistSettings() {
-  const { t } = useTranslation()
-  const general = useGeneral()
-  const save = useSaveGeneral()
-  const [watchlist, setWatchlist] = useState<boolean | null>(null)
-  const [pollMinutes, setPollMinutes] = useState<number | null>(null)
-
-  if (general.isError) return <Alert>{errorMessage(t, general.error)}</Alert>
-  if (!general.data) return <Spinner />
-  const enabled = watchlist ?? general.data.watchlist
-  const interval = pollMinutes ?? general.data.watchlistPollMinutes
-
-  const submit = (e: FormEvent) => {
-    e.preventDefault()
-    if (!general.data) return
-    save.mutate({ ...general.data, watchlist: enabled, watchlistPollMinutes: interval })
-  }
-
-  return (
-    <form onSubmit={submit} className="space-y-4 rounded-xl border border-line p-4">
-      <SectionTitle title={t('settings.mediaServer.watchlistTitle')} />
-      {save.isError && <Alert>{errorMessage(t, save.error)}</Alert>}
-      {save.isSuccess && <Alert tone="success">{t('settings.saved')}</Alert>}
-      <Checkbox
-        label={t('settings.mediaServer.watchlist')}
-        hint={t('settings.mediaServer.watchlistHint')}
-        checked={enabled}
-        onChange={(e) => setWatchlist(e.target.checked)}
-      />
-      <Field id="watchlist-poll" label={t('settings.mediaServer.watchlistPollMinutes')} hint={t('settings.mediaServer.watchlistPollMinutesHint')}>
-        <Input id="watchlist-poll" type="number" required min={1} value={interval} onChange={(e) => setPollMinutes(Number(e.target.value))} />
-      </Field>
-      <div className="flex justify-end">
-        <Button type="submit" loading={save.isPending}>{t('common.save')}</Button>
       </div>
     </form>
   )
