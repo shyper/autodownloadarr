@@ -32,9 +32,11 @@ type Services struct {
 	Store *store.Store
 	Log   *slog.Logger
 	// HTTP, TMDBBaseURL and PlexTVURL can be overridden in tests.
-	HTTP        *http.Client
-	TMDBBaseURL string
-	PlexTVURL   string
+	HTTP            *http.Client
+	TMDBBaseURL     string
+	PlexTVURL       string
+	PlexDiscoverURL string
+	PlexMetadataURL string
 
 	mu       sync.Mutex
 	pool     *nntp.Pool
@@ -349,6 +351,8 @@ func (s *Services) PlexAccount(ctx context.Context) (*plex.Account, error) {
 	if s.PlexTVURL != "" {
 		a.TVURL = s.PlexTVURL
 	}
+	a.DiscoverURL = s.PlexDiscoverURL
+	a.MetadataURL = s.PlexMetadataURL
 	return a, nil
 }
 

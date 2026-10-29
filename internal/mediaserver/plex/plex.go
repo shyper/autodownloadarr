@@ -37,6 +37,9 @@ const DefaultTVURL = "https://plex.tv"
 type Account struct {
 	HTTP  *http.Client
 	TVURL string
+	// DiscoverURL and MetadataURL serve the watchlist (overridable in tests).
+	DiscoverURL string
+	MetadataURL string
 	// ClientID identifies this installation; it must stay the same.
 	ClientID string
 }

@@ -137,3 +137,41 @@ func TestServerAPI(t *testing.T) {
 		t.Errorf("bad token: %v", err)
 	}
 }
+
+func TestWatchlist(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Plex-Token") != "user-token" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		switch r.URL.Path {
+		case "/library/sections/watchlist/all":
+			_, _ = w.Write([]byte(`{"MediaContainer":{"Metadata":[
+				{"ratingKey":"1","title":"Dune","year":2024,"type":"movie","guid":"plex://movie/1","Guid":[{"id":"tmdb://693134"}]},
+				{"ratingKey":"2","title":"Dark","year":2017,"type":"show","guid":"plex://show/2"}]}}`))
+		case "/library/metadata/2":
+			_, _ = w.Write([]byte(`{"MediaContainer":{"Metadata":[{"Guid":[{"id":"tvdb://123"},{"id":"tmdb://70523"}]}]}}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	a := NewAccount("client-1")
+	a.HTTP = srv.Client()
+	a.DiscoverURL = srv.URL
+	a.MetadataURL = srv.URL
+	items, err := a.Watchlist(context.Background(), "user-token")
+	if err != nil || len(items) != 2 {
+		t.Fatalf("watchlist = %+v %v", items, err)
+	}
+	if items[0].GUIDs[0] != "tmdb://693134" || items[0].Type != "movie" || items[0].Year != 2024 {
+		t.Errorf("movie = %+v", items[0])
+	}
+	if len(items[1].GUIDs) != 2 || items[1].GUIDs[1] != "tmdb://70523" {
+		t.Errorf("resolved guids = %+v", items[1])
+	}
+	if _, err := a.Watchlist(context.Background(), "wrong"); !errors.Is(err, httpx.ErrUnauthorized) {
+		t.Errorf("bad token: %v", err)
+	}
+}

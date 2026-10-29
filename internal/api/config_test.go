@@ -164,7 +164,7 @@ func TestPlexSignIn(t *testing.T) {
 		t.Fatalf("connect: %d %v", resp.StatusCode, body)
 	}
 	ms, _, _ := e.store.MediaServer(t.Context())
-	if ms.Token != "server-token" || ms.Name != "Home" {
+	if ms.Token != "server-token" || ms.AccountToken != "account-token" || ms.Kind != "plex" || ms.Name != "Home" {
 		t.Errorf("stored = %+v", ms)
 	}
 
@@ -223,5 +223,48 @@ func TestMovieRequestFlow(t *testing.T) {
 	}
 	if resp, _ := e.do(t, c, "DELETE", fmt.Sprintf("/api/v1/movies/%d?forget=1", id), nil); resp.StatusCode != http.StatusNoContent {
 		t.Errorf("delete: %d", resp.StatusCode)
+	}
+}
+
+func TestJellyfinLibraries(t *testing.T) {
+	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Emby-Token") != "api-key" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		switch r.URL.Path {
+		case "/jf/Library/VirtualFolders":
+			_, _ = w.Write([]byte(`[{"Name":"Filme","ItemId":"lib1","CollectionType":"movies","Locations":["/mnt/hdd/filme"]}]`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer fake.Close()
+
+	e := newEnvWith(t, func(*movies.Services) {})
+	c := e.client(t)
+	e.completeSetup(t, c)
+	resp, body := e.do(t, c, "PUT", "/api/v1/plex", map[string]any{
+		"kind": "jellyfin", "name": "Jellyfin", "url": fake.URL + "/jf", "token": "api-key", "enabled": true,
+	})
+	if resp.StatusCode != http.StatusOK || body["configured"] != true {
+		t.Fatalf("save: %d %v", resp.StatusCode, body)
+	}
+	server, _ := body["server"].(map[string]any)
+	if server["kind"] != "jellyfin" || server["hasToken"] != true {
+		t.Errorf("server = %v", server)
+	}
+
+	g := store.DefaultGeneral()
+	g.MoviesPath = "/filme"
+	_ = e.store.SetGeneral(t.Context(), g)
+	_, libs := e.do(t, c, "GET", "/api/v1/plex/libraries", nil)
+	list, _ := libs["libraries"].([]any)
+	if len(list) != 1 {
+		t.Fatalf("libraries = %v", libs)
+	}
+	lib, _ := list[0].(map[string]any)
+	if lib["type"] != "movie" || lib["key"] != "lib1" {
+		t.Errorf("library = %v", lib)
 	}
 }

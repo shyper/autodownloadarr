@@ -228,25 +228,30 @@ func (s *Store) DeleteIndexer(ctx context.Context, id int64) error {
 // MediaServer is the configured media server (Plex, Jellyfin or Emby). An
 // empty Token on save keeps the stored one.
 type MediaServer struct {
-	ID           int64             `json:"id"`
-	Kind         string            `json:"kind"` // plex, jellyfin or emby
-	Name         string            `json:"name"`
-	URL          string            `json:"url"`
-	Token        string            `json:"token,omitempty"` // write-only
-	HasToken     bool              `json:"hasToken"`
-	MovieLibrary string            `json:"movieLibrary"`
-	TVLibrary    string            `json:"tvLibrary"`
-	Mappings     []pathmap.Mapping `json:"mappings"`
-	Enabled      bool              `json:"enabled"`
+	ID       int64  `json:"id"`
+	Kind     string `json:"kind"` // plex, jellyfin or emby
+	Name     string `json:"name"`
+	URL      string `json:"url"`
+	Token    string `json:"token,omitempty"` // write-only
+	HasToken bool   `json:"hasToken"`
+	// AccountToken is the Plex account token, used for the watchlist. It is
+	// write-only as well.
+	AccountToken    string            `json:"accountToken,omitempty"`
+	HasAccountToken bool              `json:"hasAccountToken"`
+	MovieLibrary    string            `json:"movieLibrary"`
+	TVLibrary       string            `json:"tvLibrary"`
+	Mappings        []pathmap.Mapping `json:"mappings"`
+	Enabled         bool              `json:"enabled"`
 }
 
 // MediaServer returns the media server, if one is configured.
 func (s *Store) MediaServer(ctx context.Context) (MediaServer, bool, error) {
 	var m MediaServer
-	var enc string
+	var enc, accountEnc string
 	err := s.db.QueryRowContext(ctx, `
-		SELECT id, kind, name, url, token_enc, movie_library, tv_library, enabled FROM media_servers ORDER BY id LIMIT 1`,
-	).Scan(&m.ID, &m.Kind, &m.Name, &m.URL, &enc, &m.MovieLibrary, &m.TVLibrary, &m.Enabled)
+		SELECT id, kind, name, url, token_enc, account_token_enc, movie_library, tv_library, enabled
+		FROM media_servers ORDER BY id LIMIT 1`,
+	).Scan(&m.ID, &m.Kind, &m.Name, &m.URL, &enc, &accountEnc, &m.MovieLibrary, &m.TVLibrary, &m.Enabled)
 	if errors.Is(err, sql.ErrNoRows) {
 		return MediaServer{}, false, nil
 	}
@@ -255,6 +260,8 @@ func (s *Store) MediaServer(ctx context.Context) (MediaServer, bool, error) {
 	}
 	m.Token = s.decrypt(enc)
 	m.HasToken = m.Token != ""
+	m.AccountToken = s.decrypt(accountEnc)
+	m.HasAccountToken = m.AccountToken != ""
 	rows, err := s.db.QueryContext(ctx, `SELECT local_path, remote_path FROM path_mappings WHERE media_server_id = ? ORDER BY id`, m.ID)
 	if err != nil {
 		return MediaServer{}, false, err
@@ -295,6 +302,19 @@ func (s *Store) SaveMediaServer(ctx context.Context, m MediaServer) (int64, erro
 	if err != nil {
 		return 0, err
 	}
+	accountToken := m.AccountToken
+	if accountToken == "" {
+		accountToken = existing.AccountToken
+	}
+	if accountToken == "" && m.Kind == string(mediaserver.Plex) {
+		// A manually configured Plex token usually is the account token
+		// and can be used for the watchlist.
+		accountToken = token
+	}
+	accountEnc, err := s.encrypt(accountToken)
+	if err != nil {
+		return 0, err
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, err
@@ -304,8 +324,8 @@ func (s *Store) SaveMediaServer(ctx context.Context, m MediaServer) (int64, erro
 	id := existing.ID
 	if !found {
 		res, err := tx.ExecContext(ctx, `
-			INSERT INTO media_servers (kind, name, url, token_enc, movie_library, tv_library, enabled, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, m.Kind, m.Name, m.URL, enc, m.MovieLibrary, m.TVLibrary, m.Enabled, now, now)
+			INSERT INTO media_servers (kind, name, url, token_enc, account_token_enc, movie_library, tv_library, enabled, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, m.Kind, m.Name, m.URL, enc, accountEnc, m.MovieLibrary, m.TVLibrary, m.Enabled, now, now)
 		if err != nil {
 			return 0, err
 		}
@@ -313,8 +333,8 @@ func (s *Store) SaveMediaServer(ctx context.Context, m MediaServer) (int64, erro
 			return 0, err
 		}
 	} else if _, err := tx.ExecContext(ctx, `
-		UPDATE media_servers SET kind = ?, name = ?, url = ?, token_enc = ?, movie_library = ?, tv_library = ?, enabled = ?, updated_at = ? WHERE id = ?`,
-		m.Kind, m.Name, m.URL, enc, m.MovieLibrary, m.TVLibrary, m.Enabled, now, id); err != nil {
+		UPDATE media_servers SET kind = ?, name = ?, url = ?, token_enc = ?, account_token_enc = ?, movie_library = ?, tv_library = ?, enabled = ?, updated_at = ? WHERE id = ?`,
+		m.Kind, m.Name, m.URL, enc, accountEnc, m.MovieLibrary, m.TVLibrary, m.Enabled, now, id); err != nil {
 		return 0, err
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM path_mappings WHERE media_server_id = ?`, id); err != nil {

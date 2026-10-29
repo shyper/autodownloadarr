@@ -11,9 +11,11 @@ AutoDownloadarr handles everything you only want to see once.
 
 > **Status: early development.** Movies work end to end: search, request,
 > download with extraction while downloading, PAR2 repair, 7z/ZIP, automatic
-> fallback to the next release, Plex integration and automatic deletion after
-> watching. Series keep a rolling window of the next episodes: watched ones
-> are removed and the next ones fetched. See the [roadmap](docs/PLAN.md#14-roadmap).
+> fallback to the next release, Plex/Jellyfin/Emby integration and automatic
+> deletion after watching. Series keep a rolling window of the next episodes:
+> watched ones are removed and the next ones fetched. The Plex watchlist can
+> request movies and series automatically. See the
+> [roadmap](docs/PLAN.md#14-roadmap).
 
 ## Planned features
 
@@ -21,8 +23,8 @@ AutoDownloadarr handles everything you only want to see once.
   repair, password handling and automatic fallback to the next release
 - Newznab indexers, quality profiles (maximum resolution, required and
   forbidden words, e.g. German releases only)
-- Plex first, Jellyfin and Emby later: new items appear immediately, watched
-  ones are removed after a configurable delay (default 48 h)
+- Plex, Jellyfin and Emby: new items appear immediately, watched ones are
+  removed after a configurable delay (default 48 h)
 - Series as a rolling window: only the next *n* episodes are kept; starting the
   next episode removes the watched one and fetches another; future seasons can
   be subscribed
@@ -32,7 +34,8 @@ AutoDownloadarr handles everything you only want to see once.
   does not trigger deletions
 - Download page with running downloads, queue and history
 - Folder mapping between the container and the media server
-- Multiple ways to request: web UI, API, Plex watchlist, …
+- Multiple ways to request: web UI, API and the Plex watchlist (movies and
+  series)
 
 The full design is in [docs/PLAN.md](docs/PLAN.md) (German).
 
@@ -56,9 +59,9 @@ services:
 1. Start the container: `docker compose up -d`
 2. Read the one-time setup token from the log: `docker logs autodownloadarr`
 3. Open <http://localhost:8686> and follow the setup wizard: Usenet provider,
-   indexer, movies folder and TMDB key, Plex.
+   indexer, movies folder and TMDB key, media server (Plex, Jellyfin or Emby).
 
-Credentials (Usenet password, API keys, Plex token) are stored encrypted with
+Credentials (Usenet password, API keys, media server tokens) are stored encrypted with
 a key in `/config/secret.key`. Keep that file with your backups.
 
 ## Configuration
@@ -127,7 +130,8 @@ internal/store/        persistence of settings, providers and movies
 internal/release/      release name parser, quality profiles
 internal/indexer/      Newznab client
 internal/metadata/     TMDB client
-internal/mediaserver/  Plex client, path mapping
+internal/mediaserver/  Plex and Jellyfin/Emby clients, path mapping
+internal/watchlist/    import of the Plex watchlist
 internal/secrets/      encryption of stored credentials
 internal/auth/         accounts, sessions, rate limiting, setup token
 internal/config/       environment configuration

@@ -80,7 +80,8 @@ func (s *server) handlePutGeneral(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_input", "invalid series defaults")
 		return
 	}
-	if g.DeleteAfterHours < 0 || g.UnwatchedExpiryDays < 0 || g.MaxSources < 1 || g.ParallelDownloads < 1 || g.WatchPollMinutes < 1 || g.MaxDownloadMBps < 0 ||
+	if g.DeleteAfterHours < 0 || g.UnwatchedExpiryDays < 0 || g.MaxSources < 1 || g.ParallelDownloads < 1 ||
+		g.WatchPollMinutes < 1 || g.WatchlistPollMinutes < 1 || g.MaxDownloadMBps < 0 ||
 		g.MaxLibraryGB < 0 || g.MinFreeGB < 0 {
 		writeError(w, http.StatusBadRequest, "invalid_input", "values out of range")
 		return
@@ -295,11 +296,19 @@ func (s *server) handleTestIndexer(w http.ResponseWriter, r *http.Request) {
 
 // --- Plex -------------------------------------------------------------------
 
+// plexLogin is the result of a plex.tv sign-in until the user picks a
+// server. The account token is kept in memory only and stored encrypted
+// once the server is saved (it is needed for the watchlist).
+type plexLogin struct {
+	token   string
+	servers []plex.Server
+}
+
 // plexLogins keeps the servers found after a plex.tv sign-in until the
-// user picks one. The account token itself is not stored.
+// user picks one.
 type plexLogins struct {
-	mu      sync.Mutex
-	servers map[int][]plex.Server // pin id → servers
+	mu     sync.Mutex
+	logins map[int]plexLogin // pin id → result
 }
 
 func (s *server) handleGetPlex(w http.ResponseWriter, r *http.Request) {
@@ -313,6 +322,7 @@ func (s *server) handleGetPlex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ms.Token = ""
+	ms.AccountToken = ""
 	writeJSON(w, http.StatusOK, map[string]any{"configured": true, "server": ms})
 }
 
@@ -378,10 +388,10 @@ func (s *server) handlePlexPinStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.plex.mu.Lock()
-	if s.plex.servers == nil {
-		s.plex.servers = map[int][]plex.Server{}
+	if s.plex.logins == nil {
+		s.plex.logins = map[int]plexLogin{}
 	}
-	s.plex.servers[int(id)] = servers
+	s.plex.logins[int(id)] = plexLogin{token: token, servers: servers}
 	s.plex.mu.Unlock()
 	writeJSON(w, http.StatusOK, map[string]any{"authorized": true, "servers": nonNil(servers)})
 }
@@ -399,12 +409,12 @@ func (s *server) handlePlexConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.plex.mu.Lock()
-	servers := s.plex.servers[req.PinID]
+	login := s.plex.logins[req.PinID]
 	s.plex.mu.Unlock()
 	var chosen *plex.Server
-	for i := range servers {
-		if servers[i].ID == req.ServerID {
-			chosen = &servers[i]
+	for i := range login.servers {
+		if login.servers[i].ID == req.ServerID {
+			chosen = &login.servers[i]
 		}
 	}
 	if chosen == nil {
@@ -430,13 +440,14 @@ func (s *server) handlePlexConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ms := store.MediaServer{Kind: string(mediaserver.Plex), Name: chosen.Name, URL: req.URI, Token: chosen.AccessToken,
-		MovieLibrary: existing.MovieLibrary, TVLibrary: existing.TVLibrary, Mappings: existing.Mappings, Enabled: true}
+		AccountToken: login.token, MovieLibrary: existing.MovieLibrary, TVLibrary: existing.TVLibrary,
+		Mappings: existing.Mappings, Enabled: true}
 	if _, err := s.Store.SaveMediaServer(r.Context(), ms); err != nil {
 		s.writeStoreError(w, "save plex config", err)
 		return
 	}
 	s.plex.mu.Lock()
-	delete(s.plex.servers, req.PinID)
+	delete(s.plex.logins, req.PinID)
 	s.plex.mu.Unlock()
 	s.handleGetPlex(w, r)
 }

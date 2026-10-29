@@ -27,6 +27,8 @@ func TestServerAPI(t *testing.T) {
 				{"Name":"Serien","ItemId":"lib2","CollectionType":"tvshows","Locations":["/data/serien"]}]`))
 		case "/Items/lib1/Refresh":
 			scanned = "full"
+		case "/Users":
+			_, _ = w.Write([]byte(`[{"Id":"u2","Policy":{"IsAdministrator":false}},{"Id":"u1","Policy":{"IsAdministrator":true}}]`))
 		case "/Library/Media/Updated":
 			var body struct {
 				Updates []struct {
@@ -41,6 +43,9 @@ func TestServerAPI(t *testing.T) {
 				scanned = body.Updates[0].Path
 			}
 		case "/Items":
+			if r.URL.Query().Get("UserId") != "u1" {
+				t.Errorf("UserId = %q", r.URL.Query().Get("UserId"))
+			}
 			switch r.URL.Query().Get("IncludeItemTypes") {
 			case "Movie":
 				_, _ = w.Write([]byte(`{"Items":[

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/shyper/autodownloadarr/internal/httpx"
@@ -25,6 +26,12 @@ type Client struct {
 	HTTP  *http.Client
 	URL   string
 	Token string
+	// UserID selects whose watch state is read. Empty picks an
+	// administrator (API keys are not tied to a user).
+	UserID string
+
+	mu          sync.Mutex
+	userFetched bool
 }
 
 // NewClient returns a server client.
@@ -111,6 +118,7 @@ func (c *Client) Episodes(ctx context.Context, libraryKey string) ([]mediaserver
 type apiItem struct {
 	ID                string            `json:"Id"`
 	Name              string            `json:"Name"`
+	Path              string            `json:"Path"`
 	ProductionYear    int               `json:"ProductionYear"`
 	SeriesName        string            `json:"SeriesName"`
 	ParentIndexNumber int               `json:"ParentIndexNumber"`
@@ -128,6 +136,39 @@ type apiItem struct {
 	} `json:"UserData"`
 }
 
+// userID returns the user whose watch state is read. An API key is not tied
+// to a user, so an administrator is used unless one was configured.
+func (c *Client) userID(ctx context.Context) string {
+	if c.UserID != "" {
+		return c.UserID
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.userFetched {
+		return c.UserID
+	}
+	c.userFetched = true
+	var users []struct {
+		ID     string `json:"Id"`
+		Policy struct {
+			Admin bool `json:"IsAdministrator"`
+		} `json:"Policy"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/Users", nil, nil, &users); err != nil {
+		return ""
+	}
+	for _, u := range users {
+		if u.Policy.Admin {
+			c.UserID = u.ID
+			return c.UserID
+		}
+	}
+	if len(users) > 0 {
+		c.UserID = users[0].ID
+	}
+	return c.UserID
+}
+
 func (c *Client) items(ctx context.Context, libraryKey, typ string) ([]mediaserver.Item, error) {
 	q := url.Values{
 		"ParentId":            {libraryKey},
@@ -137,6 +178,9 @@ func (c *Client) items(ctx context.Context, libraryKey, typ string) ([]mediaserv
 		"EnableImages":        {"false"},
 		"EnableUserData":      {"true"},
 		"CollapseBoxSetItems": {"false"},
+	}
+	if id := c.userID(ctx); id != "" {
+		q.Set("UserId", id)
 	}
 	var res struct {
 		Items []apiItem `json:"Items"`
@@ -169,6 +213,9 @@ func (c *Client) items(ctx context.Context, libraryKey, typ string) ([]mediaserv
 			if src.Path != "" {
 				it.Files = append(it.Files, src.Path)
 			}
+		}
+		if len(it.Files) == 0 && m.Path != "" {
+			it.Files = append(it.Files, m.Path)
 		}
 		it.GUIDs = guids(m.ProviderIDs)
 		items = append(items, it)

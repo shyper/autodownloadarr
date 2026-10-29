@@ -80,6 +80,10 @@ type General struct {
 	// WatchPollMinutes is how often the media server is asked for the
 	// watch state.
 	WatchPollMinutes int `json:"watchPollMinutes"`
+	// Watchlist imports the Plex account's watchlist (movies and series).
+	Watchlist bool `json:"watchlist"`
+	// WatchlistPollMinutes is how often the watchlist is checked.
+	WatchlistPollMinutes int `json:"watchlistPollMinutes"`
 	// Language for metadata, e.g. "de-DE".
 	Language string `json:"language"`
 	// MaxDownloadMBps limits the download speed in MiB/s (0: unlimited).
@@ -95,15 +99,16 @@ type General struct {
 // DefaultGeneral returns the defaults.
 func DefaultGeneral() General {
 	return General{
-		DeleteAfterHours:    48,
-		UnwatchedExpiryDays: 14,
-		MaxSources:          5,
-		SeriesWindow:        3,
-		SeriesTrigger:       "progress",
-		SeriesTriggerValue:  10,
-		ParallelDownloads:   1,
-		WatchPollMinutes:    2,
-		Language:            "de-DE",
+		DeleteAfterHours:     48,
+		UnwatchedExpiryDays:  14,
+		MaxSources:           5,
+		SeriesWindow:         3,
+		SeriesTrigger:        "progress",
+		SeriesTriggerValue:   10,
+		ParallelDownloads:    1,
+		WatchPollMinutes:     2,
+		WatchlistPollMinutes: 30,
+		Language:             "de-DE",
 	}
 }
 

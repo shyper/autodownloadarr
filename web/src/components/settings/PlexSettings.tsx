@@ -95,6 +95,7 @@ function PlexConnect() {
       name: name.trim() || (kind === 'plex' ? 'Plex' : kind === 'jellyfin' ? 'Jellyfin' : 'Emby'),
       url: url.trim(),
       token: token.trim(),
+      accountToken: plexKind ? token.trim() : undefined,
       enabled: true,
       mappings: [],
     })

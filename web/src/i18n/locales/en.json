@@ -264,7 +264,11 @@
       "maxLibraryGB": "Temporary library limit (GB)",
       "maxLibraryGBHint": "Downloads wait while the movies and series folders together are larger than this. 0 means unlimited.",
       "minFreeGB": "Keep free disk space (GB)",
-      "minFreeGBHint": "No download starts if the disk would drop below this. 0 means off."
+      "minFreeGBHint": "No download starts if the disk would drop below this. 0 means off.",
+      "watchlist": "Import the Plex watchlist",
+      "watchlistHint": "Movies and series on your Plex watchlist are requested automatically. The Plex account token must be stored (sign in with Plex).",
+      "watchlistPollMinutes": "Check the watchlist every (minutes)",
+      "watchlistPollMinutesHint": "How often Plex is asked for new watchlist entries."
     },
     "tmdb": {
       "title": "TMDB",

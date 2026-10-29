@@ -29,6 +29,7 @@ import (
 	"github.com/shyper/autodownloadarr/internal/secrets"
 	"github.com/shyper/autodownloadarr/internal/series"
 	"github.com/shyper/autodownloadarr/internal/store"
+	"github.com/shyper/autodownloadarr/internal/watchlist"
 	"github.com/shyper/autodownloadarr/internal/webui"
 )
 
@@ -137,6 +138,8 @@ func runServer(cfg config.Config, log *slog.Logger) error {
 	if err := seriesManager.Start(ctx); err != nil {
 		return fmt.Errorf("start series manager: %w", err)
 	}
+	watchlistManager := watchlist.NewManager(st, svc, manager, seriesManager, log)
+	sched.Every("plex-watchlist", time.Minute, watchlistManager.Poll)
 
 	var setupToken string
 	required, err := authSvc.SetupRequired(ctx)

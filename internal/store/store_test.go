@@ -101,19 +101,20 @@ func TestIndexerAndMediaServer(t *testing.T) {
 	if _, found, _ := s.MediaServer(ctx); found {
 		t.Fatal("media server before saving")
 	}
-	ms := MediaServer{Name: "Plex", URL: "http://plex:32400", Token: "tok", MovieLibrary: "3", Enabled: true,
+	ms := MediaServer{Name: "Plex", URL: "http://plex:32400", Token: "tok", AccountToken: "account", MovieLibrary: "3", Enabled: true,
 		Mappings: []pathmap.Mapping{{Local: "/filme", Remote: "/mnt/hdd/filme"}, {Local: "", Remote: "ignored"}}}
 	if _, err := s.SaveMediaServer(ctx, ms); err != nil {
 		t.Fatal(err)
 	}
 	ms.Token = ""
+	ms.AccountToken = ""
 	ms.Mappings = ms.Mappings[:1]
 	ms.MovieLibrary = "4"
 	if _, err := s.SaveMediaServer(ctx, ms); err != nil {
 		t.Fatal(err)
 	}
 	got, found, err := s.MediaServer(ctx)
-	if err != nil || !found || got.Token != "tok" || got.Kind != "plex" || got.MovieLibrary != "4" || len(got.Mappings) != 1 {
+	if err != nil || !found || got.Token != "tok" || got.AccountToken != "account" || got.Kind != "plex" || got.MovieLibrary != "4" || len(got.Mappings) != 1 {
 		t.Errorf("media server = %+v %v", got, err)
 	}
 	ms.Kind = "jellyfin"

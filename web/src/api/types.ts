@@ -11,6 +11,9 @@ export type General = {
   maxSources: number
   parallelDownloads: number
   watchPollMinutes: number
+  /** Import the Plex account's watchlist. */
+  watchlist: boolean
+  watchlistPollMinutes: number
   language: string
   /** MiB/s, 0 = unlimited */
   maxDownloadMBps: number
@@ -79,6 +82,9 @@ export type MediaServer = {
   url: string
   token?: string
   hasToken: boolean
+  /** Plex account token for the watchlist (write-only). */
+  accountToken?: string
+  hasAccountToken?: boolean
   movieLibrary: string
   tvLibrary: string
   mappings: PathMapping[]
