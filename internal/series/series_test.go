@@ -506,3 +506,39 @@ func TestLastSeason(t *testing.T) {
 		t.Errorf("lastSeason = %d, want 2 (season 3 is only announced)", got)
 	}
 }
+
+func TestEpisodeDownloadsReportPlayable(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	bus := events.New(log)
+	m := &Manager{active: map[int64]*activeDownload{}, bus: bus}
+	m.active[9] = &activeDownload{
+		episode:  store.Episode{ID: 9, SeriesID: 3, Season: 1, Episode: 4},
+		release:  store.Release{Title: "Show.S01E04"},
+		progress: download.Progress{DoneBytes: 42},
+	}
+	ch, unsubscribe := bus.Subscribe(8, movies.EventDownloadProgress)
+	defer unsubscribe()
+
+	m.markPlayable(9)
+
+	list := m.Downloads()
+	if len(list) != 1 || !list[0].Playable || list[0].EpisodeID != 9 || list[0].ReleaseTitle != "Show.S01E04" {
+		t.Fatalf("downloads = %+v", list)
+	}
+	select {
+	case ev := <-ch:
+		got, ok := ev.Data.(Download)
+		if !ok || !got.Playable || got.EpisodeID != 9 || got.Progress.DoneBytes != 42 {
+			t.Errorf("event = %+v", ev.Data)
+		}
+	default:
+		t.Fatal("no playable event published")
+	}
+
+	// Later progress updates keep the flag.
+	m.progress(store.Episode{ID: 9, SeriesID: 3, Season: 1, Episode: 4}, download.Progress{DoneBytes: 100})
+	list = m.Downloads()
+	if !list[0].Playable || list[0].Progress.DoneBytes != 100 {
+		t.Errorf("after progress: %+v", list[0])
+	}
+}

@@ -120,15 +120,17 @@ type Job struct {
 
 	// mu guards the file states, progress and the flags below; cond is
 	// signalled whenever data arrives, a file gets its name or the job ends.
-	mu       sync.Mutex
-	cond     *sync.Cond
-	progress Progress
-	ended    bool
-	used     map[string]bool // claimed names, lower case
+	mu              sync.Mutex
+	cond            *sync.Cond
+	progress        Progress
+	ended           bool
+	workersFinished bool            // all articles have been tried; names are final
+	used            map[string]bool // claimed names, lower case
 
 	serverErrors int
 	lastProgress time.Time
 	workers      sync.WaitGroup
+	workersDone  chan struct{} // closed when all workers have finished
 	reporter     sync.WaitGroup
 	stopReporter chan struct{}
 
@@ -144,6 +146,7 @@ type fileState struct {
 
 	// Guarded by Job.mu.
 	name         string
+	finalName    bool // name from the first article, not just the subject
 	f            *os.File
 	size         int64 // from yEnc; the NZB only knows encoded sizes
 	missing      int
@@ -193,10 +196,12 @@ func Start(ctx context.Context, n *nzb.NZB, opts Options) (*Job, error) {
 		return nil, fmt.Errorf("create download dir: %w", err)
 	}
 
-	j := &Job{opts: opts, start: time.Now(), lastProgress: time.Now(), used: make(map[string]bool), stopReporter: make(chan struct{})}
+	j := &Job{opts: opts, start: time.Now(), lastProgress: time.Now(), used: make(map[string]bool),
+		stopReporter: make(chan struct{}), workersDone: make(chan struct{})}
 	j.cond = sync.NewCond(&j.mu)
 	j.ctx, j.stop = context.WithCancelCause(ctx)
 
+	named := 0
 	for i, f := range n.Files {
 		fs := &fileState{
 			index:   i,
@@ -205,9 +210,12 @@ func Start(ctx context.Context, n *nzb.NZB, opts Options) (*Job, error) {
 			seg:     make([]segState, len(f.Segments)),
 		}
 		// Names from the subject are fixed up front so that the files can
-		// be opened for streaming before their first article arrives.
+		// be opened for streaming before their first article arrives. They
+		// are provisional: obfuscated subjects often carry random names and
+		// the first article replaces them with the posted name.
 		if s := sanitize(f.Filename); s != "" {
 			fs.name = j.claim(s)
+			named++
 		}
 		j.files = append(j.files, fs)
 		if !fs.skipped {
@@ -216,6 +224,8 @@ func Start(ctx context.Context, n *nzb.NZB, opts Options) (*Job, error) {
 		}
 	}
 	j.order = downloadOrder(j.files)
+	opts.Log.Debug("download started", "dir", opts.Dir, "files", len(j.files), "named_files", named,
+		"segments", j.progress.TotalSegments, "bytes", j.progress.TotalBytes)
 
 	// Wake blocked readers when the job is cancelled.
 	context.AfterFunc(j.ctx, func() {
@@ -256,6 +266,17 @@ func Start(ctx context.Context, n *nzb.NZB, opts Options) (*Job, error) {
 	for range opts.Workers {
 		j.workers.Go(func() { j.work(jobs) })
 	}
+	// Signal the end of the workers independently of Wait: extraction waits
+	// for names while the download runs and must not need a concurrent Wait
+	// to be released.
+	go func() {
+		j.workers.Wait()
+		j.mu.Lock()
+		j.workersFinished = true
+		j.cond.Broadcast()
+		j.mu.Unlock()
+		close(j.workersDone)
+	}()
 	return j, nil
 }
 
@@ -285,7 +306,7 @@ func (j *Job) watchdog() {
 // cancelled, disk errors); missing articles are reported in the result.
 func (j *Job) Wait() (Result, error) {
 	j.waitOnce.Do(func() {
-		j.workers.Wait()
+		<-j.workersDone
 		close(j.stopReporter)
 		j.reporter.Wait()
 
@@ -313,6 +334,10 @@ func (j *Job) Wait() (Result, error) {
 		default:
 			j.err = closeErr
 		}
+		j.opts.Log.Debug("download finished", "dir", j.opts.Dir,
+			"done_segments", res.Progress.DoneSegments, "total_segments", res.Progress.TotalSegments,
+			"failed_segments", res.Progress.FailedSegments, "done_bytes", res.Progress.DoneBytes,
+			"elapsed", res.Progress.Elapsed.Round(time.Second), "err", j.err)
 		j.stop(nil)
 	})
 	return j.result, j.err
@@ -329,7 +354,9 @@ func (j *Job) Progress() Progress {
 }
 
 // Names returns the file names known so far, in download order. Files whose
-// subject carries no name get theirs from the first article.
+// subject carries no name get theirs from the first article. Names from
+// subjects are provisional: obfuscated releases replace them with the name
+// from the first article.
 func (j *Job) Names() []string {
 	j.mu.Lock()
 	defer j.mu.Unlock()
@@ -340,6 +367,42 @@ func (j *Job) Names() []string {
 		}
 	}
 	return names
+}
+
+// WaitForNames blocks until at least one file name confirmed by its first
+// article matches match, or until the download stops producing names. It
+// returns the matching names in download order; an empty result means no such
+// name turned up before the download ended or was cancelled. match may be nil
+// to match any name. Call passing a predicate that excludes names it has
+// already handled to wait for the next one.
+func (j *Job) WaitForNames(ctx context.Context, match func(string) bool) []string {
+	stop := context.AfterFunc(ctx, func() {
+		j.mu.Lock()
+		j.cond.Broadcast()
+		j.mu.Unlock()
+	})
+	defer stop()
+
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	for {
+		if ctx.Err() != nil || j.ctx.Err() != nil {
+			return nil
+		}
+		var names []string
+		for _, fs := range j.order {
+			if fs.name != "" && fs.finalName && !fs.skipped && (match == nil || match(fs.name)) {
+				names = append(names, fs.name)
+			}
+		}
+		if len(names) > 0 {
+			return names
+		}
+		if j.workersFinished || j.ended {
+			return nil
+		}
+		j.cond.Wait()
+	}
 }
 
 func (j *Job) snapshot() Progress {
@@ -398,12 +461,20 @@ func (j *Job) work(jobs <-chan job) {
 // write stores a decoded part at its offset, creating the file on first use.
 func (j *Job) write(jb job, p yenc.Part) error {
 	fs := jb.file
+	var learned, previous string
 	j.mu.Lock()
 	if fs.f == nil {
-		if fs.name == "" {
+		if fs.name == "" || preferArticleName(fs.name, p.Name) {
+			previous = fs.name
 			fs.name = j.claim(chooseName(p.Name, fs.index))
-			j.cond.Broadcast()
+			if fs.name != previous {
+				learned = fs.name
+			}
 		}
+		// From now on the name is final: it came from the first article or
+		// was confirmed by it. Readers waiting for a name can proceed.
+		fs.finalName = true
+		j.cond.Broadcast()
 		f, err := os.OpenFile(filepath.Join(j.opts.Dir, fs.name), os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0o644)
 		if err != nil {
 			j.mu.Unlock()
@@ -414,6 +485,9 @@ func (j *Job) write(jb job, p yenc.Part) error {
 	f, name := fs.f, fs.name
 	j.mu.Unlock()
 
+	if learned != "" {
+		j.opts.Log.Debug("file name from article", "file", learned, "previous", previous, "nzb_index", fs.index)
+	}
 	if _, err := f.WriteAt(p.Data, p.Begin); err != nil {
 		return fmt.Errorf("write %s: %w", name, err)
 	}
@@ -536,6 +610,8 @@ var (
 	newStyleVolume = regexp.MustCompile(`(?i)^(.*)\.part(\d+)\.rar$`)
 	oldStyleVolume = regexp.MustCompile(`(?i)^(.*)\.(?:rar|r(\d{2,3}))$`)
 	splitVolume    = regexp.MustCompile(`^(.*)\.(\d{3})$`)
+	oldVolumeExt   = regexp.MustCompile(`(?i)^\.r\d{2,3}$`)
+	splitVolumeExt = regexp.MustCompile(`^\.\d{3}$`)
 )
 
 // volumeKey returns the archive base name and volume index of a volume file
@@ -565,6 +641,43 @@ func chooseName(yencName string, index int) string {
 		return s
 	}
 	return fmt.Sprintf("file-%03d", index+1)
+}
+
+// knownNameExt reports whether ext identifies the kind of a posted file.
+func knownNameExt(ext string) bool {
+	switch ext {
+	case ".rar", ".par2", ".7z", ".zip", ".nfo", ".txt", ".sfv",
+		".mkv", ".mp4", ".m4v", ".avi", ".mov", ".wmv", ".ts", ".m2ts",
+		".webm", ".mpg", ".mpeg", ".srt", ".sub", ".idx", ".ass":
+		return true
+	}
+	return oldVolumeExt.MatchString(ext) || splitVolumeExt.MatchString(ext)
+}
+
+// preferArticleName reports whether the yEnc name of the first article
+// should replace the provisional name from the NZB subject. Obfuscated
+// subjects often carry random names without a useful extension, while the
+// yEnc header keeps the name the poster uploaded; extraction needs that name
+// to recognise RAR volumes.
+func preferArticleName(current, article string) bool {
+	if article == "" {
+		return false
+	}
+	if current == "" {
+		return true
+	}
+	if strings.EqualFold(current, article) {
+		return false
+	}
+	currentExt := strings.ToLower(filepath.Ext(current))
+	articleExt := strings.ToLower(filepath.Ext(article))
+	if articleExt == "" {
+		return false
+	}
+	if currentExt == "" {
+		return true
+	}
+	return !knownNameExt(currentExt) && knownNameExt(articleExt)
 }
 
 // sanitize turns a posted name into a safe base name.

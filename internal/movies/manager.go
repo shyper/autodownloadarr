@@ -76,6 +76,8 @@ type activeDownload struct {
 	cancel   context.CancelCauseFunc
 	release  store.Release
 	progress download.Progress
+	// playable is set once the video can be read while the download runs.
+	playable bool
 }
 
 // NewManager creates the manager and registers its scheduler handlers.
@@ -290,6 +292,9 @@ type Download struct {
 	MovieID      int64             `json:"movieId"`
 	ReleaseTitle string            `json:"releaseTitle"`
 	Progress     download.Progress `json:"progress"`
+	// Playable is set once the video can be watched while the download
+	// continues.
+	Playable bool `json:"playable"`
 }
 
 // Downloads lists the running downloads.
@@ -298,7 +303,7 @@ func (m *Manager) Downloads() []Download {
 	defer m.mu.Unlock()
 	out := []Download{}
 	for id, a := range m.active {
-		out = append(out, Download{MovieID: id, ReleaseTitle: a.release.Title, Progress: a.progress})
+		out = append(out, Download{MovieID: id, ReleaseTitle: a.release.Title, Progress: a.progress, Playable: a.playable})
 	}
 	return out
 }

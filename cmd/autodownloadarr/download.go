@@ -170,13 +170,26 @@ type extraction struct {
 // extractAll extracts every RAR archive of the job while it downloads.
 func extractAll(ctx context.Context, job *download.Job, dir string, passwords []string) extraction {
 	var ex extraction
-	for _, first := range unpack.FirstVolumes(job.Names()) {
-		res, err := extractWithPasswords(ctx, job, first, dir, passwords)
-		ex.files = append(ex.files, res.Files...)
-		ex.volumes = append(ex.volumes, res.Volumes...)
-		if err != nil {
-			ex.err = fmt.Errorf("%s: %w", first, err)
+	handled := make(map[string]bool)
+	for {
+		// Subjects of obfuscated releases often carry no usable name: wait
+		// for the first volume's yEnc name before giving up on streaming.
+		firsts := job.WaitForNames(ctx, func(name string) bool {
+			return !handled[name] && unpack.IsFirstVolume(name)
+		})
+		if len(firsts) == 0 {
 			break
+		}
+		for _, first := range firsts {
+			handled[first] = true
+			res, err := extractWithPasswords(ctx, job, first, dir, passwords)
+			ex.files = append(ex.files, res.Files...)
+			ex.volumes = append(ex.volumes, res.Volumes...)
+			if err != nil {
+				ex.err = fmt.Errorf("%s: %w", first, err)
+				ex.finished = time.Now()
+				return ex
+			}
 		}
 	}
 	ex.finished = time.Now()

@@ -206,7 +206,7 @@ export type HistoryPage = { items: HistoryEntry[]; next?: number }
 
 export type QueueEntry = { kind: 'movie' | 'episode'; movieId?: number; episodeId?: number; seriesId?: number; label: string }
 
-export type Download = { movieId: number; releaseTitle: string; progress: Progress }
+export type Download = { movieId: number; releaseTitle: string; progress: Progress; playable?: boolean }
 
 export type SeasonInfo = { number: number; name: string; episodeCount: number; airDate?: string }
 
@@ -276,6 +276,7 @@ export type EpisodeDownload = {
   episode: number
   releaseTitle: string
   progress: Progress
+  playable?: boolean
 }
 
 export type SeriesSettings = {

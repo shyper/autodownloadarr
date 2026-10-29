@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import type { Download, EpisodeState, Progress, Release } from '../api/types'
+import type { Download, EpisodeState, Release } from '../api/types'
 import type { ReleaseMark } from '../releases'
 import { formatBytes } from '../format'
 import { Badge, ProgressBar, type BadgeTone } from './ui'
@@ -49,7 +49,7 @@ export function Rejection({ value }: { value: string }) {
   )
 }
 
-export function DownloadProgress({ download }: { download: Pick<Download, 'progress'> & { progress: Progress } }) {
+export function DownloadProgress({ download }: { download: Pick<Download, 'progress'> & { playable?: boolean } }) {
   const { t } = useTranslation()
   const p = download.progress
   if (p.checking) {
@@ -66,6 +66,7 @@ export function DownloadProgress({ download }: { download: Pick<Download, 'progr
   const speed = seconds > 0 ? p.doneBytes / seconds : 0
   return (
     <div className="space-y-1">
+      {download.playable && <Badge tone="ok">{t('downloads.playable')}</Badge>}
       <ProgressBar value={ratio} />
       <p className="flex flex-wrap justify-between gap-x-3 text-xs text-muted">
         <span>

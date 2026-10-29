@@ -27,6 +27,7 @@ import (
 	"github.com/shyper/autodownloadarr/internal/secrets"
 	"github.com/shyper/autodownloadarr/internal/store"
 	"github.com/shyper/autodownloadarr/internal/testutil/rar5"
+	"github.com/shyper/autodownloadarr/internal/usenet/download"
 	"github.com/shyper/autodownloadarr/internal/usenet/nntp/nntptest"
 	"github.com/shyper/autodownloadarr/internal/usenet/nzb"
 	"github.com/shyper/autodownloadarr/internal/usenet/yenc"
@@ -247,6 +248,41 @@ func TestMovieLifecycle(t *testing.T) {
 	}
 	if _, err := os.Stat(folder); !os.IsNotExist(err) {
 		t.Error("movie folder still exists")
+	}
+}
+
+func TestDownloadsReportPlayable(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	bus := events.New(log)
+	m := &Manager{active: map[int64]*activeDownload{}, bus: bus}
+	m.active[7] = &activeDownload{
+		release:  store.Release{Title: "Film.2024"},
+		progress: download.Progress{DoneBytes: 42},
+	}
+	ch, unsubscribe := bus.Subscribe(8, EventDownloadProgress)
+	defer unsubscribe()
+
+	m.markPlayable(7)
+
+	list := m.Downloads()
+	if len(list) != 1 || !list[0].Playable || list[0].ReleaseTitle != "Film.2024" {
+		t.Fatalf("downloads = %+v", list)
+	}
+	select {
+	case ev := <-ch:
+		got, ok := ev.Data.(Download)
+		if !ok || !got.Playable || got.MovieID != 7 || got.Progress.DoneBytes != 42 {
+			t.Errorf("event = %+v", ev.Data)
+		}
+	default:
+		t.Fatal("no playable event published")
+	}
+
+	// Later progress updates keep the flag.
+	m.progress(7, download.Progress{DoneBytes: 100})
+	list = m.Downloads()
+	if !list[0].Playable || list[0].Progress.DoneBytes != 100 {
+		t.Errorf("after progress: %+v", list[0])
 	}
 }
 

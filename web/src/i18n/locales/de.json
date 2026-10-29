@@ -503,6 +503,7 @@
     "kindMovie": "Film",
     "kindEpisode": "Folge",
     "removed": "entfernt",
-    "duration": "{{minutes}} min"
+    "duration": "{{minutes}} min",
+    "playable": "Jetzt schon anschaubar"
   }
 }

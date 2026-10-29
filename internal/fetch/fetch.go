@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/shyper/autodownloadarr/internal/usenet/download"
 	"github.com/shyper/autodownloadarr/internal/usenet/nntp"
@@ -44,8 +45,9 @@ const (
 const WorkDirName = ".autodownloadarr"
 
 // visibleAfter is how much of the video must be extracted before the media
-// server is told about it: enough for the container headers.
-const visibleAfter = 32 << 20
+// server is told about it: enough for the container headers. It is a var so
+// tests can lower it.
+var visibleAfter int64 = 32 << 20
 
 // Pre-check: articles sampled with STAT before downloading, and the share
 // that may be missing (a repair can still fix a few).
@@ -134,11 +136,21 @@ func (f *Fetcher) Fetch(ctx context.Context, req Request) (Result, error) {
 			return Result{}, fail(KindSpam, fmt.Errorf("subject points to a web site for the password: %q", file.Subject))
 		}
 	}
+	segments, named := 0, 0
+	for _, file := range n.Files {
+		segments += len(file.Segments)
+		if file.Filename != "" {
+			named++
+		}
+	}
+	f.Log.Debug("nzb parsed", "release", req.ReleaseTitle, "files", len(n.Files), "segments", segments,
+		"size", formatSize(n.Size()), "named_files", named)
 
 	// Ask the servers whether the articles exist before downloading: every
 	// one of them, or a sample (a release that is mostly gone is skipped in
 	// seconds).
 	if req.FullCheck {
+		f.Log.Debug("checking availability", "release", req.ReleaseTitle, "full", true)
 		res, err := download.FullCheck(ctx, req.Pool, n, req.Pool.Connections(), func(done, total int) {
 			if req.OnProgress != nil {
 				req.OnProgress(download.Progress{Checking: true, Checked: done, CheckTotal: total})
@@ -177,18 +189,26 @@ func (f *Fetcher) Fetch(ctx context.Context, req Request) (Result, error) {
 	}
 	jctx, jcancel := context.WithCancelCause(ctx)
 	defer jcancel(nil)
+	lastProgressLog := time.Now()
 	job, err := download.Start(jctx, n, download.Options{
 		Pool:    req.Pool,
 		Dir:     req.WorkDir,
 		Log:     f.Log,
 		Limiter: req.Limiter,
 		OnProgress: func(p download.Progress) {
-			if req.OnProgress != nil {
-				req.OnProgress(p)
-			}
 			if p.FailedBytes > recoveryBytes {
 				jcancel(errBeyondRepair)
 			}
+			if req.OnProgress != nil {
+				req.OnProgress(p)
+			}
+			if p.Checking || time.Since(lastProgressLog) < 30*time.Second {
+				return
+			}
+			lastProgressLog = time.Now()
+			f.Log.Debug("download progress", "release", req.ReleaseTitle,
+				"done", formatSize(p.DoneBytes), "total", formatSize(p.TotalBytes),
+				"failed_segments", p.FailedSegments, "elapsed", p.Elapsed.Round(time.Second))
 		},
 	})
 	if err != nil {
@@ -198,26 +218,71 @@ func (f *Fetcher) Fetch(ctx context.Context, req Request) (Result, error) {
 	src := passwordSource{known: candidates(n, req), nfo: func() []string { return passwordsFromNFOs(job) }}
 	var extracted []string
 	var password string
-	var exErr error
-	firsts := unpack.FirstVolumes(job.Names())
+	var exErr, videoErr error
+	handled := make(map[string]bool)
 	name := req.VideoName
-	for _, first := range firsts {
-		files, pw, err := extract(jctx, job, first, req.Folder, &src, name, req.OnVisible)
-		for _, file := range files {
-			if name != "" && strings.TrimSuffix(file, filepath.Ext(file)) == name {
-				name = "" // only one file gets the name
-			}
-			extracted = append(extracted, filepath.Join(req.Folder, file))
-		}
-		if err != nil {
-			exErr = err
-			if !errors.Is(err, download.ErrDataMissing) {
-				job.Cancel() // a repair cannot fix a password or a broken archive
-			}
+	streamable := false
+	for _, known := range job.Names() {
+		if unpack.IsFirstVolume(known) || wanted(known) {
+			streamable = true
 			break
 		}
-		if pw != "" {
-			password = pw
+	}
+	if !streamable {
+		f.Log.Debug("no RAR volume or video known yet, waiting for yEnc names", "release", req.ReleaseTitle)
+	}
+	for {
+		names := job.WaitForNames(jctx, func(name string) bool {
+			return !handled[name] && (unpack.IsFirstVolume(name) || wanted(name))
+		})
+		if len(names) == 0 {
+			break
+		}
+		for _, file := range names {
+			handled[file] = true
+		}
+		for _, file := range names {
+			if unpack.IsFirstVolume(file) {
+				f.Log.Debug("extracting rar while downloading", "release", req.ReleaseTitle, "volume", file)
+				files, pw, err := extract(jctx, job, file, req.Folder, &src, name, req.OnVisible)
+				for _, out := range files {
+					if name != "" && strings.TrimSuffix(out, filepath.Ext(out)) == name {
+						name = "" // only one file gets the name
+					}
+					extracted = append(extracted, filepath.Join(req.Folder, out))
+				}
+				if err != nil {
+					exErr = err
+					if !errors.Is(err, download.ErrDataMissing) {
+						job.Cancel() // a repair cannot fix a password or a broken archive
+					}
+					break
+				}
+				if pw != "" {
+					password = pw
+				}
+				continue
+			}
+			target := filepath.Base(file)
+			if name != "" {
+				target = name + strings.ToLower(filepath.Ext(target))
+			}
+			f.Log.Debug("streaming video while downloading", "release", req.ReleaseTitle, "file", file, "target", target)
+			out, err := streamVideo(jctx, job, file, req.Folder, target, req.OnVisible)
+			if err != nil {
+				videoErr = err
+				if !errors.Is(err, download.ErrDataMissing) {
+					job.Cancel()
+				}
+				break
+			}
+			if name != "" {
+				name = "" // only one file gets the name
+			}
+			extracted = append(extracted, filepath.Join(req.Folder, out))
+		}
+		if exErr != nil || videoErr != nil {
+			break
 		}
 	}
 	res, dlErr := job.Wait()
@@ -241,12 +306,22 @@ func (f *Fetcher) Fetch(ctx context.Context, req Request) (Result, error) {
 		return failed(KindPassword, exErr)
 	case exErr != nil && !errors.Is(exErr, download.ErrDataMissing):
 		return failed(KindUnpack, exErr)
+	case videoErr != nil && !errors.Is(videoErr, download.ErrDataMissing):
+		return failed(KindDiskError, videoErr)
 	}
 
-	if len(firsts) == 0 || exErr != nil {
-		// Streaming was not possible (missing articles, obfuscated names,
-		// 7z/ZIP or no archive at all): repair if needed, then extract
-		// from disk.
+	if len(handled) == 0 || exErr != nil || videoErr != nil {
+		// Streaming was not possible (missing articles, 7z/ZIP or no
+		// archive/video at all): repair if needed, then extract from disk.
+		switch {
+		case exErr != nil:
+			f.Log.Info("streaming extraction failed, extracting after download", "release", req.ReleaseTitle, "err", exErr)
+		case videoErr != nil:
+			f.Log.Info("streaming video failed, extracting after download", "release", req.ReleaseTitle, "err", videoErr)
+		default:
+			f.Log.Info("nothing to stream while downloading, extracting after download", "release", req.ReleaseTitle,
+				"files", len(res.Files), "failed_segments", res.Progress.FailedSegments)
+		}
 		files, pw, kind, err := f.repairAndExtract(ctx, req, n, res, &src)
 		extracted = append(extracted, files...)
 		if kind == KindPassword && src.spam {
@@ -258,14 +333,19 @@ func (f *Fetcher) Fetch(ctx context.Context, req Request) (Result, error) {
 		if pw != "" {
 			password = pw
 		}
+		f.Log.Debug("extraction after download finished", "release", req.ReleaseTitle, "files", len(files))
 	}
 
 	var videos []string
+	seen := make(map[string]bool)
 	for _, file := range extracted {
-		if wanted(file) {
-			videos = append(videos, file)
-		} else {
+		if !wanted(file) {
 			_ = os.Remove(file)
+			continue
+		}
+		if !seen[file] {
+			seen[file] = true
+			videos = append(videos, file)
 		}
 	}
 	if len(videos) == 0 {

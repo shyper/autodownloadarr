@@ -503,6 +503,7 @@
     "kindMovie": "Movie",
     "kindEpisode": "Episode",
     "removed": "removed",
-    "duration": "{{minutes}} min"
+    "duration": "{{minutes}} min",
+    "playable": "Watchable now"
   }
 }

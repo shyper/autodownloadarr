@@ -48,18 +48,25 @@ var (
 func FirstVolumes(names []string) []string {
 	var first []string
 	for _, name := range names {
-		if !strings.EqualFold(filepath.Ext(name), ".rar") {
-			continue
+		if IsFirstVolume(name) {
+			first = append(first, name)
 		}
-		if m := newStyleVolume.FindStringSubmatch(name); m != nil {
-			if n, _ := strconv.Atoi(m[1]); n != 1 {
-				continue
-			}
-		}
-		first = append(first, name)
 	}
 	slices.Sort(first)
 	return first
+}
+
+// IsFirstVolume reports whether name is the first volume of a RAR archive.
+func IsFirstVolume(name string) bool {
+	if !strings.EqualFold(filepath.Ext(name), ".rar") {
+		return false
+	}
+	if m := newStyleVolume.FindStringSubmatch(name); m != nil {
+		if n, _ := strconv.Atoi(m[1]); n != 1 {
+			return false
+		}
+	}
+	return true
 }
 
 // FindRARArchives returns the paths of the first volumes in dir, skipping

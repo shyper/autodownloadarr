@@ -26,16 +26,16 @@ func (j *Job) Open(name string) (fs.File, error) {
 	for {
 		allNamed := true
 		for _, st := range j.files {
-			if st.name == name && !st.skipped {
+			if st.name == name && st.finalName && !st.skipped {
 				return &stream{job: j, st: st}, nil
 			}
-			if st.name == "" {
+			if !st.skipped && !st.finalName {
 				allNamed = false
 			}
 		}
-		// Unnamed files get their name from their first article; until
-		// then the name might still turn up.
-		if allNamed || j.ended || j.ctx.Err() != nil {
+		// A name from the subject is provisional: obfuscated releases only
+		// reveal the real name in the first article.
+		if allNamed || j.workersFinished || j.ended || j.ctx.Err() != nil {
 			return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
 		}
 		j.cond.Wait()
@@ -99,7 +99,7 @@ func (s *stream) blocked() error {
 	if st.prefix < len(st.seg) && st.seg[st.prefix].failed {
 		return fmt.Errorf("%w: %s: article %d unavailable", ErrDataMissing, st.name, st.prefix+1)
 	}
-	if s.job.ended || s.job.ctx.Err() != nil {
+	if s.job.ended || s.job.workersFinished || s.job.ctx.Err() != nil {
 		if err := s.job.ctx.Err(); err != nil && !s.job.ended {
 			return err
 		}

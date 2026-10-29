@@ -132,6 +132,7 @@ func (m *Manager) download(ctx context.Context, mv store.Movie, rel store.Releas
 		FullCheck:    m.svc.FullCheck(ctx),
 		OnVisible: func(path string) {
 			visible.Store(true)
+			m.markPlayable(mv.ID)
 			m.log.Info("movie playable while downloading", "movie", mv.Title, "file", path)
 			go m.scan(context.WithoutCancel(ctx), folder)
 		},
@@ -252,11 +253,29 @@ func (m *Manager) finish(ctx, dctx context.Context, mv store.Movie, rel store.Re
 
 func (m *Manager) progress(movieID int64, p download.Progress) {
 	m.mu.Lock()
+	d := Download{MovieID: movieID, Progress: p}
 	if a, ok := m.active[movieID]; ok {
 		a.progress = p
+		d.ReleaseTitle, d.Playable = a.release.Title, a.playable
 	}
 	m.mu.Unlock()
-	m.bus.Publish(EventDownloadProgress, Download{MovieID: movieID, Progress: p})
+	m.bus.Publish(EventDownloadProgress, d)
+}
+
+// markPlayable records that the movie can be watched while its download
+// continues and tells the UI right away instead of waiting for the next
+// progress tick.
+func (m *Manager) markPlayable(movieID int64) {
+	m.mu.Lock()
+	a, ok := m.active[movieID]
+	if !ok {
+		m.mu.Unlock()
+		return
+	}
+	a.playable = true
+	d := Download{MovieID: movieID, ReleaseTitle: a.release.Title, Progress: a.progress, Playable: true}
+	m.mu.Unlock()
+	m.bus.Publish(EventDownloadProgress, d)
 }
 
 // FolderName is the library folder of a movie, with the TMDB ID as a hint

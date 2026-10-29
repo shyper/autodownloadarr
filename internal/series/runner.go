@@ -118,19 +118,14 @@ func (m *Manager) download(ctx context.Context, se store.Series, e store.Episode
 		FullCheck: m.svc.FullCheck(ctx),
 		OnVisible: func(path string) {
 			visible.Store(true)
+			m.markPlayable(e.ID)
 			m.log.Info("episode playable while downloading", "series", se.Title, "file", path)
 			go m.scan(context.WithoutCancel(ctx), folder)
 		},
 		Passwords: passwords,
 		Limiter:   m.limiter,
 		OnProgress: func(p download.Progress) {
-			m.mu.Lock()
-			if a, ok := m.active[e.ID]; ok {
-				a.progress = p
-			}
-			m.mu.Unlock()
-			m.bus.Publish(movies.EventDownloadProgress, Download{EpisodeID: e.ID, SeriesID: e.SeriesID, Season: e.Season,
-				Episode: e.Episode, Progress: p})
+			m.progress(e, p)
 		},
 	})
 	if err != nil && visible.Load() {
@@ -159,6 +154,34 @@ func (m *Manager) download(ctx context.Context, se store.Series, e store.Episode
 		}
 	}
 	return final, "", nil
+}
+
+func (m *Manager) progress(e store.Episode, p download.Progress) {
+	m.mu.Lock()
+	d := Download{EpisodeID: e.ID, SeriesID: e.SeriesID, Season: e.Season, Episode: e.Episode, Progress: p}
+	if a, ok := m.active[e.ID]; ok {
+		a.progress = p
+		d.ReleaseTitle, d.Playable = a.release.Title, a.playable
+	}
+	m.mu.Unlock()
+	m.bus.Publish(movies.EventDownloadProgress, d)
+}
+
+// markPlayable records that the episode can be watched while its download
+// continues and tells the UI right away instead of waiting for the next
+// progress tick.
+func (m *Manager) markPlayable(episodeID int64) {
+	m.mu.Lock()
+	a, ok := m.active[episodeID]
+	if !ok {
+		m.mu.Unlock()
+		return
+	}
+	a.playable = true
+	d := Download{EpisodeID: episodeID, SeriesID: a.episode.SeriesID, Season: a.episode.Season, Episode: a.episode.Episode,
+		ReleaseTitle: a.release.Title, Progress: a.progress, Playable: true}
+	m.mu.Unlock()
+	m.bus.Publish(movies.EventDownloadProgress, d)
 }
 
 func (m *Manager) finish(ctx, dctx context.Context, se store.Series, e store.Episode, rel store.Release, attemptID int64,

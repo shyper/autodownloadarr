@@ -71,11 +71,13 @@ func (s *Services) scan(ctx context.Context, tv bool, folder string) error {
 		target, err = s.PlexTV(ctx)
 	}
 	if err == nil && target == nil {
+		s.Log.Debug("plex scan skipped: no library configured", "folder", folder, "tv", tv)
 		return nil // no library chosen: nothing to tell
 	}
 	remote := folder
 	if err == nil {
 		remote = target.Mapper.ToRemote(folder)
+		s.Log.Debug("plex scan requested", "folder", folder, "remote", remote, "tv", tv)
 		err = target.Client.Scan(ctx, target.Library, remote)
 	}
 	code := WarnPlexScanMovies
@@ -90,6 +92,7 @@ func (s *Services) scan(ctx context.Context, tv bool, folder string) error {
 	if err != nil && !errors.Is(err, context.Canceled) {
 		s.warnings[code] = Warning{Code: code, Detail: remote + ": " + err.Error(), At: time.Now()}
 	} else if err == nil {
+		s.Log.Debug("plex scan completed", "remote", remote, "tv", tv)
 		delete(s.warnings, code)
 	}
 	return err
