@@ -1,126 +1,126 @@
-# AutoDownloadarr – Projektplan
+# AutoDownloadarr – project plan
 
-> Temporäre Filme und Serien „on demand“ aus dem Usenet: anfordern, laden, beim Laden entpacken,
-> im Medienserver anzeigen, nach dem Schauen automatisch wieder löschen.
-> Ergänzt Sonarr/Radarr (dauerhafte Sammlung), ersetzt sie nicht.
+> Temporary movies and series "on demand" from Usenet: request, download, unpack while downloading,
+> show in the media server, delete automatically after watching.
+> Complements Sonarr/Radarr (permanent collection), does not replace them.
 
-Stand: 2026-10-29 · Status: Phase 0–5 umgesetzt
-
----
-
-## 1. Ziele und Abgrenzung
-
-**Ziele**
-
-- Filme und Serien(-staffeln) zum *einmaligen* Ansehen anfordern.
-- Eigener Suchclient (Newznab-Indexer) und eigener Usenet-Downloader (NNTP), der **während des Ladens entpackt**.
-- Medienserver (Plex, Jellyfin, Emby) wird sofort benachrichtigt, Inhalt erscheint direkt in der Bibliothek.
-- Gesehen-Status wird überwacht, Inhalte werden nach Regeln automatisch gelöscht.
-- Serien laufen als „rollendes Fenster“: nur X Folgen liegen bereit, gesehene werden gelöscht, die nächste wird nachgeladen.
-- Webinterface mit Anmeldung, Deployment als ein Docker-Container.
-- Alles Austauschbare (Indexer, Downloader, Medienserver, Metadaten, Benachrichtigungen, Eingangskanäle) liegt hinter Schnittstellen.
-
-**Nicht-Ziele (vorerst)**
-
-- Keine dauerhafte Archivverwaltung, Upgrades oder Qualitäts-„Cutoff“-Upgrades wie bei Sonarr/Radarr.
-- Kein Torrent-Support im MVP (über die Schnittstellen später möglich).
-- Kein Transcoding.
+Status: 2026-10-29 · Phase 0–5 implemented
 
 ---
 
-## 2. Technologie-Empfehlung
+## 1. Goals and non-goals
 
-| Bereich | Wahl | Begründung |
+**Goals**
+
+- Request movies and series (seasons) for *one-time* viewing.
+- Own search client (Newznab indexers) and own Usenet downloader (NNTP) that **unpacks while downloading**.
+- The media server (Plex, Jellyfin, Emby) is notified immediately, content appears in the library right away.
+- Watch state is monitored, content is deleted automatically according to rules.
+- Series run as a "rolling window": only X episodes are available, watched ones are deleted, the next one is fetched.
+- Web interface with login, deployment as a single Docker container.
+- Everything interchangeable (indexers, downloaders, media servers, metadata, notifications, input channels) sits behind interfaces.
+
+**Non-goals (for now)**
+
+- No permanent library management, upgrades or quality "cutoff" upgrades like Sonarr/Radarr.
+- No torrent support in the MVP (possible later through the interfaces).
+- No transcoding.
+
+---
+
+## 2. Technology choices
+
+| Area | Choice | Rationale |
 |---|---|---|
-| Backend | **Go** | Sehr gute Nebenläufigkeit (viele parallele NNTP-Verbindungen über Goroutinen), hoher Netzwerk-Durchsatz, ein statisches Binary → winziges Docker-Image, schnelle Builds, Cross-Compile für amd64/arm64 (NAS, Raspberry Pi). |
-| RAR-Entpacken | `github.com/nwaples/rardecode/v2` (pure Go) | Liest RAR 1.5–5, mehrteilige Archive, **als Stream** über `io.Reader` – genau das, was wir fürs Entpacken während des Ladens brauchen. Unterstützt verschlüsselte Archive (Passwort-Option). 7z/ZIP inkl. AES über Pure-Go-Bibliotheken. |
-| PAR2 | `par2cmdline-turbo` als externes Binary im Image | Ausgereift und schnell; eine eigene PAR2-Reparatur lohnt sich nicht. Verifikation (MD5/CRC) machen wir selbst. |
-| yEnc | eigene Implementierung in Go | Einfach, gut testbar; bei Bedarf später SIMD-optimiert. |
-| Datenbank | **SQLite** (`modernc.org/sqlite`, ohne CGO) + Migrationen (`goose`) + `sqlc` | Kein extra Container, Backups = eine Datei. Repository-Schicht erlaubt später Postgres. |
-| HTTP/API | `chi` Router, REST + Server-Sent Events für Live-Fortschritt | Schlank, Standardbibliothek-nah. |
-| Frontend | **TypeScript + React + Vite**, Tailwind + shadcn/ui, TanStack Query | Großes Ökosystem; Build wird per `go:embed` ins Binary eingebettet → ein Artefakt. |
-| Container | Multi-Stage-Build, Laufzeit-Image Alpine (wegen par2) | `PUID`/`PGID`, Volumes `/config`, `/data`. |
+| Backend | **Go** | Excellent concurrency (many parallel NNTP connections via goroutines), high network throughput, a static binary → tiny Docker image, fast builds, cross-compilation for amd64/arm64 (NAS, Raspberry Pi). |
+| RAR extraction | `github.com/nwaples/rardecode/v2` (pure Go) | Reads RAR 1.5–5, multi-volume archives, **as a stream** via `io.Reader` – exactly what we need for unpacking while downloading. Supports encrypted archives (password option). 7z/ZIP incl. AES via pure-Go libraries. |
+| PAR2 | `par2cmdline-turbo` as an external binary in the image | Mature and fast; implementing our own PAR2 repair is not worth it. Verification (MD5/CRC) is done by us. |
+| yEnc | own implementation in Go | Simple, easy to test; SIMD optimisation later if needed. |
+| Database | **SQLite** (`modernc.org/sqlite`, no CGO) + migrations (`goose`) + `sqlc` | No extra container, backups = one file. The repository layer allows Postgres later. |
+| HTTP/API | `chi` router, REST + Server-Sent Events for live progress | Lean, close to the standard library. |
+| Frontend | **TypeScript + React + Vite**, Tailwind + shadcn/ui, TanStack Query | Large ecosystem; the build is embedded into the binary via `go:embed` → one artifact. |
+| Container | Multi-stage build, Alpine runtime image (because of par2) | `PUID`/`PGID`, volumes `/config`, `/data`. |
 
-**Warum nicht …**
+**Why not …**
 
-- *Python* (wie SABnzbd): bräuchte für yEnc/Netzwerk-Durchsatz C-Erweiterungen; Packaging ist schwerer.
-- *Node/TypeScript im Backend*: machbar, aber CPU-lastiges Dekodieren/Entpacken passt schlechter zum Event-Loop.
-- *Rust*: maximale Performance, aber deutlich langsamere Entwicklung für ein Projekt mit viel Integrations-Code.
-- *C#/.NET* (wie Sonarr/Radarr): gute Alternative, aber größere Images und mehr Laufzeit-Overhead als Go.
+- *Python* (like SABnzbd): would need C extensions for yEnc/network throughput; packaging is harder.
+- *Node/TypeScript in the backend*: feasible, but CPU-heavy decoding/unpacking fits the event loop poorly.
+- *Rust*: maximum performance, but much slower development for a project with a lot of integration code.
+- *C#/.NET* (like Sonarr/Radarr): a good alternative, but larger images and more runtime overhead than Go.
 
 ---
 
-## 3. Architektur
+## 3. Architecture
 
-Modularer Monolith: ein Prozess, klar getrennte Pakete, Kommunikation über einen internen Event-Bus.
-Alle externen Systeme sind *Provider* hinter Go-Interfaces, registriert über eine Registry
-(`registry.Register("newznab", newznabFactory)`). Neue Indexer/Medienserver = neues Paket, das ein Interface implementiert.
+Modular monolith: one process, clearly separated packages, communication via an internal event bus.
+All external systems are *providers* behind Go interfaces, registered through a registry
+(`registry.Register("newznab", newznabFactory)`). A new indexer/media server = a new package that implements an interface.
 
 ```
-                         ┌──────────────────────── Web-UI (React) ───────────────────────┐
-                         │  Suche · Bibliothek · Downloads · Einstellungen · Benutzer    │
-                         └──────────────────────────────┬────────────────────────────────┘
+                         ┌──────────────────────── Web UI (React) ────────────────────────┐
+                         │  Search · Library · Downloads · Settings · Users               │
+                         └──────────────────────────────┬─────────────────────────────────┘
                                                         │ REST + SSE
 ┌───────────────┐   ┌───────────────────────────────────▼──────────────────────────────────┐
-│ Eingangskanäle│──▶│                         Core / Domain                                │
-│ UI, API,      │   │  Requests · Movies · Series · Episodes · Lifecycle-Engine · Scheduler │
-│ Watchlists,   │   └──┬───────────┬────────────┬──────────────┬─────────────┬─────────────┘
-│ Bots, *arr-API│      │           │            │              │             │
+│ Input channels│──▶│                         Core / Domain                                │
+│ UI, API,      │   │  Requests · Movies · Series · Episodes · Lifecycle engine · Scheduler│
+│ watchlists,   │   └──┬───────────┬────────────┬──────────────┬─────────────┬─────────────┘
+│ bots, *arr API│      │           │            │              │             │
 └───────────────┘      ▼           ▼            ▼              ▼             ▼
                ┌──────────┐ ┌───────────┐ ┌──────────────┐ ┌──────────┐ ┌──────────────┐
-               │ Metadata │ │ Indexer   │ │ Decision     │ │ Download │ │ Media Server │
-               │ TMDB,TVDB│ │ Newznab,  │ │ Engine       │ │ Client   │ │ Plex,        │
-               │          │ │ Prowlarr  │ │ Parser,Profil│ │ intern / │ │ Jellyfin,    │
-               └──────────┘ └───────────┘ │ Scoring      │ │ SAB/NZBG │ │ Emby         │
-                                          └──────────────┘ └────┬─────┘ └──────┬───────┘
-                                                                │              │ Watch-Events
-                                              ┌─────────────────▼───┐          ▼
-                                              │ Interner Downloader │   Watch-Tracker
-                                              │ NZB→NNTP→yEnc→      │   (Webhook/WS/Polling)
-                                              │ Stream-Unpack→PAR2  │
-                                              └─────────────────────┘
+               │ Metadata │ │ Indexer   │ │ Decision     │ │ Download │ │ Media server │
+               │ TMDB,TVDB│ │ Newznab,  │ │ engine       │ │ client   │ │ Plex,        │
+               │          │ │ Prowlarr  │ │ parser,      │ │ internal │ │ Jellyfin,    │
+               │          │ │           │ │ profile,     │ │ SAB/NZBG │ │ Emby         │
+               └──────────┘ └───────────┘ │ scoring      │ └────┬─────┘ └──────┬───────┘
+                                          └──────────────┘      │              │ watch events
+                                             ┌──────────────────▼───┐          ▼
+                                             │ Internal downloader  │   Watch tracker
+                                             │ NZB→NNTP→yEnc→       │   (webhook/WS/polling)
+                                             │ stream unpack→PAR2   │
+                                             └──────────────────────┘
 ```
 
-### 3.1 Paketstruktur (Vorschlag)
+### 3.1 Package structure (proposal)
 
 ```
-cmd/autodownloadarr/        main, Wiring
+cmd/autodownloadarr/        main, wiring
 internal/
-  config/                   Env + config-Datei, Defaults
-  db/                       Migrationen, sqlc-Queries, Repositories
-  auth/                     Benutzer, Sessions, API-Keys, (später OIDC)
-  domain/                   Entitäten + Zustandsautomaten
-  events/                   interner Event-Bus
-  scheduler/                persistente Jobs/Timer (Löschfristen, Suchen, Polling)
-  lifecycle/                Regeln: Film-Löschung, Serien-Fenster, Speicherplatz
+  config/                   env + config file, defaults
+  db/                       migrations, sqlc queries, repositories
+  auth/                     users, sessions, API keys, (later OIDC)
+  domain/                   entities + state machines
+  events/                   internal event bus
+  scheduler/                persistent jobs/timers (deletion deadlines, searches, polling)
+  lifecycle/                rules: movie deletion, series window, storage
   metadata/        (iface)  tmdb/, tvdb/
   indexer/         (iface)  newznab/, prowlarr/
-  release/                  Release-Namen-Parser, Qualitätsprofile, Scoring
+  release/                  release name parser, quality profiles, scoring
   downloadclient/  (iface)  internal/, sabnzbd/, nzbget/
-  usenet/                   nzb/, nntp/ (Pool), yenc/, assembler/, unpack/, par2/, deobfuscate/
+  usenet/                   nzb/, nntp/ (pool), yenc/, assembler/, unpack/, par2/, deobfuscate/
   password/        (iface)  nzbmeta/, jobname/, release/, list/, subject/, nfo/, archivecomment/, manual/
   mediaserver/     (iface)  plex/, jellyfin/, emby/
   notify/          (iface)  telegram/, discord/, ntfy/, webhook/
-  inputs/          (iface)  plexwatchlist/, trakt/, arrapi/ (Overseerr-kompatibel), telegrambot/
-  library/                  Dateibenennung, Pfade, sicheres Löschen
-  api/                      HTTP-Handler, SSE
-web/                        React-Frontend (wird eingebettet)
+  inputs/          (iface)  plexwatchlist/, trakt/, arrapi/ (Overseerr-compatible), telegrambot/
+  library/                  file naming, paths, safe deletion
+  api/                      HTTP handlers, SSE
+web/                        React frontend (embedded)
 ```
 
-### 3.2 Zentrale Schnittstellen (Skizze)
+### 3.2 Core interfaces (sketch)
 
 ```go
 type MetadataProvider interface {
     SearchMovies(ctx context.Context, q string) ([]MovieMeta, error)
     SearchSeries(ctx context.Context, q string) ([]SeriesMeta, error)
     Movie(ctx context.Context, id ExternalIDs) (MovieMeta, error)
-    Series(ctx context.Context, id ExternalIDs) (SeriesMeta, []SeasonMeta, error) // inkl. Episoden + Ausstrahlungsdaten
+    Series(ctx context.Context, id ExternalIDs) (SeriesMeta, []SeasonMeta, error) // incl. episodes and air dates
 }
 
 type Indexer interface {
     Name() string
-    Capabilities(ctx context.Context) (Caps, error)        // unterstützte Suchtypen/IDs/Kategorien
-    Search(ctx context.Context, q SearchQuery) ([]Release, error) // Movie(imdb/tmdb) | Episode(tvdb, S, E) | Season | Freitext
+    Capabilities(ctx context.Context) (Caps, error)               // supported search types/IDs/categories
+    Search(ctx context.Context, q SearchQuery) ([]Release, error) // movie(imdb/tmdb) | episode(tvdb, S, E) | season | free text
     FetchNZB(ctx context.Context, r Release) (io.ReadCloser, error)
 }
 
@@ -128,28 +128,28 @@ type DownloadClient interface {
     Add(ctx context.Context, nzb io.Reader, job JobSpec) (JobID, error)
     Status(ctx context.Context, id JobID) (JobStatus, error)
     Remove(ctx context.Context, id JobID, deleteData bool) error
-    Events() <-chan DownloadEvent                           // Fortschritt, Fertig, Fehler
+    Events() <-chan DownloadEvent                              // progress, done, errors
 }
 
-type MediaServer interface { // alle Pfade hier sind Medienserver-Pfade; Umrechnung macht der PathMapper
+type MediaServer interface { // all paths here are media server paths; the PathMapper converts them
     Name() string
     Test(ctx context.Context) error
     Libraries(ctx context.Context) ([]Library, error)
-    NotifyAdded(ctx context.Context, path string) error     // gezielter Teil-Scan
+    NotifyAdded(ctx context.Context, path string) error        // targeted partial scan
     NotifyRemoved(ctx context.Context, path string) error
     ResolveItem(ctx context.Context, path string) (ItemRef, error)
     WatchState(ctx context.Context, item ItemRef, users []string) (WatchState, error)
-    Subscribe(ctx context.Context) (<-chan PlaybackEvent, error) // Start/Progress/Stop/Watched – Webhook, WS oder Polling
+    Subscribe(ctx context.Context) (<-chan PlaybackEvent, error) // start/progress/stop/watched – webhook, WS or polling
 }
 
-type PasswordSource interface { // siehe Abschnitt 7
+type PasswordSource interface { // see section 7
     Name() string
     Candidates(ctx context.Context, pc PasswordContext) ([]PasswordCandidate, error)
 }
 
 type Notifier interface { Send(ctx context.Context, n Notification) error }
 
-type InputSource interface { // Watchlist o. ä., wird periodisch abgefragt
+type InputSource interface { // watchlist etc., polled periodically
     Name() string
     Poll(ctx context.Context) ([]MediaRequest, error)
 }
@@ -157,368 +157,368 @@ type InputSource interface { // Watchlist o. ä., wird periodisch abgefragt
 
 ---
 
-## 4. Datenmodell (Kern)
+## 4. Data model (core)
 
-| Tabelle | Wichtige Felder |
+| Table | Important fields |
 |---|---|
 | `users` | id, name, password_hash (argon2id), role (admin/user), media_server_user_ids |
-| `quality_profiles` | name, max_resolution, min_resolution, allowed_sources, codecs, required_words, forbidden_words, preferred_words (+Score), min/max MB pro Minute, prefer_proper, password_policy |
+| `quality_profiles` | name, max_resolution, min_resolution, allowed_sources, codecs, required_words, forbidden_words, preferred_words (+score), min/max MB per minute, prefer_proper, password_policy |
 | `movies` | tmdb_id, imdb_id, title, year, profile_id, requested_by, state, keep_flag, delete_after, attempts, next_search_at, last_error |
 | `series` | tvdb_id, tmdb_id, title, profile_id, requested_by, window_size, season_selection, keep_flag |
 | `episodes` | series_id, season, episode, air_date, state, file_id, watched_at, attempts, next_search_at, last_error |
-| `releases` | Kandidaten pro Suche: indexer, guid, title, size, parsed_attrs, score, rejected_reason, fingerprint (Name+Größe), password_flag (Newznab), searched_at |
-| `blocklist` | fingerprint, guid, media_item, Fehlerklasse, Grund (fehlende Artikel, Passwort unbekannt, Spam, Fake, falsche Sprache …), Zeitpunkt |
-| `download_jobs` | release_id, client, state, progress, speed, error_kind, error, Pfade, last_progress_at, encrypted, password (verschlüsselt), password_source |
-| `passwords` | Passwort (verschlüsselt), scope (global/indexer/gruppe), scope_ref, hits, last_hit_at, created_by |
-| `attempts` | media_item, release_id, gestartet/beendet, Ergebnis, Fehlerklasse, Details – Historie aller Versuche |
-| `files` | **jede von uns angelegte Datei**: Pfad, Größe, media_item, angelegt_am – Grundlage für sicheres Löschen |
-| `scheduled_tasks` | type, ref, run_at, payload (persistente Timer, überleben Neustarts) |
-| `events_log` | Historie/Audit für UI („Gelöscht, weil …“) |
-| `providers` | Konfiguration je Indexer/Server/Medienserver/Notifier (Typ + JSON-Settings, Secrets verschlüsselt) |
-| `path_mappings` | provider_id, local_path, remote_path, remote_os (posix/windows) – Pfad-Mapping je Medienserver/Client |
+| `releases` | candidates per search: indexer, guid, title, size, parsed_attrs, score, rejected_reason, fingerprint (name+size), password_flag (Newznab), searched_at |
+| `blocklist` | fingerprint, guid, media_item, error class, reason (missing articles, unknown password, spam, fake, wrong language …), timestamp |
+| `download_jobs` | release_id, client, state, progress, speed, error_kind, error, paths, last_progress_at, encrypted, password (encrypted), password_source |
+| `passwords` | password (encrypted), scope (global/indexer/group), scope_ref, hits, last_hit_at, created_by |
+| `attempts` | media_item, release_id, started/finished, result, error class, details – history of all attempts |
+| `files` | **every file we created**: path, size, media_item, created_at – basis for safe deletion |
+| `scheduled_tasks` | type, ref, run_at, payload (persistent timers, survive restarts) |
+| `events_log` | history/audit for the UI ("deleted because …") |
+| `providers` | configuration per indexer/server/media server/notifier (type + JSON settings, secrets encrypted) |
+| `path_mappings` | provider_id, local_path, remote_path, remote_os (posix/windows) – path mapping per media server/client |
 
 ---
 
-## 5. Abläufe
+## 5. Flows
 
-### 5.1 Zustandsautomat Medienelement (Film bzw. Episode)
+### 5.1 State machine media item (movie or episode)
 
 ```
 Requested ─▶ Searching ─▶ Downloading ─▶ Unpacking/Verifying ─▶ Available ─▶ Watching ─▶ Watched ─▶ PendingDelete ─▶ Deleted
     ▲            │             │                  │
-    │            ▼             └──── Fehler ──────┴──▶ Failed ─▶ (Release blocklisten, nächsten Kandidaten) ─▶ Searching
-    │       NotFound ─▶ (Wiederholung nach Zeitplan, z. B. noch nicht ausgestrahlt)
-    └────────────── „Erneut laden“ aus Deleted
+    │            ▼             └──── error ───────┴──▶ Failed ─▶ (blocklist release, next candidate) ─▶ Searching
+    │       NotFound ─▶ (retry on schedule, e.g. not aired yet)
+    └────────────── "Download again" from Deleted
 ```
 
-Zusätzlicher Zwischenzustand `PasswordRequired` (nur im Passwort-Modus „warten“, Abschnitt 7.3): Downloading ⇄ PasswordRequired.
+Additional intermediate state `PasswordRequired` (only in the "wait" password mode, section 7.3): Downloading ⇄ PasswordRequired.
 
-### 5.2 Film
+### 5.2 Movie
 
-1. Anfrage (UI/Watchlist/API) → Metadaten von TMDB.
-2. Vorab-Check: Liegt der Film bereits im Medienserver (z. B. über Radarr)? → Hinweis statt Download.
-3. Suche bei allen aktiven Indexern (ID-basiert, Fallback Freitext) → Parser → Profil filtert → Scoring → Kandidatenliste.
-4. Bester Kandidat → optional Verfügbarkeits-Check (NNTP `STAT` auf Stichprobe der Artikel) → Download.
-5. Stream-Entpacken direkt in den Zielordner unter dem endgültigen Namen; nach den ersten 32 MB `NotifyAdded` (schaubar während des Downloads), nach Abschluss erneut.
-6. Watch-Tracker meldet „gesehen“ → Löschzeitpunkt = jetzt + `movie_delete_after` (Standard 48 h) → Benachrichtigung „wird am … gelöscht“.
-7. Timer läuft ab → Dateien löschen (nur aus `files`-Tabelle), `NotifyRemoved`, Status `Deleted`.
+1. Request (UI/watchlist/API) → metadata from TMDB.
+2. Pre-check: is the movie already in the media server (e.g. via Radarr)? → hint instead of download.
+3. Search all active indexers (ID-based, free-text fallback) → parser → profile filters → scoring → candidate list.
+4. Best candidate → optional availability check (NNTP `STAT` on a sample of articles) → download.
+5. Stream unpack directly into the target folder under the final name; after the first 32 MB `NotifyAdded` (watchable during the download), again after completion.
+6. Watch tracker reports "watched" → deletion time = now + `movie_delete_after` (default 48 h) → notification "will be deleted on …".
+7. Timer expires → delete files (only from the `files` table), `NotifyRemoved`, state `Deleted`.
 
-Zusätzlich: **Ablauffrist** – nicht angesehene Filme werden nach N Tagen gelöscht (z. B. 14, konfigurierbar, abschaltbar).
-**„Behalten“-Schalter** pausiert alle Löschregeln.
+Additionally: **expiry deadline** – unwatched movies are deleted after N days (e.g. 14, configurable, can be disabled).
+The **"Keep" switch** pauses all deletion rules.
 
-### 5.3 Serien – rollendes Fenster
+### 5.3 Series – rolling window
 
-Einstellungen pro Serie (Default aus globalen Einstellungen):
+Settings per series (default from global settings):
 
-- **Staffelauswahl**: einzelne Staffel(n), alle, oder „ab S02E05“.
-- **Fenstergröße X** (Default 3): Anzahl bereitliegender, noch nicht gesehener Folgen.
-- **Löschauslöser** (schützt vor versehentlichem Anklicken der nächsten Folge):
-  - *Fortschritt* (Default): Folge N wird gelöscht, sobald von Folge N+1 mindestens **10 %** gesehen wurden.
-  - *Wartezeit*: Folge N wird **Y Minuten** (z. B. 15) nach dem Start von N+1 gelöscht, wenn N+1 noch läuft bzw. weitergeschaut wurde.
-  - *Gesehen-Status*: Folge N wird gelöscht, sobald der Medienserver sie als gesehen markiert (+ optionale Karenzzeit).
-  - Fortschritt und Wartezeit sind kombinierbar („was zuerst eintritt“); Prozentwert und Minuten sind konfigurierbar.
-- **Staffelgrenze**: am Staffelende automatisch mit der nächsten ausgewählten Staffel weitermachen.
-- **Laufende Serie**: Folgen, die noch nicht ausgestrahlt sind, werden nach Air-Date (+ Puffer) gesucht.
+- **Season selection**: individual season(s), all, or "from S02E05".
+- **Window size X** (default 3): number of available, not yet watched episodes.
+- **Deletion trigger** (protects against accidentally clicking the next episode):
+  - *Progress* (default): episode N is deleted once at least **10 %** of episode N+1 has been watched.
+  - *Waiting time*: episode N is deleted **Y minutes** (e.g. 15) after N+1 started, if N+1 is still playing or was continued.
+  - *Watched state*: episode N is deleted once the media server marks it as watched (+ optional grace period).
+  - Progress and waiting time can be combined ("whichever comes first"); percentage and minutes are configurable.
+- **Season boundary**: at the end of a season, continue automatically with the next selected season.
+- **Running series**: episodes that have not aired yet are searched after their air date (+ buffer).
 
-Logik (läuft bei jedem Playback-Event und periodisch):
+Logic (runs on every playback event and periodically):
 
 ```
-position  = letzte Folge, die gestartet/gesehen wurde (pro getracktem Benutzer)
-behalten  = Folgen ab position, max. X Stück voraus, plus die aktuell laufende
-löschen   = alle verfügbaren Folgen vor position, deren Löschauslöser erfüllt ist
-nachladen = nächste fehlende Folgen in Reihenfolge, bis X unverbrauchte Folgen verfügbar/im Download sind
+position  = last episode started/watched (per tracked user)
+keep      = episodes from position, at most X ahead, plus the currently playing one
+delete    = all available episodes before position whose deletion trigger fired
+fetch     = next missing episodes in order until X unwatched episodes are available/downloading
 ```
 
-Beispiel X = 3: Start → E1, E2, E3 geladen. Benutzer startet E2 → E4 wird sofort geladen; sobald 10 % von E2 gesehen sind, wird E1 gelöscht.
-(Nachladen schon beim Start, Löschen erst beim Auslöser – so ist der Puffer nie kleiner als X.)
+Example X = 3: start → E1, E2, E3 loaded. User starts E2 → E4 is fetched immediately; once 10 % of E2 has been watched, E1 is deleted.
+(Fetching already starts on playback, deletion only on the trigger – so the buffer never drops below X.)
 
-Sonderfälle: Benutzer springt vor (alle übersprungenen Folgen gelten als verbraucht? → Einstellung), Rewatch (keine erneute Löschung bei Keep), Doppelfolgen (S01E01E02 als eine Datei), Staffelpakete (wenn Einzelfolgen nicht auffindbar: Staffelpaket laden, nur die Fensterfolgen entpacken – bei Stream-Entpacken möglich, weil wir gezielt Dateien aus dem Archiv extrahieren).
+Special cases: user skips ahead (do all skipped episodes count as consumed? → setting), rewatch (no repeated deletion with keep), double episodes (S01E01E02 as one file), season packs (when single episodes cannot be found: download a season pack, extract only the window episodes – possible with stream unpacking because we extract specific files from the archive).
 
-### 5.4 Watch-Tracking
+### 5.4 Watch tracking
 
-| Medienserver | Primär | Fallback |
+| Media server | Primary | Fallback |
 |---|---|---|
-| Plex | WebSocket-Notifications des Servers (`/:/websockets/notifications`, Playing-Events, kein Plex Pass nötig) | Polling `/status/sessions` + `viewCount` der Items; Webhooks (Plex Pass) optional |
-| Jellyfin | WebSocket/Sessions-API | Polling `UserData.Played`; Webhook-Plugin optional |
-| Emby | wie Jellyfin (gemeinsame Basis-Implementierung) | – |
+| Plex | WebSocket notifications from the server (`/:/websockets/notifications`, playing events, no Plex Pass needed) | Polling `/status/sessions` + `viewCount` of the items; webhooks (Plex Pass) optional |
+| Jellyfin | WebSocket/sessions API | Polling `UserData.Played`; webhook plugin optional |
+| Emby | like Jellyfin (shared base implementation) | – |
 
-Konfigurierbar: **welche Benutzer des Medienservers zählen** (einer, mehrere = „alle müssen gesehen haben“ oder „einer reicht“).
-Default ist der Ein-Personen-Fall (Besitzer des Plex-Servers, wird beim Einrichten automatisch erkannt); Mehrbenutzer ist im Datenmodell von Anfang an vorgesehen, weil das Projekt Open Source wird.
-Gesehen-Schwelle: Medienserver-Status oder eigener Wert (z. B. ≥ 90 % Fortschritt).
+Configurable: **which media server users count** (one, several = "all must have watched" or "one is enough").
+The default is the single-person case (owner of the Plex server, detected automatically during setup); multi-user is part of the data model from the start because the project will be open source.
+Watched threshold: media server state or our own value (e.g. ≥ 90 % progress).
 
 ---
 
-## 6. Interner Downloader (Kernstück)
+## 6. Internal downloader (core piece)
 
 ```
-NZB ─▶ Parser ─▶ Dateiliste (Volumes, PAR2, Sonstiges) ─▶ Priorisierung
+NZB ─▶ parser ─▶ file list (volumes, PAR2, other) ─▶ prioritisation
                                          │
-            ┌────────────────────────────▼─────────────────────────────┐
-            │ NNTP-Pool: mehrere Server, Priorität, N Verbindungen/Srv │
-            │ TLS, AUTH, Pipelining, Retry, Fallback auf Backup-Server │
-            └────────────────────────────┬─────────────────────────────┘
-                                         ▼
-                           yEnc-Decode + CRC32 pro Segment
-                                         ▼
-                   Assembler: Segmente an Offset in Volume-Datei schreiben,
-                   „verfügbar bis Byte n“ je Volume nachhalten
-                                         ▼
-           Stream-Unpacker liest Volumes sequenziell (blockiert, bis Daten da sind)
-                                         ▼
-                    Zieldatei im Medienordner (endgültiger Name, wächst)
+           ┌────────────────────────────▼─────────────────────────────┐
+           │ NNTP pool: multiple servers, priority, N connections/srv │
+           │ TLS, AUTH, pipelining, retry, fallback to backup server  │
+           └────────────────────────────┬─────────────────────────────┘
+                                        ▼
+                          yEnc decode + CRC32 per segment
+                                        ▼
+                  assembler: write segments at offsets in volume files,
+                  track "available up to byte n" per volume
+                                        ▼
+          stream unpacker reads volumes sequentially (blocks until data arrives)
+                                        ▼
+                   target file in the media folder (final name, grows)
 ```
 
-**Entpacken während des Ladens**
+**Unpacking while downloading**
 
-- **Umgesetzt in Phase 1.** Volumes werden in Archivreihenfolge geladen (PAR2-Index zuerst, dann `part1, part2, …` bzw. `.rar, .r00, …`, dann der Rest).
-- Der laufende Download stellt seine Dateien als Dateisystem (`fs.FS`) bereit. Lesezugriffe blockieren, bis die Bytes zusammenhängend auf der Platte liegen; `rardecode` liest darüber und schreibt die Zieldatei, während weitere Volumes noch laden. Ist das letzte Volume da, ist der Film praktisch sofort fertig.
-- Das Video wird gleich unter seinem endgültigen Namen geschrieben. Sobald die ersten 32 MB auf der Platte liegen (Container-Kopf mit Laufzeit und Codecs), bekommt der Medienserver einen Teil-Scan – der Titel ist schaubar, während der Rest noch lädt. Nach Abschluss folgt ein zweiter Scan. Andere Dateien (Extras, Samples werden gar nicht entpackt) heißen beim Schreiben `name.partial`. Scheitert der Versuch, wird die Datei gelöscht und erneut gescannt.
-- Fehlt ein Artikel endgültig, bricht das Stream-Entpacken mit „Daten fehlen“ ab statt zu hängen (Rückfall auf Reparatur siehe unten).
-- Sonderfall *Store-Modus* (RAR m0, bei Scene-Releases üblich): Nutzdaten liegen unkomprimiert im Archiv → wir könnten Segmente direkt an den richtigen Offset der Zieldatei schreiben und die RAR-Volumes gar nicht erst speichern. Spart Plattenplatz und I/O. (Optimierung für später.)
-- Nach dem Entpacken: Prüfung über CRC aus dem RAR-Header bzw. PAR2-Hashes.
+- **Implemented in phase 1.** Volumes are downloaded in archive order (PAR2 index first, then `part1, part2, …` or `.rar, .r00, …`, then the rest).
+- The running download exposes its files as a filesystem (`fs.FS`). Reads block until the bytes are contiguously on disk; `rardecode` reads through it and writes the target file while further volumes are still downloading. Once the last volume is there, the movie is practically finished immediately.
+- The video is written under its final name right away. As soon as the first 32 MB are on disk (container header with runtime and codecs), the media server gets a partial scan – the title is watchable while the rest is still downloading. A second scan follows after completion. Other files (extras; samples are not extracted at all) are named `name.partial` while writing. If the attempt fails, the file is deleted and rescanned.
+- If an article is permanently missing, stream unpacking aborts with "data missing" instead of hanging (fallback to repair, see below).
+- Special case *store mode* (RAR m0, common for scene releases): payload is stored uncompressed in the archive → we could write segments directly to the correct offset of the target file and not store the RAR volumes at all. Saves disk space and I/O. (Optimisation for later.)
+- After unpacking: verification via CRC from the RAR header or PAR2 hashes.
 
-**Schauen, bevor der Download fertig ist (Variante A umgesetzt)**
+**Watching before the download is finished (variant A implemented)**
 
-Damit man schon *während* des Downloads schauen kann, gibt es zwei Wege. Umgesetzt ist A (wachsende Datei, siehe oben); B bleibt eine Option für später, falls Spulen in noch nicht geladene Teile wichtig wird:
+To be able to watch *while* downloading, there are two approaches. A is implemented (growing file, see above); B remains an option for later if seeking into not-yet-downloaded parts becomes important:
 
-| | A: Wachsende Datei | B: Virtuelles Dateisystem |
+| | A: Growing file | B: Virtual filesystem |
 |---|---|---|
-| Idee | Die entpackte Datei erscheint sofort im Medienserver und wächst | Ein Laufwerk (WebDAV/FUSE) zeigt die *vollständige* Datei sofort; Lesezugriffe von Plex laden die nötigen Artikel gezielt nach (mit Vorausladen) |
-| Spulen | Nur in bereits geladene Teile | Überallhin, fehlende Stellen werden sofort nachgeladen |
-| Voraussetzung | keine | RAR im Store-Modus (üblich) oder Datei ohne Archiv; Plex muss das Laufwerk einbinden (FUSE im Container oder WebDAV-Mount auf dem Plex-Host) |
-| Risiko | Plex liest Laufzeit/Index (MKV-Cues am Dateiende) beim ersten Scan falsch; Wiedergabe stoppt, wenn sie den Download einholt | Deutlich mehr Aufwand; Einrichtung des Mounts für Nutzer |
-| Aufwand | gering | hoch (eigene Phase) |
+| Idea | The extracted file appears in the media server immediately and grows | A drive (WebDAV/FUSE) shows the *complete* file immediately; reads from Plex fetch the required articles on demand (with read-ahead) |
+| Seeking | Only into already downloaded parts | Anywhere; missing parts are fetched immediately |
+| Prerequisite | none | RAR in store mode (common) or a file without an archive; Plex must mount the drive (FUSE in the container or WebDAV mount on the Plex host) |
+| Risk | Plex reads runtime/index (MKV cues at the end of the file) incorrectly on the first scan; playback stops when it catches up with the download | Considerably more effort; users have to set up the mount |
+| Effort | low | high (its own phase) |
 
-Empfehlung: zuerst A als Option ausprobieren (wenig Aufwand, zeigt die Grenzen von Plex), B als eigene spätere Phase, falls A nicht reicht.
+Recommendation: try A first as an option (little effort, shows the limits of Plex), B as its own later phase if A is not enough.
 
-**Fehlerfälle** (Gesamtkonzept siehe Abschnitt 9)
+**Failure cases** (overall concept see section 9)
 
-- Fehlende Artikel (430) auf allen Servern → Stream-Entpacken pausiert, PAR2-Recovery-Blöcke werden nachgeladen (nur so viele wie nötig), `par2` repariert, dann klassisch entpacken.
-- Verschlüsseltes Archiv → Passwortsuche (Abschnitt 7); erst wenn kein Passwort passt, gilt die Quelle als unbrauchbar.
-- Nicht reparierbar, Fake (z. B. `.exe`, falsche Größe/Laufzeit) → Release auf Blocklist, nächster Kandidat automatisch.
-- **Verfügbarkeits-Check vorab** per `STAT` reduziert Fehlstarts.
-- **Deobfuskation**: zufällige Dateinamen über PAR2-Metadaten (Originalnamen + MD5 der ersten 16 KiB) und Datei-Signaturen auflösen.
-- Nicht-RAR: 7z/zip (Pure-Go-Bibliotheken), direkte `.mkv`/`.mp4` ohne Archiv.
-- Samples, `.nfo`, `.exe` etc. werden verworfen.
+- Missing articles (430) on all servers → stream unpacking pauses, PAR2 recovery blocks are downloaded (only as many as needed), `par2` repairs, then unpack classically.
+- Encrypted archive → password search (section 7); the source only counts as unusable once no password fits.
+- Not repairable, fake (e.g. `.exe`, wrong size/runtime) → release goes on the blocklist, next candidate automatically.
+- **Availability check up front** via `STAT` reduces false starts.
+- **Deobfuscation**: resolve random file names via PAR2 metadata (original names + MD5 of the first 16 KiB) and file signatures.
+- Non-RAR: 7z/zip (pure-Go libraries), direct `.mkv`/`.mp4` without an archive.
+- Samples, `.nfo`, `.exe` etc. are discarded.
 
-**Weitere Downloader-Funktionen**: Bandbreitenlimit (mit Zeitplan), globale/parallele Job-Limits, Priorität („jetzt schauen“ vor Hintergrund-Nachladen), Speicherplatz-Wächter (Pausieren bei < Mindest-Freiplatz), Artikel-Cache im RAM.
+**More downloader features**: bandwidth limit (with schedule), global/parallel job limits, priority ("watch now" before background fetching), disk space watchdog (pause below minimum free space), article cache in RAM.
 
-**Austauschbarkeit**: Da der Downloader hinter `DownloadClient` liegt, können SABnzbd/NZBGet als alternative Clients angebunden werden (ohne Stream-Entpacken). Nützlich zum Vergleichen und als Rückfalloption.
+**Interchangeability**: because the downloader sits behind `DownloadClient`, SABnzbd/NZBGet can be connected as alternative clients (without stream unpacking). Useful for comparison and as a fallback.
 
 ---
 
-## 7. Passwortgeschützte Releases
+## 7. Password-protected releases
 
-Gerade bei deutschen Releases sind verschlüsselte Archive häufig. **Passwortgeschützt heißt nicht defekt**: Eine Quelle gilt
-erst dann als unbrauchbar, wenn aus keiner Quelle ein passendes Passwort gefunden wurde.
+Encrypted archives are especially common with German releases. **Password-protected does not mean broken**: a source only counts
+as unusable once no suitable password was found from any source.
 
-### 7.1 Passwortquellen
+### 7.1 Password sources
 
-Jede Quelle ist ein eigenes Modul hinter einer Schnittstelle (`PasswordSource`). Alle Quellen liefern Kandidaten,
-die zusammengeführt, entdoppelt und in dieser Reihenfolge getestet werden. Jeder Kandidat merkt sich seine Herkunft (für UI und Statistik).
+Every source is its own module behind an interface (`PasswordSource`). All sources return candidates that are merged,
+deduplicated and tested in this order. Every candidate remembers its origin (for the UI and statistics).
 
-| # | Quelle | Beispiele | Phase |
+| # | Source | Examples | Phase |
 |---|---|---|---|
-| 1 | **NZB-Metadaten** | `<head><meta type="password">geheim</meta></head>` (auch mehrere `password`-Einträge) | 2 |
-| 2 | **NZB-Dateiname / Jobname** | `Film.2024.German.720p.WEB.x264{{geheim}}.nzb`, SABnzbd-Schreibweise `Jobname / geheim`, `password=geheim` – gilt für Upload, API und Indexer-Downloads (`Content-Disposition`) | 2 |
-| 3 | **Release-Titel und Indexer-Daten** | `{{geheim}}` im Titel, Newznab-Attribute/Beschreibung/Kommentar, Standardpasswort pro Indexer | 2 |
-| 4 | **Passwortliste** | global, pro Indexer, pro Release-Gruppe; sortiert nach Erfolgsquote („gelernte“ Passwörter) | 2 einfach, 3 mit Gruppen + Statistik |
-| 5 | **Manuelle Eingabe** | Web-UI, API, später Antwort an den Bot | 2 |
-| 6 | **Betreffzeilen / Dateinamen in der NZB** | `[PW: geheim]`, `Passwort - geheim`, `password.txt` als Dateiname | 3 |
-| 7 | **Begleitdateien im Post** | `.nfo`, `.txt` werden (weil klein) zuerst geladen und nach Passwort-Mustern durchsucht | 3 |
-| 8 | **Archiv-Kommentar** | RAR-Kommentar, lesbar solange die Header nicht verschlüsselt sind | 3 |
+| 1 | **NZB metadata** | `<head><meta type="password">secret</meta></head>` (also multiple `password` entries) | 2 |
+| 2 | **NZB file name / job name** | `Movie.2024.German.720p.WEB.x264{{secret}}.nzb`, SABnzbd notation `Jobname / secret`, `password=secret` – applies to upload, API and indexer downloads (`Content-Disposition`) | 2 |
+| 3 | **Release title and indexer data** | `{{secret}}` in the title, Newznab attributes/description/comment, default password per indexer | 2 |
+| 4 | **Password list** | global, per indexer, per release group; sorted by success rate ("learned" passwords) | 2 simple, 3 with groups + statistics |
+| 5 | **Manual entry** | web UI, API, later reply to the bot | 2 |
+| 6 | **Subject lines / file names in the NZB** | `[PW: secret]`, `Password - secret`, `password.txt` as a file name | 3 |
+| 7 | **Companion files in the post** | `.nfo`, `.txt` are downloaded first (because they are small) and searched for password patterns | 3 |
+| 8 | **Archive comment** | RAR comment, readable as long as the headers are not encrypted | 3 |
 
-Die Suchmuster sind konfigurierbare reguläre Ausdrücke (Default u. a. `pw`, `pass`, `passwort`, `password`, `kennwort`, `{{…}}`),
-damit Nutzer neue Konventionen ohne Code-Änderung ergänzen können. Gefundene Werte werden bereinigt (Leerzeichen, Anführungszeichen, Klammern).
+The search patterns are configurable regular expressions (defaults include `pw`, `pass`, `passwort`, `password`, `kennwort`, `{{…}}`),
+so users can add new conventions without changing code. Found values are cleaned up (spaces, quotes, brackets).
 
 ```go
 type PasswordSource interface {
     Name() string
-    // ctx enthält NZB, Release, Indexer und bereits geladene Begleitdateien
+    // ctx contains the NZB, release, indexer and already downloaded companion files
     Candidates(ctx context.Context, pc PasswordContext) ([]PasswordCandidate, error)
 }
 ```
 
-### 7.2 Erkennen und Prüfen
+### 7.2 Detecting and testing
 
-- **Früh erkennen**: Das erste Volume wird zuerst geladen; aus den ersten Segmenten wird der Archiv-Header gelesen.
-  - Nur Daten verschlüsselt → Dateiliste ist sichtbar, Fake-Prüfung (`.exe`, falsche Größe) ist sofort möglich.
-  - Header verschlüsselt (`rar -hp`) → auch die Dateiliste erst mit Passwort.
-- **Testen, bevor viel geladen wird**:
-  - RAR5 enthält einen Passwort-Prüfwert → Kandidaten lassen sich in Millisekunden prüfen, ohne Daten zu entschlüsseln.
-  - RAR3/4, 7z-AES, ZIP-AES: mit dem Kandidaten den ersten Datenblock entschlüsseln und gegen CRC bzw. Container-Signatur (MKV/MP4-Header) prüfen.
-- **Treffer** → Stream-Entpacken läuft mit Passwort normal weiter; Passwort und Herkunft werden zum Job gespeichert, Erfolgsquote der Liste wird hochgezählt.
-- **Verschachtelte Archive**: Innere Archive durchlaufen dieselbe Passwortsuche (zuletzt erfolgreiches Passwort zuerst).
-- **Grenzen**: höchstens N Kandidaten aus der Liste pro Release (z. B. 50), kein Brute Force.
-- **Spam erkennen**: Verweist die NFO/der Dateiname für das Passwort auf eine Webseite („Passwort auf www…“), gilt das Release als Spam → Blocklist mit eigenem Grund, nicht als „Passwort unbekannt“.
+- **Detect early**: the first volume is downloaded first; the archive header is read from the first segments.
+  - Only data encrypted → the file list is visible, the fake check (`.exe`, wrong size) is possible immediately.
+  - Headers encrypted (`rar -hp`) → the file list is only available with the password.
+- **Test before downloading much**:
+  - RAR5 contains a password check value → candidates can be tested in milliseconds without decrypting data.
+  - RAR3/4, 7z-AES, ZIP-AES: decrypt the first data block with the candidate and verify against the CRC or container signature (MKV/MP4 header).
+- **Hit** → stream unpacking continues normally with the password; the password and its origin are stored with the job, the list's success rate is incremented.
+- **Nested archives**: inner archives go through the same password search (last successful password first).
+- **Limits**: at most N candidates from the list per release (e.g. 50), no brute force.
+- **Detect spam**: if the NFO/file name points to a web site for the password ("password at www…"), the release counts as spam → blocklist with its own reason, not as "password unknown".
 
-### 7.3 Wenn kein Passwort passt
+### 7.3 When no password fits
 
 ```
-Verschlüsselt erkannt ─▶ Kandidaten aus allen Quellen testen
-   ├─ Treffer ─────────▶ weiter laden + Stream-Entpacken
-   └─ kein Treffer
-        ├─ Modus „automatisch“ (Default): Release blocklisten (Grund „Passwort unbekannt“) ─▶ nächster Kandidat.
-        │      Das Release bleibt unter „Passwort benötigt“ sichtbar, falls man das Passwort später nachreicht.
-        └─ Modus „warten“: Download pausiert, Status „Passwort benötigt“, Benachrichtigung.
-               Nach Zeit T (z. B. 30 min) ohne Eingabe ─▶ wie „automatisch“.
+Encrypted detected ─▶ test candidates from all sources
+   ├─ hit ───────────▶ continue downloading + stream unpacking
+   └─ no hit
+        ├─ mode "automatic" (default): blocklist release (reason "password unknown") ─▶ next candidate.
+        │      The release stays visible under "Password required" in case the password is supplied later.
+        └─ mode "wait": download paused, state "Password required", notification.
+               After time T (e.g. 30 min) without input ─▶ same as "automatic".
 
-Manuelle Eingabe ─▶ wird sofort geprüft; bereits geladene Daten werden weiterverwendet,
-                    optional „Passwort zur Liste hinzufügen“ (global / Indexer / Gruppe).
+Manual entry ─▶ checked immediately; already downloaded data is reused,
+                optionally "add password to the list" (global / indexer / group).
 ```
 
-### 7.4 Berücksichtigung bei der Release-Auswahl
+### 7.4 Consideration during release selection
 
-- Das Newznab-Attribut `password` wird ausgewertet (0 = nein, 1 = passwortgeschützt, 2 = enthält inneres Archiv; je nach Indexer unterschiedlich gut gepflegt).
-- Profiloption „Passwortgeschützte Releases“: *erlauben* · *nur wenn Passwort bekannt* · *vermeiden* (Score-Abzug) · *ablehnen*.
-- Ist das Passwort bereits aus NZB oder Titel bekannt, gibt es keinen Abzug.
+- The Newznab attribute `password` is evaluated (0 = no, 1 = password-protected, 2 = contains an inner archive; maintained with varying quality depending on the indexer).
+- Profile option "password-protected releases": *allow* · *only when password known* · *avoid* (score penalty) · *reject*.
+- If the password is already known from the NZB or title, there is no penalty.
 
-### 7.5 Sicherheit
+### 7.5 Security
 
-- Passwortliste und Job-Passwörter werden wie andere Secrets verschlüsselt in der DB gespeichert und in Logs maskiert.
-- Passwörter verlassen das System nie (keine Abfrage externer Dienste).
-- Import/Export der Passwortliste als Textdatei (eine Zeile pro Passwort, optional mit Gültigkeitsbereich).
+- The password list and job passwords are stored encrypted in the DB like other secrets and masked in logs.
+- Passwords never leave the system (no queries to external services).
+- Import/export of the password list as a text file (one line per password, optionally with scope).
 
 ---
 
-## 8. Release-Auswahl
+## 8. Release selection
 
-**Parser** (eigenes Paket, Tabellen-getestet mit vielen echten Release-Namen):
-Titel, Jahr, Staffel/Episode(n), Auflösung, Quelle (WEB-DL, WEBRip, BluRay, HDTV, …), Codec, HDR, Audio, Sprache(n) (`German`, `DL`, `ML`, …), Gruppe, PROPER/REPACK, Edition.
+**Parser** (own package, table-tested with many real release names):
+title, year, season/episode(s), resolution, source (WEB-DL, WEBRip, BluRay, HDTV, …), codec, HDR, audio, language(s) (`German`, `DL`, `ML`, …), group, PROPER/REPACK, edition.
 
-**Qualitätsprofil**
+**Quality profile**
 
-- **Maximale Auflösung** (z. B. 720p) – harte Grenze; innerhalb davon gewinnt die höchste.
-- Minimale Auflösung (optional).
-- **Required Words** (alle/einer muss passen, Regex möglich) – z. B. `German`.
-- **Forbidden Words** – z. B. `CAM`, `TS`, `HDCAM`, `Subbed`, `LD`.
-- Preferred Words mit Punktwerten (z. B. `DL` +10, bestimmte Gruppen +5).
-- Größenlimits pro Laufzeitminute (filtert Fakes und riesige Remuxe).
-- Bevorzugter Codec (x265 spart Platz bei temporären Inhalten).
-- Mindestalter des Releases / Mindest-Grabs (optional, gegen Fakes).
-- Umgang mit passwortgeschützten Releases: erlauben / nur mit bekanntem Passwort / vermeiden / ablehnen (Abschnitt 7.4).
+- **Maximum resolution** (e.g. 720p) – hard limit; within it the highest wins.
+- Minimum resolution (optional).
+- **Required words** (all/one must match, regex possible) – e.g. `German`.
+- **Forbidden words** – e.g. `CAM`, `TS`, `HDCAM`, `Subbed`, `LD`.
+- Preferred words with scores (e.g. `DL` +10, certain groups +5).
+- Size limits per minute of runtime (filters fakes and huge remuxes).
+- Preferred codec (x265 saves space for temporary content).
+- Minimum release age / minimum grabs (optional, against fakes).
+- Handling of password-protected releases: allow / only with known password / avoid / reject (section 7.4).
 
-**Scoring**: Auflösung (≤ max) > Quelle > Preferred-Words > Größe-nahe-Ziel > Alter/Grabs. Abgelehnte Kandidaten werden mit Grund gespeichert und in der UI angezeigt („warum wurde nichts gefunden?“). Manuelle Auswahl eines Releases aus der Liste ist möglich.
+**Scoring**: resolution (≤ max) > source > preferred words > size close to target > age/grabs. Rejected candidates are stored with a reason and shown in the UI ("why was nothing found?"). Manual selection of a release from the list is possible.
 
 ---
 
-## 9. Fehlerbehandlung und automatischer Quellenwechsel
+## 9. Error handling and automatic source switching
 
-Grundsatz: Jeder Fehler wird **klassifiziert**, und die Klasse bestimmt die Reaktion. Eingreifen muss der Benutzer nur,
-wenn wirklich keine Quelle mehr zu finden ist oder die Konfiguration falsch ist. Jeder Versuch ist mit Grund in der UI sichtbar.
+Principle: every error is **classified**, and the class determines the reaction. The user only has to intervene
+when no source can really be found any more or the configuration is wrong. Every attempt is visible in the UI with its reason.
 
-### 9.1 Fehlerklassen
+### 9.1 Error classes
 
-| Klasse | Beispiele | Reaktion |
+| Class | Examples | Reaction |
 |---|---|---|
-| **Quelle defekt** (betrifft nur dieses Release) | Artikel fehlen (DMCA/Takedown, Retention), PAR2 reicht nicht, Passwort unbekannt (nach erfolgloser Passwortsuche, Abschnitt 7), Spam, Fake/Malware (`.exe`, `.lnk`), Entpacken/CRC schlägt fehl, Laufzeit oder Sprache passt nicht | Release auf Blocklist → **nächster Kandidat** |
-| **Vorübergehend** (Infrastruktur) | Indexer-Timeout/5xx, API-Limit erreicht, NNTP-Verbindungsabbruch, „too many connections“, Medienserver offline | Wiederholen mit exponentiellem Backoff + Jitter, Job wird *pausiert*, nicht als fehlgeschlagen gewertet; Circuit Breaker pro Anbieter |
-| **Konfiguration** | Falsche Usenet-Zugangsdaten (NNTP 481/502), ungültiger API-Key, Pfad nicht beschreibbar | Sofort anhalten, keine Wiederholungsschleife; Warnung in der UI + Benachrichtigung |
-| **Ressourcen** | Platte voll, Mindest-Freiplatz unterschritten | Downloads pausieren, Speicherplatz-Regeln anwenden, automatisch fortsetzen |
-| **Noch nicht verfügbar** | Keine passenden Releases, Film noch nicht als Digital/BluRay erschienen, Folge nicht ausgestrahlt | Status „Wartet“, Neusuche nach Zeitplan; Erscheinungsdaten von TMDB bestimmen den frühesten Suchzeitpunkt |
+| **Source broken** (affects only this release) | articles missing (DMCA/takedown, retention), PAR2 not enough, password unknown (after unsuccessful password search, section 7), spam, fake/malware (`.exe`, `.lnk`), unpacking/CRC fails, runtime or language does not match | blocklist release → **next candidate** |
+| **Temporary** (infrastructure) | indexer timeout/5xx, API limit reached, NNTP connection dropped, "too many connections", media server offline | retry with exponential backoff + jitter, job is *paused*, not counted as failed; circuit breaker per provider |
+| **Configuration** | wrong Usenet credentials (NNTP 481/502), invalid API key, path not writable | stop immediately, no retry loop; warning in the UI + notification |
+| **Resources** | disk full, minimum free space undercut | pause downloads, apply storage rules, resume automatically |
+| **Not yet available** | no matching releases, movie not yet released as digital/BluRay, episode not aired | state "Waiting", new search on schedule; release dates from TMDB determine the earliest search time |
 
-Im Code: eigene Fehlertypen mit Klasse (`errors.Is(err, ErrSourceBroken)`, `ErrTransient`, `ErrConfig`, …), die jede Schicht
-(Indexer, NNTP, Unpacker, Medienserver) setzt. Die Lifecycle-Engine entscheidet ausschließlich anhand der Klasse.
+In code: custom error types with a class (`errors.Is(err, ErrSourceBroken)`, `ErrTransient`, `ErrConfig`, …) set by every layer
+(indexer, NNTP, unpacker, media server). The lifecycle engine decides exclusively based on the class.
 
-### 9.2 Ablauf des Quellenwechsels
+### 9.2 Source switching flow
 
 ```
-Suche ─▶ Kandidatenliste (nach Score sortiert, in DB gespeichert)
+Search ─▶ candidate list (sorted by score, stored in the DB)
    │
    ▼
-Kandidat k ─▶ Vorabprüfung: NZB laden · Dateitypen/Größe plausibel · STAT-Stichprobe der Artikel
-   │   └─ fehlgeschlagen ─▶ blocklisten ─▶ Kandidat k+1
+Candidate k ─▶ pre-check: fetch NZB · file types/size plausible · STAT sample of the articles
+   │   └─ failed ─▶ blocklist ─▶ candidate k+1
    ▼
-Download + Stream-Entpacken
-   │   ├─ fehlende Artikel > PAR2-Reserve (laufend berechnet) ─▶ sofort abbrechen ─▶ blocklisten ─▶ k+1
-   │   ├─ fehlende Artikel ≤ PAR2-Reserve ─▶ reparieren ─▶ weiter
-   │   ├─ verschlüsselt ─▶ Passwortsuche (Abschnitt 7) ─▶ Treffer: weiter · kein Treffer: blocklisten ─▶ k+1
-   │   └─ Fake / Spam / Entpackfehler ─▶ blocklisten ─▶ k+1
+Download + stream unpacking
+   │   ├─ missing articles > PAR2 reserve (calculated continuously) ─▶ abort immediately ─▶ blocklist ─▶ k+1
+   │   ├─ missing articles ≤ PAR2 reserve ─▶ repair ─▶ continue
+   │   ├─ encrypted ─▶ password search (section 7) ─▶ hit: continue · no hit: blocklist ─▶ k+1
+   │   └─ fake / spam / unpack error ─▶ blocklist ─▶ k+1
    ▼
-Prüfung vor Freigabe (ffprobe): Laufzeit ≈ TMDB, Video- und Audiospur vorhanden, Audiosprache passt
-   │   └─ fehlgeschlagen ─▶ Datei löschen ─▶ blocklisten ─▶ k+1
+Check before release (ffprobe): runtime ≈ TMDB, video and audio track present, audio language matches
+   │   └─ failed ─▶ delete file ─▶ blocklist ─▶ k+1
    ▼
 Available
 
-Kandidaten erschöpft ─▶ Neusuche: alle Indexer, frische Ergebnisse, Freitext-Fallback mit alternativen Titeln
-                        (deutscher Titel, Originaltitel, Aliase von TMDB)
-Weiterhin nichts     ─▶ Status „Nicht gefunden“, Neusuche mit Backoff (1 h, 6 h, 24 h, danach täglich),
-                        einmalige Benachrichtigung
+Candidates exhausted ─▶ new search: all indexers, fresh results, free-text fallback with alternative titles
+                        (German title, original title, aliases from TMDB)
+Still nothing        ─▶ state "Not found", new search with backoff (1 h, 6 h, 24 h, then daily),
+                        one-time notification
 ```
 
 **Details**
 
-- **Kandidatenliste wird gespeichert**: Der Wechsel zur nächsten Quelle braucht keine neue Indexer-Abfrage (schont API-Limits) und passiert in Sekunden. Die Liste ist N Stunden gültig, danach wird neu gesucht.
-- **Duplikate erkennen**: Dasselbe Release taucht oft bei mehreren Indexern auf. Ein Fingerprint aus normalisiertem Namen + Größe sorgt dafür, dass ein defektes Release überall als defekt gilt.
-- **Fail-Fast**: Fehlende Artikel werden laufend gegen die verfügbaren PAR2-Blöcke gerechnet. Ist klar, dass die Reparatur nicht reicht, wird sofort abgebrochen statt erst nach dem kompletten Download.
-- **Versuchslimit**: Nach z. B. 5 fehlgeschlagenen Quellen pausiert das Element und es kommt eine Benachrichtigung (verhindert Endlosschleifen bei systematischen Problemen, z. B. falscher Required Word).
-- **Optionales Fallback-Profil**: Wenn im Profil nichts funktioniert, darf (wenn aktiviert) ein lockereres Profil verwendet werden, z. B. auch 480p. *Required Words werden nie gelockert.*
-- **Aufräumen**: Teildaten, `.partial`-Dateien und Arbeitsordner eines fehlgeschlagenen Versuchs werden sofort gelöscht.
-- **Serien**: Gleiche Logik pro Folge. Ist eine Einzelfolge nirgends verfügbar, wird ein Staffelpaket als Quelle versucht. Andere Folgen im Fenster laden unabhängig weiter.
+- **Candidate list is stored**: switching to the next source does not need a new indexer query (spares API limits) and happens within seconds. The list is valid for N hours, after which a new search is done.
+- **Detect duplicates**: the same release often appears on several indexers. A fingerprint of normalised name + size ensures a broken release counts as broken everywhere.
+- **Fail fast**: missing articles are continuously compared against the available PAR2 blocks. If it is clear that the repair will not be enough, the download is aborted immediately instead of after the complete download.
+- **Attempt limit**: after e.g. 5 failed sources the item is paused and a notification is sent (prevents endless loops with systematic problems, e.g. a wrong required word).
+- **Optional fallback profile**: if nothing works in the profile, a looser profile may be used (if enabled), e.g. also 480p. *Required words are never relaxed.*
+- **Cleanup**: partial data, `.partial` files and working folders of a failed attempt are deleted immediately.
+- **Series**: same logic per episode. If a single episode is not available anywhere, a season pack is tried as a source. Other episodes in the window keep downloading independently.
 
-### 9.3 Fehler, die erst beim Schauen auffallen
+### 9.3 Errors noticed only while watching
 
-- Button **„Quelle defekt“** (mit Grund: falsche Sprache, schlechte Qualität, Bild-/Tonfehler, falscher Film) in der UI → Datei löschen, Release blocklisten, nächste Quelle wird automatisch geladen.
-- Optional später: Plex-Wiedergabe bricht wiederholt früh ab → Hinweis in der UI („Quelle prüfen?“), keine automatische Löschung.
+- Button **"Source broken"** (with reason: wrong language, poor quality, video/audio defects, wrong movie) in the UI → delete file, blocklist release, next source is loaded automatically.
+- Optionally later: Plex playback repeatedly aborts early → hint in the UI ("check source?"), no automatic deletion.
 
-### 9.4 Robustheit des Systems
+### 9.4 System robustness
 
-- **Persistenter Zustand**: Jeder Schritt wird in der DB festgehalten. Nach einem Neustart laufen Downloads weiter (Segment-Fortschritt gespeichert) oder werden sauber neu begonnen.
-- **Idempotente Schritte**: Scan auslösen, Datei löschen, Benachrichtigung senden – mehrfaches Ausführen schadet nicht, daher gefahrlos wiederholbar.
-- **Circuit Breaker** pro Indexer und Usenet-Server: nach N Fehlern für eine Zeit T deaktiviert, andere übernehmen; Zustand in der Health-Anzeige.
-- **NNTP-Fallback pro Artikel**: Fehlt ein Artikel beim Hauptserver, wird er bei Backup-Servern (idealerweise anderes Backbone) angefragt, bevor er als fehlend gilt.
-- **Watchdog**: Jobs ohne Fortschritt seit X Minuten werden abgebrochen und neu gestartet.
-- **Medienserver offline**: Scans und Benachrichtigungen landen in einer Warteschlange und werden nachgeholt; Löschungen auf der Platte werden dadurch nicht blockiert.
-- **Benachrichtigungen bündeln**: lieber „3 Quellen für *Film* fehlgeschlagen, nächste läuft“ als drei Einzelmeldungen.
+- **Persistent state**: every step is recorded in the DB. After a restart, downloads continue (segment progress stored) or are restarted cleanly.
+- **Idempotent steps**: triggering a scan, deleting a file, sending a notification – running them multiple times does no harm, so they can be repeated safely.
+- **Circuit breaker** per indexer and Usenet server: disabled for a time T after N errors, others take over; state in the health display.
+- **NNTP fallback per article**: if an article is missing on the primary server, it is requested from backup servers (ideally a different backbone) before it counts as missing.
+- **Watchdog**: jobs without progress for X minutes are aborted and restarted.
+- **Media server offline**: scans and notifications go into a queue and are retried; file deletions on disk are not blocked by this.
+- **Bundle notifications**: rather "3 sources for *Movie* failed, next one running" than three separate messages.
 
-### 9.5 Transparenz und manuelle Eingriffe
+### 9.5 Transparency and manual intervention
 
-- Versuchs-Historie pro Film/Folge: Release, Indexer, Fehlerklasse, Grund, Dauer, Zeitpunkt.
-- Aktionen: „Nächste Quelle“, „Neu suchen“, „Release manuell wählen“, „Passwort eingeben“, Blocklist-Eintrag entfernen, Element fortsetzen.
-- Strukturiertes Logging (`log/slog`, JSON) mit Korrelations-ID pro Element und Versuch, damit Fehler in Issues nachvollziehbar sind.
+- Attempt history per movie/episode: release, indexer, error class, reason, duration, timestamp.
+- Actions: "Next source", "Search again", "Select release manually", "Enter password", remove blocklist entry, resume item.
+- Structured logging (`log/slog`, JSON) with a correlation ID per item and attempt, so errors in issues can be traced.
 
 ---
 
-## 10. Eingangskanäle („verschiedene Wege“)
+## 10. Input channels ("different ways")
 
-| Kanal | Phase | Hinweis |
+| Channel | Phase | Note |
 |---|---|---|
-| Web-UI-Suche (TMDB) | MVP | Poster, Beschreibung, Staffelauswahl |
-| REST-API mit API-Key | MVP | Basis für alles andere |
-| Manueller NZB-Upload | MVP | Für Sonderfälle |
-| Link einfügen (IMDb/TMDB/TVDB-URL) | 2 | Auch als Bookmarklet / Share-Ziel (PWA) |
-| Plex-Watchlist (eigener + Freunde) | 3 | Auf jedem Gerät zur Watchlist → wird geladen; eigenes Tag/Filter möglich |
-| Trakt-Watchlist/Listen | 4 | |
-| Overseerr/Jellyseerr | später | Vorerst nicht geplant. Idee: Radarr/Sonarr-API teilweise emulieren, sodass Seerr AutoDownloadarr als „Radarr“ nutzen kann |
-| Telegram-/Discord-Bot | 4 | `/film Dune` → Auswahl → fertig-Meldung |
+| Web UI search (TMDB) | MVP | poster, description, season selection |
+| REST API with API key | MVP | basis for everything else |
+| Manual NZB upload | MVP | for special cases |
+| Paste link (IMDb/TMDB/TVDB URL) | 2 | also as bookmarklet / share target (PWA) |
+| Plex watchlist (own + friends) | 3 | add to the watchlist on any device → gets downloaded; own tag/filter possible |
+| Trakt watchlist/lists | 4 | |
+| Overseerr/Jellyseerr | later | Not planned for now. Idea: partially emulate the Radarr/Sonarr API so Seerr can use AutoDownloadarr as "Radarr" |
+| Telegram/Discord bot | 4 | `/movie Dune` → selection → done message |
 
 ---
 
-## 11. Weitere Funktionen
+## 11. Further features
 
-- **Übergabe an Radarr/Sonarr**: „Doch behalten“ → Titel wird in Radarr/Sonarr angelegt, temporäre Kopie bleibt bis zum Import.
-- **Duplikatschutz**: prüft Medienserver und optional Radarr/Sonarr, bevor geladen wird.
-- **Speicherplatz-Management**: Maximalgröße der temporären Bibliothek; bei Überschreitung zuerst gesehene, dann älteste ungesehene löschen (mit Benachrichtigung).
-- **Benachrichtigungen**: bereit, fehlgeschlagen, wird bald gelöscht, gelöscht (Telegram, Discord, ntfy, generischer Webhook).
-- **Mehrbenutzer** (umgesetzt): Rollen Admin/User, Anfragen pro Benutzer, optionale Kontingente (Anzahl/GB). Die Zuordnung zu Medienserver-Benutzern folgt.
-- **„Jetzt schauen“-Priorität**: Download mit höchster Priorität, Meldung sobald abspielbar.
-- **Historie & Statistik**: Was wurde geladen/gelöscht und warum, verbrauchtes Datenvolumen.
-- **Dashboard mit Live-Fortschritt** (SSE): Geschwindigkeit, ETA, Entpack-Status.
-- **Untertitel** (optional, später): Abruf über OpenSubtitles.
-- **Backup/Restore** der Konfiguration und DB aus der UI.
-- **Health-Checks** in der UI: Indexer-API-Limits, Usenet-Login, Medienserver erreichbar, Pfade beschreibbar.
+- **Handover to Radarr/Sonarr**: "Keep after all" → title is added to Radarr/Sonarr, temporary copy stays until import.
+- **Duplicate protection**: checks the media server and optionally Radarr/Sonarr before downloading.
+- **Storage management**: maximum size of the temporary library; when exceeded, delete watched first, then oldest unwatched (with notification).
+- **Notifications**: ready, failed, will be deleted soon, deleted (Telegram, Discord, ntfy, generic webhook).
+- **Multi-user** (implemented): admin/user roles, requests per user, optional quotas (count/GB). Mapping to media server users follows.
+- **"Watch now" priority**: download with the highest priority, message as soon as it is playable.
+- **History & statistics**: what was downloaded/deleted and why, data volume used.
+- **Dashboard with live progress** (SSE): speed, ETA, unpack status.
+- **Subtitles** (optional, later): fetch via OpenSubtitles.
+- **Backup/restore** of configuration and DB from the UI.
+- **Health checks** in the UI: indexer API limits, Usenet login, media server reachable, paths writable.
 
 ---
 
-## 12. Sicherheit und Datenschutz
+## 12. Security and privacy
 
-- Login mit argon2id-Hashes, Session-Cookies (`HttpOnly`, `SameSite`), CSRF-Schutz, Rate-Limit beim Login.
-- Erster Start: Setup-Assistent legt Admin an (kein Standardpasswort). Dafür ist ein einmaliges **Setup-Token** nötig, das nur im Server-Log steht (Abschnitt 13.2).
-- Passwort vergessen: `autodownloadarr reset-password <benutzer>` im Container.
-- Optional: OIDC (Authentik, Authelia, Keycloak) bzw. Vertrauen auf Reverse-Proxy-Header; später Plex-Login.
-- Secrets (Usenet-Passwort, API-Keys) verschlüsselt in der DB (Schlüssel aus Env/Datei in `/config`).
-- **Sicheres Löschen**: Es wird nur gelöscht, was in `files` steht *und* unterhalb der konfigurierten temporären Medienordner liegt. Sonarr/Radarr-Ordner sind damit nie betroffen.
-- Logs ohne Zugangsdaten.
+- Login with argon2id hashes, session cookies (`HttpOnly`, `SameSite`), CSRF protection, rate limit on login.
+- First start: the setup wizard creates the admin (no default password). This requires a one-time **setup token** that is only printed in the server log (section 13.2).
+- Forgot password: `autodownloadarr reset-password <user>` in the container.
+- Optional: OIDC (Authentik, Authelia, Keycloak) or trusting reverse proxy headers; Plex login later.
+- Secrets (Usenet password, API keys) encrypted in the DB (key from env/file in `/config`).
+- **Safe deletion**: only what is in `files` *and* below the configured temporary media folders is deleted. Sonarr/Radarr folders are therefore never affected.
+- Logs without credentials.
 
 ---
 
@@ -533,134 +533,134 @@ services:
       - PGID=1000
       - TZ=Europe/Berlin
     volumes:
-      - ./config:/config            # DB, Einstellungen, Logs
-      - /mnt/media/temp:/data       # Downloads (temporär) + temporäre Bibliotheken
+      - ./config:/config            # DB, settings, logs
+      - /mnt/media/temp:/data       # downloads (temporary) + temporary libraries
     ports:
       - "8686:8686"
     restart: unless-stopped
 ```
 
-- **Eigene Bibliotheken im Medienserver** empfohlen: z. B. `/data/library/movies` → Plex-Bibliothek „Temp Filme“, `/data/library/tv` → „Temp Serien“.
-- **Pfad-Mapping** zwischen Container und Medienserver – siehe unten.
-- Download-Arbeitsordner und Bibliothek auf **demselben Dateisystem** (atomares Umbenennen statt Kopieren).
-- Benennung kompatibel zu Plex/Jellyfin: `Titel (Jahr) {tmdb-123}/Titel (Jahr).mkv`, `Serie (Jahr) {tvdb-456}/Season 01/Serie - S01E01 - Episodentitel.mkv`.
-- Multi-Arch-Image (amd64, arm64), Healthcheck-Endpoint, Konfiguration über UI (Env nur für Bootstrap).
+- **Dedicated libraries in the media server** recommended: e.g. `/data/library/movies` → Plex library "Temp Movies", `/data/library/tv` → "Temp Series".
+- **Path mapping** between container and media server – see below.
+- Download working folder and library on the **same filesystem** (atomic rename instead of copying).
+- Naming compatible with Plex/Jellyfin: `Title (Year) {tmdb-123}/Title (Year).mkv`, `Series (Year) {tvdb-456}/Season 01/Series - S01E01 - Episode Title.mkv`.
+- Multi-arch image (amd64, arm64), healthcheck endpoint, configuration via UI (env only for bootstrap).
 
-### 13.1 Pfad-Mapping (Container ↔ Medienserver)
+### 13.1 Path mapping (container ↔ media server)
 
-AutoDownloadarr und der Medienserver sehen dieselben Dateien meist unter verschiedenen Pfaden, z. B.:
+AutoDownloadarr and the media server usually see the same files under different paths, for example:
 
-| AutoDownloadarr (im Container) | Plex-Server | Hinweis |
+| AutoDownloadarr (in the container) | Plex server | Note |
 |---|---|---|
-| `/filme/` | `/mnt/hdd/filme/` | Plex direkt auf dem Host |
-| `/serien/` | `/mnt/hdd/serien/` | |
-| `/filme/` | `/data/movies/` | Plex ebenfalls im Docker-Container |
-| `/filme/` | `D:\Medien\Filme\` | Plex unter Windows |
+| `/movies/` | `/mnt/hdd/movies/` | Plex directly on the host |
+| `/series/` | `/mnt/hdd/series/` | |
+| `/movies/` | `/data/movies/` | Plex also in a Docker container |
+| `/movies/` | `D:\Media\Movies\` | Plex on Windows |
 
-- **Mapping-Tabelle pro Medienserver** (und später pro externem Download-Client und Radarr/Sonarr-Übergabe): beliebig viele Paare *lokaler Pfad ↔ entfernter Pfad*.
-- **In beide Richtungen**:
-  - lokal → entfernt: Scan auslösen (`NotifyAdded`/`NotifyRemoved`) mit dem Pfad, den Plex kennt.
-  - entfernt → lokal: Plex meldet Wiedergabe/Gesehen mit seinem Dateipfad → daraus wird unser Film bzw. unsere Folge ermittelt.
-- **Längster passender Präfix gewinnt** (z. B. `/filme/4k/` vor `/filme/`), Vergleich nur an Ordnergrenzen (`/filme` passt nicht auf `/filme-alt`).
-- **Normalisierung**: abschließende Schrägstriche, `\` vs. `/`, Groß-/Kleinschreibung bei Windows-Servern, Unicode-Normalisierung (Umlaute).
-- **Zentrale Komponente** `PathMapper`, die alle Medienserver-Adapter benutzen; die Adapter selbst arbeiten nur mit Medienserver-Pfaden.
-- **Assistent in der UI**:
-  - liest die Bibliotheksordner aus Plex (`/library/sections` liefert die `Location`-Pfade),
-  - schlägt Mappings anhand gleicher Ordnernamen vor (`/filme` ↔ `/mnt/hdd/filme`),
-  - zeigt eine Vorschau: „`/filme/Dune (2021)/Dune (2021).mkv` → `/mnt/hdd/filme/Dune (2021)/Dune (2021).mkv`“.
-- **Prüfung**: Warnung, wenn ein Zielordner von AutoDownloadarr nach dem Mapping in keiner Plex-Bibliothek liegt, oder wenn kein Mapping greift. Optionaler Live-Test: Testordner anlegen, Teil-Scan auslösen, prüfen ob Plex ihn sieht, wieder entfernen.
-- **Rückfall bei der Zuordnung**: Findet sich ein Plex-Element nicht über den Pfad, wird über die IDs (`tmdb://`, `tvdb://` in den Plex-GUIDs) zugeordnet – das schützt vor falsch konfigurierten Mappings.
-- Ohne Mapping (gleiche Pfade auf beiden Seiten) funktioniert alles unverändert.
+- **Mapping table per media server** (and later per external download client and Radarr/Sonarr handover): any number of *local path ↔ remote path* pairs.
+- **Both directions**:
+  - local → remote: trigger a scan (`NotifyAdded`/`NotifyRemoved`) with the path Plex knows.
+  - remote → local: Plex reports playback/watched with its file path → we derive our movie or episode from it.
+- **Longest matching prefix wins** (e.g. `/movies/4k/` before `/movies/`), comparison only at folder boundaries (`/movies` does not match `/movies-old`).
+- **Normalisation**: trailing slashes, `\` vs `/`, case sensitivity on Windows servers, Unicode normalisation (umlauts).
+- **Central component** `PathMapper` used by all media server adapters; the adapters themselves only work with media server paths.
+- **Wizard in the UI**:
+  - reads the library folders from Plex (`/library/sections` returns the `Location` paths),
+  - suggests mappings based on identical folder names (`/movies` ↔ `/mnt/hdd/movies`),
+  - shows a preview: "`/movies/Dune (2021)/Dune (2021).mkv` → `/mnt/hdd/movies/Dune (2021)/Dune (2021).mkv`".
+- **Validation**: warning if a target folder of AutoDownloadarr is not inside any Plex library after mapping, or if no mapping applies. Optional live test: create a test folder, trigger a partial scan, check whether Plex sees it, remove it again.
+- **Fallback for matching**: if a Plex item is not found via the path, it is matched via the IDs (`tmdb://`, `tvdb://` in the Plex GUIDs) – this protects against misconfigured mappings.
+- Without mapping (same paths on both sides) everything works unchanged.
 
-### 13.2 Einrichtungsassistent beim ersten Start
+### 13.2 Setup wizard on first start
 
-Beim ersten Start (noch kein Konto vorhanden) führt die Weboberfläche durch die komplette Einrichtung:
+On first start (no account yet) the web interface guides through the complete setup:
 
-| Schritt | Inhalt | Prüfung | Verfügbar ab |
+| Step | Content | Validation | Available from |
 |---|---|---|---|
-| 1. Konto | Setup-Token aus dem Container-Log, Benutzername, Passwort | Token muss stimmen (schützt frisch gestartete, öffentlich erreichbare Instanzen) | **Phase 0 (umgesetzt)** |
-| 2. Medienserver | Anmeldung über Plex (PIN-Verfahren über plex.tv, kein Token-Kopieren), Server wählen, Bibliotheken für temporäre Filme/Serien wählen, Pfad-Mapping mit Vorschlägen (13.1) | Server erreichbar, Bibliotheken lesbar, Mapping-Vorschau | Phase 2 |
-| 3. Indexer | Newznab-URL + API-Key, Kategorien | `t=caps`-Abfrage, unterstützte Such-IDs (IMDb/TMDB/TVDB) | Phase 2 |
-| 4. Usenet | Server, Port, SSL, Benutzer, Passwort, Verbindungen; optional Backup-Server | Login-Test, Anzahl erlaubter Verbindungen | Phase 2 (Downloader aus Phase 1) |
-| 5. Standards | Qualitätsprofil (max. Auflösung, Vorlage „Deutsch“ mit Required Words), Löschfrist Filme, Fenstergröße Serien | – | Phase 2 / 4 |
-| 6. Fertig | Zusammenfassung, offene Punkte, Link zur Übersicht | – | Phase 0 |
+| 1. Account | setup token from the container log, username, password | token must match (protects freshly started, publicly reachable instances) | **phase 0 (implemented)** |
+| 2. Media server | sign-in via Plex (PIN flow via plex.tv, no token copying), choose server, choose libraries for temporary movies/series, path mapping with suggestions (13.1) | server reachable, libraries readable, mapping preview | phase 2 |
+| 3. Indexer | Newznab URL + API key, categories | `t=caps` query, supported search IDs (IMDb/TMDB/TVDB) | phase 2 |
+| 4. Usenet | server, port, SSL, user, password, connections; optional backup server | login test, number of allowed connections | phase 2 (downloader from phase 1) |
+| 5. Defaults | quality profile (max resolution, "German" preset with required words), movie expiry deadline, series window size | – | phase 2 / 4 |
+| 6. Done | summary, open items, link to the dashboard | – | phase 0 |
 
-- Jeder Schritt wird **vor dem Speichern getestet**; Fehler werden konkret angezeigt („Login abgelehnt“, „Host nicht erreichbar“).
-- Alle Schritte außer dem Konto sind **überspringbar**; fehlende Teile erscheinen danach als Hinweis in der Übersicht.
-- Der **Fortschritt wird gespeichert**: Wer den Browser schließt, landet nach der Anmeldung wieder beim nächsten offenen Schritt. (Kommt mit Phase 2, sobald es Schritte mit gespeicherten Einstellungen gibt.)
-- Der Assistent lässt sich später aus den Einstellungen **erneut starten**; dieselben Formulare stehen dort auch einzeln zur Verfügung.
-- Stand Phase 0: Schritt 1 und 6 funktionieren, Schritte 2–4 sind als Vorschau sichtbar und können übersprungen werden.
+- Every step is **tested before saving**; errors are shown concretely ("login rejected", "host unreachable").
+- All steps except the account are **skippable**; missing parts then appear as a hint on the dashboard.
+- **Progress is stored**: if someone closes the browser, they return to the next open step after signing in.
+- The wizard can be **started again** later from the settings; the same forms are also available there individually.
+- All steps are implemented today; only the account step is mandatory.
 
 ---
 
 ## 14. Roadmap
 
-| Phase | Inhalt | Ergebnis |
+| Phase | Content | Result |
 |---|---|---|
-| **0 – Fundament** ✅ | Repo, Go-Modul, Config, SQLite+Migrationen, Event-Bus, Scheduler, Auth + Einrichtungsassistent (Konto-Schritt), React-Gerüst mit i18n (en/de), Dockerfile, CI (Tests, Lint, Image-Build) | Leere App mit Login läuft im Container |
-| **1 – Downloader** ✅ | NZB-Parser, NNTP-Pool (TLS, Auth, mehrere Server mit Priorität, Retry), yEnc, Assembler, **Entpacken während des Downloads** (RAR, mehrteilig, Passwort), CLI-Befehl `download-nzb`, Test-NNTP-Server, Benchmarks | Beliebige NZB lässt sich zuverlässig und schnell laden; der Film ist fertig, sobald das letzte Volume da ist |
-| **2 – MVP Filme** ✅ | TMDB, Newznab (ID-Suche mit Textsuche als Rückfall), Release-Parser, Qualitätsprofil (max./min. Auflösung, Pflicht-/Verbots-/Bonuswörter, MB pro Minute, Codec, Passwort-Regel), Plex (Anmeldung per PIN, Bibliothek, Pfad-Mapping mit Vorschlägen, Teil-Scan, Gesehen-Status per Abfrage), Lösch- und Ablauffristen, Fehlerklassen, Kandidatenliste, Sperrliste, automatischer Quellenwechsel, Neusuche mit Backoff, Passwörter aus NZB-Metadaten, NZB-/Jobname, Release-Titel und Passwortliste, verschlüsselte Zugangsdaten, Einrichtungsassistent mit allen Schritten, UI: Filmsuche, Bibliothek, Detailseite mit Releases/Verlauf/Sperrliste, Live-Fortschritt, Einstellungen | Kompletter Film-Kreislauf funktioniert, nicht verfügbare Quellen werden automatisch ersetzt |
-| **3 – Robuster Downloader** ✅ | PAR2-Reparatur als Rückfall (nur benötigte Recovery-Blöcke laden, Abbruch sobald mehr fehlt als reparierbar), 7z/ZIP (7-Zip im Image), `STAT`-Vorabprüfung einer Stichprobe, Wiederherstellen verschleierter Namen per PAR2, Passwörter aus Betreffzeilen und NFO-Dateien, Spam-Erkennung („Passwort auf Webseite“), Watchdog für hängende Downloads, Indexer-Pause nach wiederholten Fehlern, Bandbreitenlimit | Entpacken während des Ladens, Reparatur nur wenn nötig, wenig manuelle Eingriffe |
-| **4 – Serien** ✅ | TMDB-Serien (Staffeln, Folgen, Ausstrahlungstermine), Newznab-Folgensuche (TVDB/IMDb-ID, sonst Text), Staffel/Folge im Release-Namen, Staffelauswahl, rollendes Fenster mit Löschauslöser (Fortschritt der nächsten Folge, Minuten nach Start, gesehen), Suche ab Ausstrahlung, tägliche Aktualisierung der Folgenliste, Plex-Serienbibliothek mit Wiedergabe-Fortschritt, gemeinsamer Download-Kern mit den Filmen, Staffelpakete als Ausweichquelle (nur wenn keine Einzelfolge auffindbar), UI für Serien | Serien-Kreislauf funktioniert |
-| **5 – Integrationen** ✅ | Jellyfin/Emby, Benachrichtigungen, Plex-Watchlist, Benutzerverwaltung mit Rollen Admin/User und optionalen Kontingenten je Benutzer, Speicherplatz-Management (Radarr/Sonarr bewusst verworfen) | Alltagstauglich |
-| **6 – Komfort** | Trakt, Bots, OIDC, Statistik, Medienserver-Benutzerzuordnung, Store-Modus-Direktschreiben | Feinschliff |
-| später | Overseerr/Jellyseerr-kompatible API, weitere Indexer-Typen, Torrent-Client | nach Bedarf |
+| **0 – Foundation** ✅ | repo, Go module, config, SQLite+migrations, event bus, scheduler, auth + setup wizard (account step), React skeleton with i18n (en/de), Dockerfile, CI (tests, lint, image build) | empty app with login runs in the container |
+| **1 – Downloader** ✅ | NZB parser, NNTP pool (TLS, auth, multiple servers with priority, retry), yEnc, assembler, **unpacking while downloading** (RAR, multi-volume, password), CLI command `download-nzb`, test NNTP server, benchmarks | any NZB can be downloaded reliably and quickly; the movie is ready as soon as the last volume arrives |
+| **2 – MVP movies** ✅ | TMDB, Newznab (ID search with text search fallback), release parser, quality profile (max/min resolution, required/forbidden/bonus words, MB per minute, codec, password rule), Plex (PIN sign-in, library, path mapping with suggestions, partial scan, watched state via polling), deletion and expiry deadlines, error classes, candidate list, blocklist, automatic source switching, new search with backoff, passwords from NZB metadata, NZB/job name, release title and password list, encrypted credentials, setup wizard with all steps, UI: movie search, library, detail page with releases/history/blocklist, live progress, settings | complete movie cycle works, unavailable sources are replaced automatically |
+| **3 – Robust downloader** ✅ | PAR2 repair as fallback (download only the needed recovery blocks, abort as soon as more is missing than can be repaired), 7z/ZIP (7-Zip in the image), `STAT` pre-check of a sample, restore obfuscated names via PAR2, passwords from subject lines and NFO files, spam detection ("password on web site"), watchdog for hanging downloads, indexer pause after repeated errors, bandwidth limit | unpacking while downloading, repair only when needed, few manual interventions |
+| **4 – Series** ✅ | TMDB series (seasons, episodes, air dates), Newznab episode search (TVDB/IMDb ID, otherwise text), season/episode in release names, season selection, rolling window with deletion trigger (progress of the next episode, minutes after start, watched), search after airing, daily refresh of the episode list, Plex series library with playback progress, shared download core with movies, season packs as a fallback source (only when no single episode can be found), UI for series | series cycle works |
+| **5 – Integrations** ✅ | Jellyfin/Emby, notifications, Plex watchlist, user management with admin/user roles and optional per-user quotas, storage management (Radarr/Sonarr deliberately dropped) | ready for everyday use |
+| **6 – Comfort** | Trakt, bots, OIDC, statistics, media server user mapping, store-mode direct writing | polish |
+| later | Overseerr/Jellyseerr-compatible API, more indexer types, torrent client | as needed |
 
 ---
 
-## 15. Risiken und offene Punkte
+## 15. Risks and open points
 
-| Risiko | Gegenmaßnahme |
+| Risk | Mitigation |
 |---|---|
-| Stream-Entpacken bei fehlenden Artikeln | Optimistisch streamen, bei Fehler auf „Laden → PAR2 → Entpacken“ zurückfallen |
-| Medienserver erkennt wachsende Dateien schlecht | Erster Scan erst nach 32 MB (Container-Kopf vollständig), zweiter Scan nach Abschluss; Spulen nur in bereits geladene Teile (MKV-Index am Dateiende) |
-| Plex behält den Gesehen-Status eines Titels über das Löschen hinaus | Beim ersten Erscheinen einer neuen Datei wird der Plex-Stand als Ausgangswert gespeichert; nur Änderungen danach zählen als Schauen (Wiedergabe nach Download-Beginn zählt). Zuordnung nur über die eigene Datei, nicht über die TMDB-ID |
-| Watch-Status-Erkennung (Mehrbenutzer, Plex Pass) | WebSocket/Polling statt Webhooks; klare Benutzerzuordnung in den Einstellungen |
-| Indexer-API-Limits | Caching der Suchergebnisse, RSS-Feed statt wiederholter Suche, Limits je Indexer konfigurierbar |
-| Release-Namen-Vielfalt (deutsche Releases) | Großes Test-Korpus echter Namen, Parser tabellengetrieben testen |
-| Neue/unbekannte Passwort-Konventionen | Passwortquellen als Module, Suchmuster per Regex konfigurierbar, Testkorpus mit echten NZB-/Release-Beispielen |
-| Durchsatz des eigenen Downloaders | Früher Benchmark in Phase 1 gegen SABnzbd/NZBGet |
-| Versehentliches Löschen | Nur getrackte Dateien in erlaubten Ordnern, Dry-Run-Modus, Audit-Log |
+| Stream unpacking with missing articles | Stream optimistically, fall back to "download → PAR2 → unpack" on error |
+| Media server handles growing files poorly | First scan only after 32 MB (container header complete), second scan after completion; seeking only into already downloaded parts (MKV index at the end of the file) |
+| Plex keeps the watched state of a title beyond deletion | When a new file first appears, the Plex state is stored as the baseline; only changes after that count as watching (playback after download start counts). Matching only via our own file, not via the TMDB ID |
+| Watch state detection (multi-user, Plex Pass) | WebSocket/polling instead of webhooks; clear user mapping in the settings |
+| Indexer API limits | Caching of search results, RSS feed instead of repeated searches, limits configurable per indexer |
+| Variety of release names (German releases) | Large test corpus of real names, table-driven parser tests |
+| New/unknown password conventions | Password sources as modules, search patterns configurable via regex, test corpus with real NZB/release examples |
+| Throughput of our own downloader | Early benchmark in phase 1 against SABnzbd/NZBGet |
+| Accidental deletion | Only tracked files in allowed folders, dry-run mode, audit log |
 
 ---
 
-## 16. Entscheidungen
+## 16. Decisions
 
-| Thema | Entscheidung |
+| Topic | Decision |
 |---|---|
-| Medienserver | **Plex zuerst**; Jellyfin/Emby in Phase 5 |
-| Benutzer | Ein-Personen-Betrieb als Default, Mehrbenutzer im Modell vorgesehen (Open Source) |
-| Indexer | **Newznab-API** (generisch); Prowlarr als Newznab-Quelle nutzbar, kein eigener Adapter nötig |
-| Serien-Löschauslöser | 10 % der nächsten Folge gesehen (Default) oder kurze Wartezeit nach Start, beides konfigurierbar |
-| Overseerr/Jellyseerr | vorerst nicht |
-| Fehlerbehandlung | Fehler werden klassifiziert; nicht verfügbare/defekte Quellen werden automatisch durch die nächste ersetzt (ab MVP) |
-| Pfad-Mapping | Mapping-Tabelle lokaler Pfad ↔ Medienserver-Pfad, in beide Richtungen, mit Vorschlägen aus den Plex-Bibliotheken (ab MVP) |
-| Passwörter | Mehrere Passwortquellen (NZB-Meta, NZB-Name, Titel, Liste, Betreff, NFO, Archiv-Kommentar, manuell); Quelle gilt erst als unbrauchbar, wenn kein Passwort passt |
-| Entpacken | Entpacken **während** des Downloads ist Kernfunktion (ab Phase 1); klassisches Entpacken nur als Rückfall nach einer Reparatur |
-| Schauen während des Downloads | A (wachsende Datei): Video unter endgültigem Namen, Plex-Scan nach 32 MB und nach Abschluss; B (virtuelles Dateisystem) später, siehe Abschnitt 6 |
-| Verfügbarkeitsprüfung | Pro Usenet-Server abschaltbar (Standard an): vor dem Download wird jeder Artikel per `STAT` mit Pipelining geprüft; geladen wird nur, was vollständig oder per PAR2 reparierbar ist (Recovery-Daten ≥ 1,2 × fehlende Daten). Aus: Stichprobe von 20 Artikeln. Die nächsten Quellen werden nicht im Hintergrund vorab geprüft – das bräuchte Verbindungen und NZB-Abrufe während des laufenden Downloads |
-| Künftige Staffeln | Pro Serie: gewählte Staffeln plus alle nach der höchsten Staffel, die bei der Auswahl schon lief (angekündigte zählen als künftig). „Alle Staffeln“ schließt künftige immer ein |
-| Übersprungene Folgen | Gelten bei allen Löschauslösern als gesehen: gelöscht, sobald eine spätere Folge den Auslöser erreicht |
-| Plex-Scan | Fehlgeschlagene Teil-Scans werden bis zu sechsmal mit Backoff wiederholt und bis zum nächsten erfolgreichen Scan als Warnung im Dashboard angezeigt |
-| Download-Verlauf | Jeder Versuch mit Titel, Release, Größe, Indexer, Dauer und Ergebnis; bleibt erhalten, wenn Film oder Serie entfernt werden. Seite „Downloads“ mit Laufend, Warteschlange und Verlauf (Filter, Seiten à 50) |
-| Reihenfolge der Releases | Nicht abgelehnte zuerst, dann nach Punktzahl des Profils (Auflösung, Quelle, Bonuswörter, Codec, PROPER, Grabs); bei gleicher Punktzahl das neueste Upload zuerst (ältere werden häufiger gelöscht), Releases ohne Datum danach, dann mehr Grabs |
-| Reihenfolge der Folgen | Folgen einer Serie laden nacheinander in Ausstrahlungsreihenfolge; eine frühere Folge, die noch gesucht wird, hält die späteren zurück. Freie Plätze nutzen andere Serien und Filme |
-| Einrichtung | Einrichtungsassistent beim ersten Start: Konto → Plex → Indexer → Usenet → Standards; Schritte testen vor dem Speichern, überspringbar, später erneut aufrufbar |
-| Lizenz | GPL-3.0 |
-| Konfiguration | Env-Variablen mit Präfix `AUTODOWNLOADARR_` nur für den Start (Port, Config-Ordner, Logging, Proxy); alles andere in der UI |
-| Umsetzung Phase 4 | Wiedergabe-Fortschritt per Abfrage der Plex-Serienbibliothek jede Minute statt WebSocket – reicht für die Auslöser (Löschen/Nachladen mit höchstens einer Minute Verzug). Staffelpakete sind die Ausweich-Quelle: erst wird die Einzelfolge gesucht, nur ohne brauchbaren Treffer die ganze Staffel; aus dem Paket werden ausschließlich die Folgen des Fensters übernommen, der Rest wird verworfen. Spezialfolgen (Staffel 0) nur, wenn ausdrücklich gewählt. Filme und Serien haben je eigene Download-Plätze („Parallele Downloads“ gilt pro Bereich), teilen sich aber das Geschwindigkeitslimit. |
-| Umsetzung Phase 3 | Prüfung der fertigen Datei per `ffprobe` (Laufzeit, Tonspur-Sprache) zurückgestellt: `ffmpeg` würde das Image um ~100 MB vergrößern – später als optionales Image oder externes Werkzeug. Gelernte Passwörter pro Release-Gruppe ebenfalls später; die Passwortliste zählt Treffer und sortiert danach. |
-| Umsetzung Phase 2 | Gesehen-Status per Abfrage der Plex-Bibliothek (Standard alle 2 Min.) statt WebSocket – der WebSocket kommt mit den Serien (Phase 4), wo die Wiedergabe-Position zählt. Manuelle Passworteingabe als „Passwort zur Liste hinzufügen + Release erneut laden“. Ein Plex-Server, eine Film-Bibliothek. |
-| Umsetzung Phase 0 | Go 1.26, chi, SQLite (modernc, ohne CGO) mit goose; Abfragen vorerst handgeschrieben (`sqlc` erst, wenn die Zahl der Abfragen es lohnt); React 19 + Vite + Tailwind 4, eigene kleine UI-Komponenten statt shadcn/ui; Go-Modulpfad `github.com/shyper/autodownloadarr` (Platzhalter bis zum GitHub-Repo) |
+| Media server | **Plex first**; Jellyfin/Emby in phase 5 |
+| Users | Single-person operation as default, multi-user part of the model (open source) |
+| Indexers | **Newznab API** (generic); Prowlarr usable as a Newznab source, no dedicated adapter needed |
+| Series deletion trigger | 10 % of the next episode watched (default) or a short wait after start, both configurable |
+| Overseerr/Jellyseerr | not for now |
+| Error handling | Errors are classified; unavailable/broken sources are replaced automatically by the next one (from the MVP) |
+| Path mapping | Mapping table local path ↔ media server path, both directions, with suggestions from the Plex libraries (from the MVP) |
+| Passwords | Multiple password sources (NZB meta, NZB name, title, list, subject, NFO, archive comment, manual); a source only counts as unusable when no password fits |
+| Unpacking | Unpacking **while** downloading is a core feature (from phase 1); classic unpacking only as a fallback after a repair |
+| Watching during download | A (growing file): video under its final name, Plex scan after 32 MB and after completion; B (virtual filesystem) later, see section 6 |
+| Availability check | Can be disabled per Usenet server (on by default): before downloading, every article is checked via `STAT` with pipelining; only what is complete or repairable via PAR2 is downloaded (recovery data ≥ 1.2 × missing data). Off: sample of 20 articles. The next sources are not pre-checked in the background – that would need connections and NZB fetches during the running download |
+| Future seasons | Per series: selected seasons plus all seasons after the highest one that had already aired at selection time (announced ones count as future). "All seasons" always includes future ones |
+| Skipped episodes | Count as watched for all deletion triggers: deleted once a later episode reaches the trigger |
+| Plex scan | Failed partial scans are retried up to six times with backoff and shown as a warning on the dashboard until the next successful scan |
+| Download history | Every attempt with title, release, size, indexer, duration and result; kept when a movie or series is removed. "Downloads" page with running, queue and history (filter, pages of 50) |
+| Release order | Non-rejected first, then by profile score (resolution, source, bonus words, codec, PROPER, grabs); for equal scores the newest upload first (older ones are deleted more often), releases without a date after that, then more grabs |
+| Episode order | Episodes of a series download one after another in broadcast order; an earlier episode still being searched holds back the later ones. Free slots are used by other series and movies |
+| Setup | Setup wizard on first start: account → Plex → indexer → Usenet → defaults; steps test before saving, skippable, can be reopened later |
+| License | GPL-3.0 |
+| Configuration | Environment variables with the prefix `AUTODOWNLOADARR_` only for startup (port, config folder, logging, proxy); everything else in the UI |
+| Implementation phase 4 | Playback progress by polling the Plex series library every minute instead of WebSocket – sufficient for the triggers (deletion/refetch with at most one minute of delay). Season packs are the fallback source: a single episode is searched first, the whole season only without a usable hit; from the pack only the episodes of the window are kept, the rest is discarded. Specials (season 0) only when explicitly selected. Movies and series each have their own download slots ("parallel downloads" applies per area) but share the bandwidth limit. |
+| Implementation phase 3 | Checking the finished file via `ffprobe` (runtime, audio track language) deferred: `ffmpeg` would grow the image by ~100 MB – later as an optional image or external tool. Learned passwords per release group also later; the password list counts hits and sorts by them. |
+| Implementation phase 2 | Watched state by polling the Plex library (default every 2 min) instead of WebSocket – the WebSocket comes with series (phase 4), where the playback position matters. Manual password entry as "add password to the list + download release again". One Plex server, one movie library. |
+| Implementation phase 0 | Go 1.26, chi, SQLite (modernc, no CGO) with goose; queries hand-written for now (`sqlc` only when the number of queries justifies it); React 19 + Vite + Tailwind 4, small custom UI components instead of shadcn/ui; Go module path `github.com/shyper/autodownloadarr` (placeholder until the GitHub repo) |
 
 ---
 
-## 17. Open Source
+## 17. Open source
 
-- **Sprache im Projekt**: Code, Commits, Issues, Doku und UI-Standardsprache auf **Englisch**; UI mit i18n von Anfang an, Deutsch als erste Übersetzung.
-- **Lizenz**: Empfehlung **GPL-3.0** (wie Sonarr/Radarr – Forks bleiben offen). Alternative: MIT, wenn maximale Weiterverwendung gewünscht ist.
-- **Keine Annahmen über das eigene Setup**: alle Pfade, Ports, Benutzer, Zeitzone über Konfiguration; Setup-Assistent beim ersten Start.
-- **Repo-Grundausstattung**: README mit Compose-Beispiel, CONTRIBUTING, Issue-Templates, CHANGELOG, SemVer-Releases.
-- **CI**: Tests, Linting (golangci-lint, ESLint), Multi-Arch-Images nach GHCR, Release-Builds per Tag.
-- **Doku für Erweiterungen**: kurze Anleitung „neuen Indexer/Medienserver hinzufügen“ anhand der Interfaces.
-- **Tests ohne echte Zugangsdaten**: NNTP-Testserver und Newznab-/Plex-Mocks im Repo, damit Beitragende ohne eigenen Usenet-Account testen können.
+- **Language in the project**: code, commits, issues, documentation and default UI language in **English**; UI with i18n from the start, German as the first translation.
+- **License**: recommendation **GPL-3.0** (like Sonarr/Radarr – forks stay open). Alternative: MIT if maximum reuse is desired.
+- **No assumptions about one's own setup**: all paths, ports, users and timezone via configuration; setup wizard on first start.
+- **Repo basics**: README with compose example, CONTRIBUTING, issue templates, CHANGELOG, SemVer releases.
+- **CI**: tests, linting (golangci-lint, ESLint), multi-arch images to GHCR, release builds per tag.
+- **Documentation for extensions**: short guide "adding a new indexer/media server" based on the interfaces.
+- **Tests without real credentials**: NNTP test server and Newznab/Plex mocks in the repo, so contributors can test without their own Usenet account.

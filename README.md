@@ -41,7 +41,7 @@ AutoDownloadarr handles everything you only want to see once.
 - Multiple ways to request: web UI, API and the Plex watchlist (movies and
   series)
 
-The full design is in [docs/PLAN.md](docs/PLAN.md) (German).
+The full design is in [docs/PLAN.md](docs/PLAN.md).
 
 ## Quick start (Docker)
 
