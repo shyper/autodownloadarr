@@ -13,7 +13,11 @@ func TestUserManagementAPI(t *testing.T) {
 
 	listUsers := func(c *http.Client) ([]map[string]any, int) {
 		t.Helper()
-		resp, err := c.Get(e.srv.URL + "/api/v1/users")
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, e.srv.URL+"/api/v1/users", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err := c.Do(req)
 		if err != nil {
 			t.Fatal(err)
 		}

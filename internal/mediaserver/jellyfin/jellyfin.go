@@ -18,9 +18,6 @@ import (
 	"github.com/shyper/autodownloadarr/internal/mediaserver"
 )
 
-// ticksPerSecond is the number of 100ns ticks in a second.
-const ticksPerSecond = 10_000_000
-
 // Client talks to one Jellyfin or Emby server.
 type Client struct {
 	HTTP  *http.Client
