@@ -13,8 +13,9 @@ AutoDownloadarr handles everything you only want to see once.
 > download with extraction while downloading, PAR2 repair, 7z/ZIP, automatic
 > fallback to the next release, Plex/Jellyfin/Emby integration and automatic
 > deletion after watching. Series keep a rolling window of the next episodes:
-> watched ones are removed and the next ones fetched. The Plex watchlist can
-> request movies and series automatically. See the
+> watched ones are removed and the next ones fetched. Administrators manage
+> additional accounts, optionally with limits on requests and storage. The Plex
+> watchlist can request movies and series automatically. See the
 > [roadmap](docs/PLAN.md#14-roadmap).
 
 ## Planned features
@@ -27,7 +28,10 @@ AutoDownloadarr handles everything you only want to see once.
   removed after a configurable delay (default 48 h)
 - Series as a rolling window: only the next *n* episodes are kept; starting the
   next episode removes the watched one and fetches another; future seasons can
-  be subscribed
+  be subscribed. If no single episode release exists, a season pack is used as
+  a fallback and only the needed episodes are kept
+- Several users: administrators manage accounts, everyone requests movies and
+  series, and optional per-user limits cap active requests and stored gigabytes
 - Optional full availability check before downloading (every article, `STAT`
   with pipelining), so a download does not fail halfway
 - Only new viewing counts: Plex remembers titles watched long ago, that history

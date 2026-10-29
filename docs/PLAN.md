@@ -4,7 +4,7 @@
 > im Medienserver anzeigen, nach dem Schauen automatisch wieder löschen.
 > Ergänzt Sonarr/Radarr (dauerhafte Sammlung), ersetzt sie nicht.
 
-Stand: 2026-10-28 · Status: Phase 0–4 umgesetzt
+Stand: 2026-10-29 · Status: Phase 0–5 umgesetzt
 
 ---
 
@@ -500,7 +500,7 @@ Weiterhin nichts     ─▶ Status „Nicht gefunden“, Neusuche mit Backoff (1
 - **Duplikatschutz**: prüft Medienserver und optional Radarr/Sonarr, bevor geladen wird.
 - **Speicherplatz-Management**: Maximalgröße der temporären Bibliothek; bei Überschreitung zuerst gesehene, dann älteste ungesehene löschen (mit Benachrichtigung).
 - **Benachrichtigungen**: bereit, fehlgeschlagen, wird bald gelöscht, gelöscht (Telegram, Discord, ntfy, generischer Webhook).
-- **Mehrbenutzer**: Rollen Admin/User, Anfragen pro Benutzer, optionale Kontingente (Anzahl/GB), Zuordnung zu Medienserver-Benutzern.
+- **Mehrbenutzer** (umgesetzt): Rollen Admin/User, Anfragen pro Benutzer, optionale Kontingente (Anzahl/GB). Die Zuordnung zu Medienserver-Benutzern folgt.
 - **„Jetzt schauen“-Priorität**: Download mit höchster Priorität, Meldung sobald abspielbar.
 - **Historie & Statistik**: Was wurde geladen/gelöscht und warum, verbrauchtes Datenvolumen.
 - **Dashboard mit Live-Fortschritt** (SSE): Geschwindigkeit, ETA, Entpack-Status.
@@ -601,9 +601,9 @@ Beim ersten Start (noch kein Konto vorhanden) führt die Weboberfläche durch di
 | **1 – Downloader** ✅ | NZB-Parser, NNTP-Pool (TLS, Auth, mehrere Server mit Priorität, Retry), yEnc, Assembler, **Entpacken während des Downloads** (RAR, mehrteilig, Passwort), CLI-Befehl `download-nzb`, Test-NNTP-Server, Benchmarks | Beliebige NZB lässt sich zuverlässig und schnell laden; der Film ist fertig, sobald das letzte Volume da ist |
 | **2 – MVP Filme** ✅ | TMDB, Newznab (ID-Suche mit Textsuche als Rückfall), Release-Parser, Qualitätsprofil (max./min. Auflösung, Pflicht-/Verbots-/Bonuswörter, MB pro Minute, Codec, Passwort-Regel), Plex (Anmeldung per PIN, Bibliothek, Pfad-Mapping mit Vorschlägen, Teil-Scan, Gesehen-Status per Abfrage), Lösch- und Ablauffristen, Fehlerklassen, Kandidatenliste, Sperrliste, automatischer Quellenwechsel, Neusuche mit Backoff, Passwörter aus NZB-Metadaten, NZB-/Jobname, Release-Titel und Passwortliste, verschlüsselte Zugangsdaten, Einrichtungsassistent mit allen Schritten, UI: Filmsuche, Bibliothek, Detailseite mit Releases/Verlauf/Sperrliste, Live-Fortschritt, Einstellungen | Kompletter Film-Kreislauf funktioniert, nicht verfügbare Quellen werden automatisch ersetzt |
 | **3 – Robuster Downloader** ✅ | PAR2-Reparatur als Rückfall (nur benötigte Recovery-Blöcke laden, Abbruch sobald mehr fehlt als reparierbar), 7z/ZIP (7-Zip im Image), `STAT`-Vorabprüfung einer Stichprobe, Wiederherstellen verschleierter Namen per PAR2, Passwörter aus Betreffzeilen und NFO-Dateien, Spam-Erkennung („Passwort auf Webseite“), Watchdog für hängende Downloads, Indexer-Pause nach wiederholten Fehlern, Bandbreitenlimit | Entpacken während des Ladens, Reparatur nur wenn nötig, wenig manuelle Eingriffe |
-| **4 – Serien** ✅ | TMDB-Serien (Staffeln, Folgen, Ausstrahlungstermine), Newznab-Folgensuche (TVDB/IMDb-ID, sonst Text), Staffel/Folge im Release-Namen, Staffelauswahl, rollendes Fenster mit Löschauslöser (Fortschritt der nächsten Folge, Minuten nach Start, gesehen), Suche ab Ausstrahlung, tägliche Aktualisierung der Folgenliste, Plex-Serienbibliothek mit Wiedergabe-Fortschritt, gemeinsamer Download-Kern mit den Filmen, UI für Serien | Serien-Kreislauf funktioniert |
-| **5 – Integrationen** ✅ | Jellyfin/Emby, Benachrichtigungen, Plex-Watchlist, Speicherplatz-Management (Radarr/Sonarr bewusst verworfen) | Alltagstauglich |
-| **6 – Komfort** | Trakt, Bots, OIDC, Kontingente, Statistik, Store-Modus-Direktschreiben | Feinschliff |
+| **4 – Serien** ✅ | TMDB-Serien (Staffeln, Folgen, Ausstrahlungstermine), Newznab-Folgensuche (TVDB/IMDb-ID, sonst Text), Staffel/Folge im Release-Namen, Staffelauswahl, rollendes Fenster mit Löschauslöser (Fortschritt der nächsten Folge, Minuten nach Start, gesehen), Suche ab Ausstrahlung, tägliche Aktualisierung der Folgenliste, Plex-Serienbibliothek mit Wiedergabe-Fortschritt, gemeinsamer Download-Kern mit den Filmen, Staffelpakete als Ausweichquelle (nur wenn keine Einzelfolge auffindbar), UI für Serien | Serien-Kreislauf funktioniert |
+| **5 – Integrationen** ✅ | Jellyfin/Emby, Benachrichtigungen, Plex-Watchlist, Benutzerverwaltung mit Rollen Admin/User und optionalen Kontingenten je Benutzer, Speicherplatz-Management (Radarr/Sonarr bewusst verworfen) | Alltagstauglich |
+| **6 – Komfort** | Trakt, Bots, OIDC, Statistik, Medienserver-Benutzerzuordnung, Store-Modus-Direktschreiben | Feinschliff |
 | später | Overseerr/Jellyseerr-kompatible API, weitere Indexer-Typen, Torrent-Client | nach Bedarf |
 
 ---
@@ -648,7 +648,7 @@ Beim ersten Start (noch kein Konto vorhanden) führt die Weboberfläche durch di
 | Einrichtung | Einrichtungsassistent beim ersten Start: Konto → Plex → Indexer → Usenet → Standards; Schritte testen vor dem Speichern, überspringbar, später erneut aufrufbar |
 | Lizenz | GPL-3.0 |
 | Konfiguration | Env-Variablen mit Präfix `AUTODOWNLOADARR_` nur für den Start (Port, Config-Ordner, Logging, Proxy); alles andere in der UI |
-| Umsetzung Phase 4 | Wiedergabe-Fortschritt per Abfrage der Plex-Serienbibliothek jede Minute statt WebSocket – reicht für die Auslöser (Löschen/Nachladen mit höchstens einer Minute Verzug). Staffelpakete werden erkannt, aber noch nicht als Ausweich-Quelle geladen (später). Spezialfolgen (Staffel 0) nur, wenn ausdrücklich gewählt. Filme und Serien haben je eigene Download-Plätze („Parallele Downloads“ gilt pro Bereich), teilen sich aber das Geschwindigkeitslimit. |
+| Umsetzung Phase 4 | Wiedergabe-Fortschritt per Abfrage der Plex-Serienbibliothek jede Minute statt WebSocket – reicht für die Auslöser (Löschen/Nachladen mit höchstens einer Minute Verzug). Staffelpakete sind die Ausweich-Quelle: erst wird die Einzelfolge gesucht, nur ohne brauchbaren Treffer die ganze Staffel; aus dem Paket werden ausschließlich die Folgen des Fensters übernommen, der Rest wird verworfen. Spezialfolgen (Staffel 0) nur, wenn ausdrücklich gewählt. Filme und Serien haben je eigene Download-Plätze („Parallele Downloads“ gilt pro Bereich), teilen sich aber das Geschwindigkeitslimit. |
 | Umsetzung Phase 3 | Prüfung der fertigen Datei per `ffprobe` (Laufzeit, Tonspur-Sprache) zurückgestellt: `ffmpeg` würde das Image um ~100 MB vergrößern – später als optionales Image oder externes Werkzeug. Gelernte Passwörter pro Release-Gruppe ebenfalls später; die Passwortliste zählt Treffer und sortiert danach. |
 | Umsetzung Phase 2 | Gesehen-Status per Abfrage der Plex-Bibliothek (Standard alle 2 Min.) statt WebSocket – der WebSocket kommt mit den Serien (Phase 4), wo die Wiedergabe-Position zählt. Manuelle Passworteingabe als „Passwort zur Liste hinzufügen + Release erneut laden“. Ein Plex-Server, eine Film-Bibliothek. |
 | Umsetzung Phase 0 | Go 1.26, chi, SQLite (modernc, ohne CGO) mit goose; Abfragen vorerst handgeschrieben (`sqlc` erst, wenn die Zahl der Abfragen es lohnt); React 19 + Vite + Tailwind 4, eigene kleine UI-Komponenten statt shadcn/ui; Go-Modulpfad `github.com/shyper/autodownloadarr` (Platzhalter bis zum GitHub-Repo) |
