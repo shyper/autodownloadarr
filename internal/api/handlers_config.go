@@ -15,6 +15,7 @@ import (
 
 	"github.com/shyper/autodownloadarr/internal/httpx"
 	"github.com/shyper/autodownloadarr/internal/indexer/newznab"
+	"github.com/shyper/autodownloadarr/internal/mediaserver"
 	"github.com/shyper/autodownloadarr/internal/mediaserver/pathmap"
 	"github.com/shyper/autodownloadarr/internal/mediaserver/plex"
 	"github.com/shyper/autodownloadarr/internal/metadata/tmdb"
@@ -428,8 +429,8 @@ func (s *server) handlePlexConnect(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "read plex config", err)
 		return
 	}
-	ms := store.MediaServer{Name: chosen.Name, URL: req.URI, Token: chosen.AccessToken, MovieLibrary: existing.MovieLibrary,
-		TVLibrary: existing.TVLibrary, Mappings: existing.Mappings, Enabled: true}
+	ms := store.MediaServer{Kind: string(mediaserver.Plex), Name: chosen.Name, URL: req.URI, Token: chosen.AccessToken,
+		MovieLibrary: existing.MovieLibrary, TVLibrary: existing.TVLibrary, Mappings: existing.Mappings, Enabled: true}
 	if _, err := s.Store.SaveMediaServer(r.Context(), ms); err != nil {
 		s.writeStoreError(w, "save plex config", err)
 		return
@@ -449,21 +450,21 @@ func (s *server) handlePlexLibraries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !found {
-		writeError(w, http.StatusConflict, "not_configured", "no Plex server configured")
+		writeError(w, http.StatusConflict, "not_configured", "no media server configured")
 		return
 	}
-	clientID, err := s.Store.PlexClientID(r.Context())
+	c, err := s.Services.MediaServer(r.Context())
 	if err != nil {
-		s.internalError(w, "plex client id", err)
+		s.writeStoreError(w, "connect media server", err)
 		return
 	}
-	c := plex.NewClient(ms.URL, ms.Token, clientID)
-	if s.Services.HTTP != nil {
-		c.HTTP = s.Services.HTTP
+	if c == nil {
+		writeError(w, http.StatusConflict, "not_configured", "no media server configured")
+		return
 	}
 	libs, err := c.Libraries(r.Context())
 	if err != nil {
-		s.writeStoreError(w, "list plex libraries", err)
+		s.writeStoreError(w, "list media server libraries", err)
 		return
 	}
 	g, err := s.Store.General(r.Context())

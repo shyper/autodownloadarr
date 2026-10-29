@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/shyper/autodownloadarr/internal/mediaserver"
 	"github.com/shyper/autodownloadarr/internal/mediaserver/pathmap"
 	"github.com/shyper/autodownloadarr/internal/release"
 	"github.com/shyper/autodownloadarr/internal/usenet/nntp"
@@ -224,10 +225,11 @@ func (s *Store) DeleteIndexer(ctx context.Context, id int64) error {
 	return affected(s.db.ExecContext(ctx, `DELETE FROM indexers WHERE id = ?`, id))
 }
 
-// MediaServer is the configured Plex server. An empty Token on save keeps
-// the stored one.
+// MediaServer is the configured media server (Plex, Jellyfin or Emby). An
+// empty Token on save keeps the stored one.
 type MediaServer struct {
 	ID           int64             `json:"id"`
+	Kind         string            `json:"kind"` // plex, jellyfin or emby
 	Name         string            `json:"name"`
 	URL          string            `json:"url"`
 	Token        string            `json:"token,omitempty"` // write-only
@@ -238,13 +240,13 @@ type MediaServer struct {
 	Enabled      bool              `json:"enabled"`
 }
 
-// MediaServer returns the Plex server, if one is configured.
+// MediaServer returns the media server, if one is configured.
 func (s *Store) MediaServer(ctx context.Context) (MediaServer, bool, error) {
 	var m MediaServer
 	var enc string
 	err := s.db.QueryRowContext(ctx, `
-		SELECT id, name, url, token_enc, movie_library, tv_library, enabled FROM media_servers ORDER BY id LIMIT 1`,
-	).Scan(&m.ID, &m.Name, &m.URL, &enc, &m.MovieLibrary, &m.TVLibrary, &m.Enabled)
+		SELECT id, kind, name, url, token_enc, movie_library, tv_library, enabled FROM media_servers ORDER BY id LIMIT 1`,
+	).Scan(&m.ID, &m.Kind, &m.Name, &m.URL, &enc, &m.MovieLibrary, &m.TVLibrary, &m.Enabled)
 	if errors.Is(err, sql.ErrNoRows) {
 		return MediaServer{}, false, nil
 	}
@@ -269,11 +271,17 @@ func (s *Store) MediaServer(ctx context.Context) (MediaServer, bool, error) {
 	return m, true, rows.Err()
 }
 
-// SaveMediaServer stores the Plex server (there is only one) with its path
+// SaveMediaServer stores the media server (there is only one) with its path
 // mappings.
 func (s *Store) SaveMediaServer(ctx context.Context, m MediaServer) (int64, error) {
 	if !strings.HasPrefix(m.URL, "http://") && !strings.HasPrefix(m.URL, "https://") {
 		return 0, fmt.Errorf("%w: URL must start with http:// or https://", ErrInvalid)
+	}
+	if m.Kind == "" {
+		m.Kind = string(mediaserver.Plex)
+	}
+	if !mediaserver.Kind(m.Kind).Valid() {
+		return 0, fmt.Errorf("%w: unknown media server type %q", ErrInvalid, m.Kind)
 	}
 	existing, found, err := s.MediaServer(ctx)
 	if err != nil {
@@ -297,7 +305,7 @@ func (s *Store) SaveMediaServer(ctx context.Context, m MediaServer) (int64, erro
 	if !found {
 		res, err := tx.ExecContext(ctx, `
 			INSERT INTO media_servers (kind, name, url, token_enc, movie_library, tv_library, enabled, created_at, updated_at)
-			VALUES ('plex', ?, ?, ?, ?, ?, ?, ?, ?)`, m.Name, m.URL, enc, m.MovieLibrary, m.TVLibrary, m.Enabled, now, now)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, m.Kind, m.Name, m.URL, enc, m.MovieLibrary, m.TVLibrary, m.Enabled, now, now)
 		if err != nil {
 			return 0, err
 		}
@@ -305,8 +313,8 @@ func (s *Store) SaveMediaServer(ctx context.Context, m MediaServer) (int64, erro
 			return 0, err
 		}
 	} else if _, err := tx.ExecContext(ctx, `
-		UPDATE media_servers SET name = ?, url = ?, token_enc = ?, movie_library = ?, tv_library = ?, enabled = ?, updated_at = ? WHERE id = ?`,
-		m.Name, m.URL, enc, m.MovieLibrary, m.TVLibrary, m.Enabled, now, id); err != nil {
+		UPDATE media_servers SET kind = ?, name = ?, url = ?, token_enc = ?, movie_library = ?, tv_library = ?, enabled = ?, updated_at = ? WHERE id = ?`,
+		m.Kind, m.Name, m.URL, enc, m.MovieLibrary, m.TVLibrary, m.Enabled, now, id); err != nil {
 		return 0, err
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM path_mappings WHERE media_server_id = ?`, id); err != nil {

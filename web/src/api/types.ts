@@ -70,8 +70,11 @@ export type Caps = {
 
 export type PathMapping = { local: string; remote: string }
 
+export type MediaServerKind = 'plex' | 'jellyfin' | 'emby'
+
 export type MediaServer = {
   id: number
+  kind: MediaServerKind
   name: string
   url: string
   token?: string

@@ -408,6 +408,15 @@
       "chatIdHint": "Der Chat oder Kanal, der die Meldungen erhält.",
       "sendTest": "Test senden",
       "testSent": "Testbenachrichtigung gesendet."
+    },
+    "mediaServer": {
+      "title": "Medienserver",
+      "description": "Plex, Jellyfin oder Emby: der Server erfährt, wo neue Filme und Episoden liegen, und meldet, was angesehen wurde.",
+      "kind": "Server-Typ",
+      "kindHint": "Plex meldet sich mit dem Plex-Konto an. Jellyfin und Emby verwenden einen API-Schlüssel.",
+      "name": "Name",
+      "apiKey": "API-Schlüssel",
+      "apiKeyHint": "Jellyfin/Emby: Dashboard → API-Schlüssel."
     }
   },
   "account": {

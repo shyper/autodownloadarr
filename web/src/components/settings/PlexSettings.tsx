@@ -9,9 +9,15 @@ import {
   usePlexLibraries,
   useSavePlex,
 } from '../../api/config'
-import type { MediaServer, PathMapping, PlexServer } from '../../api/types'
+import type { MediaServer, MediaServerKind, PathMapping, PlexServer } from '../../api/types'
 import { errorMessage } from '../../i18n'
 import { Alert, Badge, Button, Field, Input, SectionTitle, Select, Spinner } from '../ui'
+
+const kinds: { value: MediaServerKind; label: string }[] = [
+  { value: 'plex', label: 'Plex' },
+  { value: 'jellyfin', label: 'Jellyfin' },
+  { value: 'emby', label: 'Emby' },
+]
 
 export function PlexSettings({ onSaved }: { onSaved?: () => void }) {
   const { t } = useTranslation()
@@ -19,7 +25,7 @@ export function PlexSettings({ onSaved }: { onSaved?: () => void }) {
   if (!plex.data) return null
   return (
     <div className="space-y-5">
-      <SectionTitle title={t('settings.plex.title')} description={t('settings.plex.description')} />
+      <SectionTitle title={t('settings.mediaServer.title')} description={t('settings.mediaServer.description')} />
       {plex.data.configured ? (
         <PlexLibrarySettings key={plex.data.server.id} server={plex.data.server} onSaved={onSaved} />
       ) : (
@@ -34,10 +40,12 @@ function PlexConnect() {
   const { t } = useTranslation()
   const connect = useConnectPlex()
   const save = useSavePlex()
+  const [kind, setKind] = useState<MediaServerKind>('plex')
   const [pinId, setPinId] = useState<number | null>(null)
   const [servers, setServers] = useState<PlexServer[] | null>(null)
   const [error, setError] = useState<unknown>(null)
   const [manual, setManual] = useState(false)
+  const [name, setName] = useState('')
   const [url, setUrl] = useState('http://')
   const [token, setToken] = useState('')
   const timer = useRef<number | undefined>(undefined)
@@ -82,14 +90,40 @@ function PlexConnect() {
 
   const submitManual = (e: FormEvent) => {
     e.preventDefault()
-    save.mutate({ name: 'Plex', url: url.trim(), token: token.trim(), enabled: true, mappings: [] })
+    save.mutate({
+      kind,
+      name: name.trim() || (kind === 'plex' ? 'Plex' : kind === 'jellyfin' ? 'Jellyfin' : 'Emby'),
+      url: url.trim(),
+      token: token.trim(),
+      enabled: true,
+      mappings: [],
+    })
   }
 
   const err = error ?? connect.error ?? save.error
+  const plexKind = kind === 'plex'
   return (
     <div className="space-y-4">
       {err != null && <Alert>{errorMessage(t, err)}</Alert>}
-      {servers === null ? (
+      <Field id="media-server-kind" label={t('settings.mediaServer.kind')} hint={t('settings.mediaServer.kindHint')}>
+        <Select
+          id="media-server-kind"
+          value={kind}
+          onChange={(e) => {
+            setKind(e.target.value as MediaServerKind)
+            setServers(null)
+            setManual(false)
+            setError(null)
+          }}
+        >
+          {kinds.map((k) => (
+            <option key={k.value} value={k.value}>
+              {k.label}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      {plexKind && servers === null ? (
         <div className="flex flex-wrap items-center gap-3">
           <Button onClick={() => void signIn()} loading={pinId !== null}>
             {t('settings.plex.signIn')}
@@ -99,19 +133,27 @@ function PlexConnect() {
             {t('settings.plex.manual')}
           </Button>
         </div>
-      ) : (
+      ) : null}
+      {plexKind && servers !== null && (
         <ServerPicker
           servers={servers}
           busy={connect.isPending}
           onPick={(serverId, uri) => pinId !== null && connect.mutate({ pinId, serverId, uri })}
         />
       )}
-      {manual && servers === null && (
+      {(manual || !plexKind) && servers === null && (
         <form onSubmit={submitManual} className="grid gap-4 rounded-xl border border-line bg-surface-2 p-4 sm:grid-cols-2">
-          <Field id="plex-url" label={t('settings.plex.url')}>
-            <Input id="plex-url" required value={url} onChange={(e) => setUrl(e.target.value)} placeholder="http://192.168.1.10:32400" />
+          <Field id="media-server-name" label={t('settings.mediaServer.name')}>
+            <Input id="media-server-name" value={name} onChange={(e) => setName(e.target.value)} placeholder={kind === 'plex' ? 'Plex' : kind === 'jellyfin' ? 'Jellyfin' : 'Emby'} />
           </Field>
-          <Field id="plex-token" label={t('settings.plex.token')} hint={t('settings.plex.tokenHint')}>
+          <Field id="plex-url" label={t('settings.plex.url')}>
+            <Input id="plex-url" required value={url} onChange={(e) => setUrl(e.target.value)} placeholder={plexKind ? 'http://192.168.1.10:32400' : 'http://192.168.1.10:8096'} />
+          </Field>
+          <Field
+            id="plex-token"
+            label={plexKind ? t('settings.plex.token') : t('settings.mediaServer.apiKey')}
+            hint={plexKind ? t('settings.plex.tokenHint') : t('settings.mediaServer.apiKeyHint')}
+          >
             <Input id="plex-token" type="password" required value={token} onChange={(e) => setToken(e.target.value)} />
           </Field>
           <div className="flex justify-end sm:col-span-2">
@@ -173,6 +215,7 @@ function PlexLibrarySettings({ server, onSaved }: { server: MediaServer; onSaved
     e.preventDefault()
     save.mutate(
       {
+        kind: server.kind,
         name: server.name,
         url: server.url,
         movieLibrary: library,
@@ -188,7 +231,9 @@ function PlexLibrarySettings({ server, onSaved }: { server: MediaServer; onSaved
     <form onSubmit={submit} className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line p-4">
         <div>
-          <p className="font-medium">{server.name}</p>
+          <p className="font-medium">
+            {server.name} <Badge tone="muted">{server.kind}</Badge>
+          </p>
           <p className="font-mono text-xs text-muted">{server.url}</p>
         </div>
         <Button type="button" variant="ghost" onClick={() => disconnect.mutate()}>

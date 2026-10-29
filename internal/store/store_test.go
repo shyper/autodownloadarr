@@ -113,8 +113,18 @@ func TestIndexerAndMediaServer(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, found, err := s.MediaServer(ctx)
-	if err != nil || !found || got.Token != "tok" || got.MovieLibrary != "4" || len(got.Mappings) != 1 {
+	if err != nil || !found || got.Token != "tok" || got.Kind != "plex" || got.MovieLibrary != "4" || len(got.Mappings) != 1 {
 		t.Errorf("media server = %+v %v", got, err)
+	}
+	ms.Kind = "jellyfin"
+	if _, err := s.SaveMediaServer(ctx, ms); err != nil {
+		t.Fatal(err)
+	}
+	if got, _, _ := s.MediaServer(ctx); got.Kind != "jellyfin" {
+		t.Errorf("kind = %q", got.Kind)
+	}
+	if _, err := s.SaveMediaServer(ctx, MediaServer{Kind: "unknown", URL: "http://x"}); err == nil {
+		t.Error("unknown media server kind accepted")
 	}
 }
 

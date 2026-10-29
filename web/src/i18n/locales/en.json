@@ -408,6 +408,15 @@
       "chatIdHint": "The chat or channel that receives the messages.",
       "sendTest": "Send test",
       "testSent": "Test notification sent."
+    },
+    "mediaServer": {
+      "title": "Media server",
+      "description": "Plex, Jellyfin or Emby: the server is told where new movies and episodes are and reports what was watched.",
+      "kind": "Server type",
+      "kindHint": "Plex signs in with your Plex account. Jellyfin and Emby use an API key.",
+      "name": "Name",
+      "apiKey": "API key",
+      "apiKeyHint": "Jellyfin/Emby: Dashboard → API Keys."
     }
   },
   "account": {

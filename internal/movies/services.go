@@ -13,6 +13,7 @@ import (
 	"github.com/shyper/autodownloadarr/internal/disk"
 	"github.com/shyper/autodownloadarr/internal/indexer/newznab"
 	"github.com/shyper/autodownloadarr/internal/mediaserver"
+	"github.com/shyper/autodownloadarr/internal/mediaserver/jellyfin"
 	"github.com/shyper/autodownloadarr/internal/mediaserver/pathmap"
 	"github.com/shyper/autodownloadarr/internal/mediaserver/plex"
 	"github.com/shyper/autodownloadarr/internal/metadata/tmdb"
@@ -321,13 +322,20 @@ func (s *Services) mediaTarget(ctx context.Context, library func(store.MediaServ
 }
 
 func (s *Services) serverClient(ctx context.Context, ms store.MediaServer) (mediaserver.Server, error) {
-	clientID, err := s.Store.PlexClientID(ctx)
-	if err != nil {
-		return nil, err
+	switch mediaserver.Kind(ms.Kind) {
+	case mediaserver.Jellyfin, mediaserver.Emby:
+		c := jellyfin.NewClient(ms.URL, ms.Token)
+		c.HTTP = s.httpClient()
+		return c, nil
+	default:
+		clientID, err := s.Store.PlexClientID(ctx)
+		if err != nil {
+			return nil, err
+		}
+		c := plex.NewClient(ms.URL, ms.Token, clientID)
+		c.HTTP = s.httpClient()
+		return c, nil
 	}
-	c := plex.NewClient(ms.URL, ms.Token, clientID)
-	c.HTTP = s.httpClient()
-	return c, nil
 }
 
 // PlexAccount returns a plex.tv client for sign-in and server discovery.
