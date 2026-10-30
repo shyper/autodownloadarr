@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -162,6 +163,19 @@ func (s *server) handleGetSeries(w http.ResponseWriter, r *http.Request) {
 		s.writeStoreError(w, "read series", err)
 		return
 	}
+	if se.Genres == nil {
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+		if client, err := s.Services.TMDB(ctx); err == nil {
+			if meta, err := client.Show(ctx, se.TMDBID); err == nil {
+				se.Genres = meta.Genres
+				if err := s.Store.SetSeriesGenres(ctx, se.ID, meta.Genres); err != nil {
+					s.Log.Warn("cache genres", "err", err)
+				}
+			}
+		}
+	}
+
 	v, eps, err := s.seriesView(r, se)
 	if err != nil {
 		s.internalError(w, "read episodes", err)

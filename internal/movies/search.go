@@ -287,6 +287,9 @@ func (m *Manager) retrySpace(ctx context.Context) {
 // number of parallel downloads.
 func (m *Manager) startQueued() {
 	ctx := m.ctx
+	if ctx.Err() != nil {
+		return
+	}
 	g, err := m.store.General(ctx)
 	if err != nil {
 		m.log.Error("read settings", "err", err)
@@ -328,6 +331,9 @@ func (m *Manager) startQueued() {
 				retryScheduled = true
 			}
 			continue // stays queued; the queue is retried periodically
+		}
+		if !m.svc.AcquireDownload(g.ParallelDownloads) {
+			return
 		}
 		budget -= rel.Size
 		m.svc.ClearNoSpace()

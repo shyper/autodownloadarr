@@ -6,12 +6,12 @@ export type ReleaseMark = { kind: 'loaded' | 'loading' } | { kind: 'failed'; err
  * What happened with a release of a movie or episode: the one on disk (or
  * being downloaded), or one whose last attempt failed.
  */
-export function releaseMark(r: Release, current: { releaseTitle: string; state: EpisodeState }, attempts: Attempt[]): ReleaseMark {
-  if (r.title === current.releaseTitle) {
+export function releaseMark(r: Release, current: { releaseKey: string; state: EpisodeState }, attempts: Attempt[]): ReleaseMark {
+  if (r.releaseKey && r.releaseKey === current.releaseKey) {
     if (current.state === 'available' || current.state === 'watched') return { kind: 'loaded' }
     if (current.state === 'downloading') return { kind: 'loading' }
   }
-  const last = attempts.find((a) => a.releaseTitle === r.title) // newest first
+  const last = attempts.find((a) => r.releaseKey && a.releaseKey === r.releaseKey) // newest first
   if (last?.result === 'failed') return { kind: 'failed', errorKind: last.errorKind }
   return null
 }

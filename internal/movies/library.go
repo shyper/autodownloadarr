@@ -29,10 +29,10 @@ func (m *Manager) available(ctx context.Context, mv store.Movie, rel store.Relea
 	now := m.now()
 	mv.State = store.MovieAvailable
 	mv.Folder = filepath.Dir(video)
-	mv.ReleaseTitle = rel.Title
+	mv.ReleaseKey, mv.ReleaseTitle = rel.Identity(), rel.Title
 	mv.AvailableAt = &now
 	mv.Attempts, mv.LastError, mv.NextSearchAt = 0, "", nil
-	mv.WatchedAt, mv.DeleteAt = nil, nil
+	mv.StartedAt, mv.WatchedAt, mv.DeleteAt = nil, nil, nil
 	mv.Progress, mv.Base = 0, store.WatchBase{} // a new file: the next poll takes the baseline
 	if err := m.store.UpdateMovie(ctx, mv); err != nil {
 		return err
@@ -104,9 +104,18 @@ func (m *Manager) handleDelete(ctx context.Context, t scheduler.Task) error {
 	}
 	switch {
 	case p.Reason == "watched" && mv.State == store.MovieWatched:
-	case p.Reason == "expired" && mv.State == store.MovieAvailable:
+	case p.Reason == "expired" && mv.State == store.MovieAvailable && mv.StartedAt == nil:
+	case p.Reason == "started" && mv.State == store.MovieAvailable && mv.StartedAt != nil:
 	default:
 		return nil // the state changed meanwhile
+	}
+	g, err := m.store.General(ctx)
+	if err != nil {
+		return err
+	}
+	at, reason := movieDeletion(mv, g)
+	if at.IsZero() || reason != p.Reason || at.After(m.now()) {
+		return m.scheduleDeletion(ctx, mv)
 	}
 	if err := m.removeFiles(ctx, &mv); err != nil {
 		return err
@@ -207,6 +216,30 @@ func (m *Manager) PollWatched(ctx context.Context) error {
 	}
 
 	for _, mv := range list {
+		missing, err := FilesMissing(ctx, m.store, store.ForMovie(mv.ID), g.MoviesPath)
+		if err != nil {
+			return err
+		}
+		if missing {
+			files, err := m.store.Files(ctx, mv.ID)
+			if err != nil {
+				return err
+			}
+			for _, f := range files {
+				if err := m.store.UntrackFile(ctx, f); err != nil {
+					return err
+				}
+			}
+			mv.State, mv.DeleteAt, mv.Folder, mv.MediaKey = store.MovieDeleted, nil, "", ""
+			if err := m.store.UpdateMovie(ctx, mv); err != nil {
+				return err
+			}
+			if err := m.sched.Cancel(ctx, deleteKey(mv.ID)); err != nil {
+				return err
+			}
+			m.publish(mv)
+			continue
+		}
 		it, ok := byDir[filepath.Clean(mv.Folder)]
 		if !ok {
 			it, ok = byKey[mv.MediaKey]
@@ -219,6 +252,10 @@ func (m *Manager) PollWatched(ctx context.Context) error {
 		changed := mv.MediaKey != it.Key || mv.Base != base || math.Abs(progress-mv.Progress) >= 0.01 ||
 			(progress != mv.Progress && (progress == 0 || progress == 1))
 		mv.MediaKey, mv.Progress = it.Key, progress
+		if progress > 0 && mv.StartedAt == nil {
+			now := m.now()
+			mv.StartedAt, changed = &now, true
+		}
 		switch {
 		case watched && mv.State == store.MovieAvailable:
 			now := m.now()
@@ -232,15 +269,45 @@ func (m *Manager) PollWatched(ctx context.Context) error {
 			changed = true
 		}
 		if !changed {
+			if err := m.scheduleDeletion(ctx, mv); err != nil {
+				return err
+			}
 			continue
 		}
 		if err := m.store.UpdateMovie(ctx, mv); err != nil {
 			return err
 		}
+		m.publish(mv)
 		if err := m.scheduleDeletion(ctx, mv); err != nil {
 			return err
 		}
-		m.publish(mv)
 	}
 	return nil
+}
+
+// FilesMissing only confirms removal when all tracked files are absent and the
+// library root is accessible. Scan delays and filesystem errors are not deletions.
+func FilesMissing(ctx context.Context, st *store.Store, owner store.Owner, root string) (bool, error) {
+	if root == "" {
+		return false, nil
+	}
+	if info, err := os.Stat(root); err != nil || !info.IsDir() {
+		return false, nil
+	}
+	files, err := st.FilesOf(ctx, owner)
+	if err != nil {
+		return false, err
+	}
+	if len(files) == 0 {
+		return false, nil
+	}
+	for _, f := range files {
+		if !within(root, f) {
+			return false, nil
+		}
+		if _, err := os.Stat(f); !os.IsNotExist(err) {
+			return false, nil
+		}
+	}
+	return true, nil
 }

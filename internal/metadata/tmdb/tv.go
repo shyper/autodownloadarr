@@ -9,6 +9,7 @@ import (
 
 // Show is a TV series.
 type Show struct {
+	Genres        []string     `json:"genres"`
 	ID            int          `json:"tmdbId"`
 	TVDBID        int          `json:"tvdbId,omitempty"`
 	IMDbID        string       `json:"imdbId,omitempty"`
@@ -41,6 +42,9 @@ type Episode struct {
 }
 
 type apiShow struct {
+	Genres []struct {
+		Name string `json:"name"`
+	} `json:"genres"`
 	ID             int    `json:"id"`
 	Name           string `json:"name"`
 	OriginalName   string `json:"original_name"`
@@ -70,6 +74,12 @@ func (s apiShow) convert() Show {
 	out := Show{
 		ID: s.ID, TVDBID: s.ExternalIDs.TVDBID, IMDbID: s.ExternalIDs.IMDbID, Title: s.Name, OriginalTitle: s.OriginalName,
 		Overview: s.Overview, PosterPath: s.PosterPath, Status: s.Status,
+	}
+	out.Genres = []string{}
+	for _, genre := range s.Genres {
+		if genre.Name != "" {
+			out.Genres = append(out.Genres, genre.Name)
+		}
 	}
 	if len(s.FirstAirDate) >= 4 {
 		out.Year, _ = strconv.Atoi(s.FirstAirDate[:4])

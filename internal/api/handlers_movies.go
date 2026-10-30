@@ -1,10 +1,12 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/shyper/autodownloadarr/internal/metadata/tmdb"
 	"github.com/shyper/autodownloadarr/internal/movies"
@@ -109,6 +111,19 @@ func (s *server) handleGetMovie(w http.ResponseWriter, r *http.Request) {
 		s.writeStoreError(w, "read movie", err)
 		return
 	}
+	if m.Genres == nil {
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+		if client, err := s.Services.TMDB(ctx); err == nil {
+			if meta, err := client.Movie(ctx, m.TMDBID); err == nil {
+				m.Genres = meta.Genres
+				if err := s.Store.SetMovieGenres(ctx, m.ID, meta.Genres); err != nil {
+					s.Log.Warn("cache genres", "err", err)
+				}
+			}
+		}
+	}
+
 	d := movieDetail{movieView: view(m)}
 	if d.Releases, err = s.Store.Releases(r.Context(), id); err != nil {
 		s.internalError(w, "read releases", err)

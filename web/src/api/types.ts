@@ -7,6 +7,7 @@ export type General = {
   seriesTrigger: DeleteTrigger
   seriesTriggerValue: number
   deleteAfterHours: number
+  startedExpiryDays: number
   unwatchedExpiryDays: number
   maxSources: number
   parallelDownloads: number
@@ -136,6 +137,7 @@ export type MovieState =
   | 'failed'
 
 export type Movie = {
+  genres?: string[]
   id: number
   tmdbId: number
   imdbId: string
@@ -152,6 +154,7 @@ export type Movie = {
   attempts: number
   lastError: string
   nextSearchAt?: string
+  releaseKey: string
   releaseTitle: string
   folder: string
   availableAt?: string
@@ -163,6 +166,7 @@ export type Movie = {
 }
 
 export type Release = {
+  releaseKey: string
   id: number
   indexerName: string
   title: string
@@ -177,6 +181,7 @@ export type Release = {
 
 export type Attempt = {
   id: number
+  releaseKey: string
   releaseTitle: string
   indexerName: string
   startedAt: string
@@ -249,6 +254,7 @@ export type ShowResult = {
 export type EpisodeState = MovieState | 'pending' | 'skipped'
 
 export type Series = {
+  genres?: string[]
   id: number
   tmdbId: number
   title: string
@@ -287,6 +293,7 @@ export type Episode = {
   state: EpisodeState
   lastError: string
   nextSearchAt?: string
+  releaseKey: string
   releaseTitle: string
   progress: number
   startedAt?: string

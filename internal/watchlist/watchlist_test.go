@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/shyper/autodownloadarr/internal/db"
 	"github.com/shyper/autodownloadarr/internal/events"
@@ -19,8 +21,17 @@ import (
 )
 
 func TestPollRequestsWatchlist(t *testing.T) {
+	var removed atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case "/discover/actions/removeFromWatchlist":
+			if r.Method != http.MethodPut || r.URL.Query().Get("ratingKey") != "1" || r.Header.Get("X-Plex-Token") != "account-token" {
+				t.Error("invalid watchlist removal request")
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			removed.Add(1)
+			w.WriteHeader(http.StatusNoContent)
 		case "/tmdb/movie/42":
 			_, _ = w.Write([]byte(`{"id":42,"title":"Film","release_date":"2024-05-01","runtime":100}`))
 		case "/tmdb/movie/43":
@@ -97,6 +108,24 @@ func TestPollRequestsWatchlist(t *testing.T) {
 	// A second poll must not create duplicates.
 	if err := wm.PollNow(ctx); err != nil {
 		t.Fatal(err)
+	}
+	if removed.Load() != 0 {
+		t.Fatal("unwatched movie removed")
+	}
+	movie, err := st.MovieByTMDB(ctx, 42)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	movie.State, movie.WatchedAt = store.MovieWatched, &now
+	if err := st.UpdateMovie(ctx, movie); err != nil {
+		t.Fatal(err)
+	}
+	if err := wm.PollNow(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if removed.Load() != 1 {
+		t.Fatal("watched movie not removed")
 	}
 	list, err := st.Movies(ctx)
 	if err != nil || len(list) != 2 {

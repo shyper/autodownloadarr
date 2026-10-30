@@ -82,7 +82,7 @@ func (s *server) handlePutGeneral(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_input", "invalid series defaults")
 		return
 	}
-	if g.DeleteAfterHours < 0 || g.UnwatchedExpiryDays < 0 || g.MaxSources < 1 || g.ParallelDownloads < 1 ||
+	if g.StartedExpiryDays < 0 || g.DeleteAfterHours < 0 || g.UnwatchedExpiryDays < 0 || g.MaxSources < 1 || g.ParallelDownloads < 1 ||
 		g.WatchPollMinutes < 1 || g.WatchlistPollMinutes < 1 || g.MaxDownloadMBps < 0 ||
 		g.MaxLibraryGB < 0 || g.MinFreeGB < 0 {
 		writeError(w, http.StatusBadRequest, "invalid_input", "values out of range")

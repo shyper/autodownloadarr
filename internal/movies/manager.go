@@ -108,6 +108,7 @@ func NewManager(st *store.Store, svc *Services, sched *scheduler.Scheduler, bus 
 		m.startQueued() // downloads that waited for space
 		return nil
 	})
+	svc.RegisterDownloadQueue(m.startQueued)
 	svc.HandleScanRetries(sched)
 	return m
 }
@@ -149,6 +150,7 @@ func (m *Manager) Request(ctx context.Context, tmdbID int, userID, profileID int
 		existing.State = store.MovieSearching
 		existing.Attempts, existing.LastError = 0, ""
 		existing.WatchedAt, existing.DeleteAt, existing.AvailableAt, existing.NextSearchAt = nil, nil, nil, nil
+		existing.StartedAt = nil
 		existing.MediaKey = ""
 		if err := m.store.UpdateMovie(ctx, existing); err != nil {
 			return store.Movie{}, err
@@ -187,6 +189,7 @@ func (m *Manager) Request(ctx context.Context, tmdbID int, userID, profileID int
 		PosterPath:    meta.PosterPath,
 		Runtime:       meta.Runtime,
 		AltTitles:     meta.AltTitles,
+		Genres:        meta.Genres,
 		ProfileID:     profileID,
 		State:         store.MovieSearching,
 	}, userID)
@@ -399,16 +402,23 @@ func (m *Manager) scheduleDeletion(ctx context.Context, mv store.Movie) error {
 	if err != nil {
 		return err
 	}
-	var at time.Time
-	reason := "watched"
-	switch {
-	case mv.State == store.MovieWatched && mv.DeleteAt != nil:
-		at = *mv.DeleteAt
-	case mv.State == store.MovieAvailable && g.UnwatchedExpiryDays > 0 && mv.AvailableAt != nil:
-		at = mv.AvailableAt.Add(time.Duration(g.UnwatchedExpiryDays) * 24 * time.Hour)
-		reason = "expired"
-	default:
+	at, reason := movieDeletion(mv, g)
+	if at.IsZero() {
+		if mv.DeleteAt != nil {
+			mv.DeleteAt = nil
+			if err := m.store.UpdateMovie(ctx, mv); err != nil {
+				return err
+			}
+			m.publish(mv)
+		}
 		return m.sched.Cancel(ctx, deleteKey(mv.ID))
+	}
+	if mv.DeleteAt == nil || !mv.DeleteAt.Equal(at) {
+		mv.DeleteAt = &at
+		if err := m.store.UpdateMovie(ctx, mv); err != nil {
+			return err
+		}
+		m.publish(mv)
 	}
 	_, err = m.sched.Schedule(ctx, scheduler.Spec{
 		Type: taskDelete, Key: deleteKey(mv.ID), RunAt: at,
@@ -423,4 +433,22 @@ func decode[T any](t scheduler.Task) (T, error) {
 		return v, scheduler.Permanent(fmt.Errorf("invalid payload: %w", err))
 	}
 	return v, nil
+}
+
+// movieDeletion calculates the deadline from the relevant lifecycle event.
+func movieDeletion(mv store.Movie, g store.General) (time.Time, string) {
+	if mv.Keep {
+		return time.Time{}, ""
+	}
+	switch {
+	case mv.State == store.MovieWatched && mv.WatchedAt != nil:
+		return mv.WatchedAt.Add(time.Duration(g.DeleteAfterHours) * time.Hour), "watched"
+	case mv.State == store.MovieAvailable && mv.StartedAt != nil:
+		if g.StartedExpiryDays > 0 {
+			return mv.StartedAt.Add(time.Duration(g.StartedExpiryDays) * 24 * time.Hour), "started"
+		}
+	case mv.State == store.MovieAvailable && g.UnwatchedExpiryDays > 0 && mv.AvailableAt != nil:
+		return mv.AvailableAt.Add(time.Duration(g.UnwatchedExpiryDays) * 24 * time.Hour), "expired"
+	}
+	return time.Time{}, ""
 }

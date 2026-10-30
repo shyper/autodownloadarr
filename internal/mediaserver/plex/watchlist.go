@@ -138,3 +138,15 @@ func (a *Account) discover(ctx context.Context, rawURL string, q url.Values, tok
 	}
 	return nil
 }
+
+// RemoveFromWatchlist removes a discovery item using the account token.
+func (a *Account) RemoveFromWatchlist(ctx context.Context, token, key string) error {
+	u := a.discoverURL() + "/actions/removeFromWatchlist?" + url.Values{"ratingKey": {key}}.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, u, nil)
+	if err != nil {
+		return err
+	}
+	setHeaders(req, a.ClientID, token)
+	_, _, err = httpx.Do(a.HTTP, req, 1<<20)
+	return err
+}

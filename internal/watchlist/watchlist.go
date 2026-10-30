@@ -88,6 +88,21 @@ func (m *Manager) poll(ctx context.Context, force bool) error {
 		}
 		switch it.Type {
 		case "movie":
+			mv, lookupErr := m.store.MovieByTMDB(ctx, id)
+			if lookupErr == nil && mv.WatchedAt != nil {
+				key := it.Key
+				if it.PlexGUID != "" {
+					key = it.PlexGUID[strings.LastIndex(it.PlexGUID, "/")+1:]
+				}
+				if key == "" {
+					continue
+				}
+				if err := acc.RemoveFromWatchlist(ctx, ms.AccountToken, key); err != nil {
+					return err // the next scheduled poll retries the removal
+				}
+				m.log.Info("watched movie removed from Plex watchlist", "movie", mv.Title)
+				continue
+			}
 			m.requestMovie(ctx, id, it.Title)
 		case "show":
 			m.requestSeries(ctx, id, it.Title)

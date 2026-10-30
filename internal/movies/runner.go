@@ -54,7 +54,7 @@ func (m *Manager) runDownload(ctx context.Context, mv store.Movie, rel store.Rel
 		delete(m.active, mv.ID)
 		m.mu.Unlock()
 		close(done)
-		m.startQueued()
+		m.svc.ReleaseDownload()
 	}()
 	bg := context.WithoutCancel(ctx)
 
@@ -63,6 +63,7 @@ func (m *Manager) runDownload(ctx context.Context, mv store.Movie, rel store.Rel
 		m.log.Error("record attempt", "err", err)
 		return
 	}
+	mv.ReleaseKey = rel.Identity()
 	mv.State, mv.ReleaseTitle = store.MovieDownloading, rel.Title
 	if err := m.store.UpdateMovie(bg, mv); err != nil {
 		m.log.Error("update movie", "err", err)

@@ -1,3 +1,4 @@
+import { Queue } from './DownloadsPage'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
@@ -43,6 +44,7 @@ export function DashboardPage() {
       </div>
 
       <DownloadsCard />
+      <Queue />
     </div>
   )
 }

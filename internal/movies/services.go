@@ -38,13 +38,15 @@ type Services struct {
 	PlexDiscoverURL string
 	PlexMetadataURL string
 
-	mu       sync.Mutex
-	pool     *nntp.Pool
-	poolKey  string
-	caps     map[int64]cachedCaps
-	breaker  map[int64]*breakerState
-	sched    *scheduler.Scheduler // retries failed Plex scans
-	warnings map[string]Warning
+	downloads      int
+	downloadQueues []func()
+	mu             sync.Mutex
+	pool           *nntp.Pool
+	poolKey        string
+	caps           map[int64]cachedCaps
+	breaker        map[int64]*breakerState
+	sched          *scheduler.Scheduler // retries failed Plex scans
+	warnings       map[string]Warning
 }
 
 type breakerState struct {

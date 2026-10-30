@@ -103,6 +103,7 @@ func NewManager(st *store.Store, svc *movies.Services, sched *scheduler.Schedule
 		m.startQueued() // episodes that waited for space
 		return nil
 	})
+	svc.RegisterDownloadQueue(m.startQueued)
 	svc.HandleScanRetries(sched)
 	return m
 }
@@ -187,7 +188,7 @@ func (m *Manager) Request(ctx context.Context, tmdbID int, userID int64, opts Re
 	se, err := m.store.CreateSeries(ctx, store.Series{
 		TMDBID: show.ID, TVDBID: show.TVDBID, IMDbID: show.IMDbID, Title: show.Title, OriginalTitle: show.OriginalTitle,
 		Year: show.Year, Overview: show.Overview, PosterPath: show.PosterPath, Status: show.Status, Runtime: show.Runtime,
-		AltTitles: show.AltTitles, ProfileID: opts.ProfileID, Seasons: opts.Seasons, FutureSeasons: opts.FutureSeasons,
+		Genres: show.Genres, AltTitles: show.AltTitles, ProfileID: opts.ProfileID, Seasons: opts.Seasons, FutureSeasons: opts.FutureSeasons,
 		KnownSeasons: lastSeason(show, m.now()), StartSeason: opts.StartSeason,
 		StartEpisode: opts.StartEpisode, WindowSize: opts.WindowSize, DeleteTrigger: opts.Trigger, TriggerValue: opts.TriggerValue,
 	}, userID)
@@ -257,6 +258,7 @@ func (m *Manager) loadEpisodes(ctx context.Context, client *tmdb.Client, se *sto
 		return err
 	}
 	now := m.now()
+	se.Genres = show.Genres
 	se.RefreshedAt = &now
 	se.Status = show.Status
 	return m.store.UpdateSeries(ctx, *se)

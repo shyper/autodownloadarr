@@ -273,7 +273,7 @@
       "unwatchedExpiryDaysHint": "0 keeps unwatched movies.",
       "maxSources": "Releases to try",
       "maxSourcesHint": "After this many failed releases the movie needs your attention.",
-      "parallelDownloads": "Parallel downloads",
+      "parallelDownloads": "Parallel downloads (movies and episodes combined)",
       "watchPollMinutes": "Check watch state every (minutes)",
       "watchPollMinutesHint": "How often Plex is asked what was watched.",
       "language": "Metadata language",
@@ -286,7 +286,9 @@
       "maxLibraryGB": "Temporary library limit (GB)",
       "maxLibraryGBHint": "Downloads wait while the movies and series folders together are larger than this. 0 means unlimited.",
       "minFreeGB": "Keep free disk space (GB)",
-      "minFreeGBHint": "No download starts if the disk would drop below this. 0 means off."
+      "minFreeGBHint": "No download starts if the disk would drop below this. 0 means off.",
+      "startedExpiryDays": "Started movie expiry (days)",
+      "startedExpiryDaysHint": "Counted from first playback. 0 keeps started movies indefinitely."
     },
     "tmdb": {
       "title": "TMDB",
@@ -558,6 +560,14 @@
       "progress": "delete at {{value}} % of the next",
       "minutes": "delete {{value}} min after the next starts",
       "watched": "delete after watching"
+    },
+    "lifecycle": {
+      "Returning Series": "Ongoing",
+      "Ended": "Ended",
+      "Canceled": "Canceled",
+      "In Production": "In production",
+      "Planned": "Planned",
+      "Pilot": "Pilot"
     }
   },
   "warnings": {

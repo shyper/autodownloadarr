@@ -800,3 +800,18 @@ func TestChooseReleasePrefersEpisodeOverPack(t *testing.T) {
 		t.Fatalf("chooseRelease = %+v, %v, %v; want the pack", rel, ok, err)
 	}
 }
+
+func TestWindowAdvancesPastExternallyDeletedEpisodes(t *testing.T) {
+	eps := []store.Episode{
+		{State: store.MovieDeleted, Progress: 0.4},
+		{State: store.MovieDeleted},
+		{State: store.MovieAvailable},
+	}
+	if got := windowStart(eps); got != 2 {
+		t.Fatalf("window starts at %d, want 2", got)
+	}
+	eps[0].Progress = 0
+	if got := windowStart(eps); got != 2 {
+		t.Fatalf("unwatched deletion starts at %d, want 2", got)
+	}
+}

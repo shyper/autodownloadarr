@@ -19,3 +19,6 @@ coverage/
 # Editors / OS
 .DS_Store
 *.swp
+
+# Project-local build cache and temporary test files
+/.cache/

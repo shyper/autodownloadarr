@@ -176,13 +176,14 @@ func windowStart(list []store.Episode) int {
 			last = i
 		}
 	}
-	if last < 0 {
-		return 0
+	start := max(last, 0)
+	if last >= 0 && consumed(list[last]) {
+		start = last + 1
 	}
-	if consumed(list[last]) {
-		return last + 1
+	for start < len(list) && list[start].State == store.MovieDeleted {
+		start++
 	}
-	return last
+	return start
 }
 
 func consumed(e store.Episode) bool {

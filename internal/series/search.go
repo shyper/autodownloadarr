@@ -349,6 +349,9 @@ func (m *Manager) retrySpace(ctx context.Context) {
 // earlier episode is still being searched, the later ones wait for it.
 func (m *Manager) startQueued() {
 	ctx := m.ctx
+	if ctx.Err() != nil {
+		return
+	}
 	g, err := m.store.General(ctx)
 	if err != nil {
 		m.log.Error("read settings", "err", err)
@@ -405,6 +408,9 @@ func (m *Manager) startQueued() {
 				retryScheduled = true
 			}
 			continue // stays queued; the queue is retried later
+		}
+		if !m.svc.AcquireDownload(g.ParallelDownloads) {
+			return
 		}
 		budget -= rel.Size
 		m.svc.ClearNoSpace()

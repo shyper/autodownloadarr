@@ -71,11 +71,13 @@ type General struct {
 	SeriesTriggerValue int    `json:"seriesTriggerValue"`
 	// DeleteAfterHours is how long a watched movie is kept.
 	DeleteAfterHours int `json:"deleteAfterHours"`
+	// StartedExpiryDays deletes started movies after first playback (0: never).
+	StartedExpiryDays int `json:"startedExpiryDays"`
 	// UnwatchedExpiryDays deletes movies nobody watched (0: never).
 	UnwatchedExpiryDays int `json:"unwatchedExpiryDays"`
 	// MaxSources is how many releases are tried before giving up.
 	MaxSources int `json:"maxSources"`
-	// ParallelDownloads is the number of movies downloaded at once.
+	// ParallelDownloads is the total number of movies and episodes downloaded at once.
 	ParallelDownloads int `json:"parallelDownloads"`
 	// WatchPollMinutes is how often the media server is asked for the
 	// watch state.
@@ -101,6 +103,7 @@ func DefaultGeneral() General {
 	return General{
 		DeleteAfterHours:     48,
 		UnwatchedExpiryDays:  14,
+		StartedExpiryDays:    2,
 		MaxSources:           5,
 		SeriesWindow:         3,
 		SeriesTrigger:        "progress",

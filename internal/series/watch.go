@@ -42,9 +42,35 @@ func (m *Manager) PollWatched(ctx context.Context) error {
 		}
 	}
 
+	g, err := m.store.General(ctx)
+	if err != nil {
+		return err
+	}
 	now := m.now()
 	changedSeries := map[int64]bool{}
 	for _, e := range eps {
+		missing, err := movies.FilesMissing(ctx, m.store, store.ForEpisode(e.ID), g.SeriesPath)
+		if err != nil {
+			return err
+		}
+		if missing {
+			files, err := m.store.FilesOf(ctx, store.ForEpisode(e.ID))
+			if err != nil {
+				return err
+			}
+			for _, f := range files {
+				if err := m.store.UntrackFile(ctx, f); err != nil {
+					return err
+				}
+			}
+			e.State, e.File, e.MediaKey, e.DeleteAt = store.MovieDeleted, "", "", nil
+			if err := m.store.UpdateEpisode(ctx, e); err != nil {
+				return err
+			}
+			m.publishEpisode(e)
+			changedSeries[e.SeriesID] = true
+			continue
+		}
 		it, ok := byFile[filepath.Clean(e.File)]
 		if !ok {
 			it, ok = byKey[e.MediaKey]

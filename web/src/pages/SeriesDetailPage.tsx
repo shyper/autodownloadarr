@@ -46,12 +46,12 @@ function Detail({ s }: { s: SeriesDetail }) {
         ← {t('series.title')}
       </Link>
       <Header s={s} />
+      <DeleteSeries s={s} />
       <StatusLine s={s} />
       <SettingsSection s={s} />
       {seasons.map((season) => (
         <SeasonSection key={season} season={season} episodes={s.episodes.filter((e) => e.season === season)} defaultOpen={season === openSeason} />
       ))}
-      <DeleteSeries s={s} />
     </div>
   )
 }
@@ -69,10 +69,11 @@ function Header({ s }: { s: SeriesDetail }) {
           {s.title} {s.year > 0 && <span className="text-muted">({s.year})</span>}
         </h1>
         <div className="flex flex-wrap gap-2">
+          {s.genres?.map((genre) => <Badge key={genre} tone="muted">{genre}</Badge>)}
           {s.keep && <Badge tone="ok">{t('movies.kept')}</Badge>}
           {s.paused && <Badge tone="muted">{t('series.paused')}</Badge>}
           {(s.seasons.length === 0 || s.futureSeasons) && <Badge tone="accent">{t('series.subscribed')}</Badge>}
-          {s.status && <Badge tone="muted">{s.status}</Badge>}
+          {s.status && <Badge tone="muted">{t(`series.lifecycle.${s.status}`, { defaultValue: s.status })}</Badge>}
         </div>
         {s.overview && (
           <div className="max-w-3xl text-sm text-muted">
@@ -371,7 +372,7 @@ function DeleteSeries({ s }: { s: SeriesDetail }) {
   const remove = useDeleteSeries()
   const confirmDelete = () => {
     if (!window.confirm(t('series.confirmDelete', { title: s.title }))) return
-    remove.mutate(s.id, { onSuccess: () => navigate('/series') })
+    void remove.mutateAsync(s.id).then(() => navigate('/series')).catch(() => {})
   }
   return (
     <div className="space-y-2 pt-2">

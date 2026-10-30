@@ -65,7 +65,7 @@ function Active() {
   )
 }
 
-function Queue() {
+export function Queue() {
   const { t } = useTranslation()
   const queue = useQueue()
   if (!queue.data?.length) return null

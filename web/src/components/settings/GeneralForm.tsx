@@ -76,6 +76,9 @@ function GeneralFormInner({ initial, fields, onSaved }: Props & { initial: Gener
             <Field id="expiry" label={t('settings.general.unwatchedExpiryDays')} hint={t('settings.general.unwatchedExpiryDaysHint')}>
               <Input id="expiry" type="number" min={0} value={g.unwatchedExpiryDays} onChange={num('unwatchedExpiryDays')} />
             </Field>
+            <Field id="started-expiry" label={t('settings.general.startedExpiryDays')} hint={t('settings.general.startedExpiryDaysHint')}>
+              <Input id="started-expiry" type="number" min={0} value={g.startedExpiryDays} onChange={num('startedExpiryDays')} />
+            </Field>
             <Field id="max-sources" label={t('settings.general.maxSources')} hint={t('settings.general.maxSourcesHint')}>
               <Input id="max-sources" type="number" min={1} value={g.maxSources} onChange={num('maxSources')} />
             </Field>

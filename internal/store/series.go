@@ -25,6 +25,7 @@ const (
 
 // Series is a requested TV series.
 type Series struct {
+	Genres          []string   `json:"genres"`
 	ID              int64      `json:"id"`
 	TMDBID          int        `json:"tmdbId"`
 	TVDBID          int        `json:"tvdbId"`
@@ -85,6 +86,7 @@ type Episode struct {
 	Attempts     int        `json:"attempts"`
 	LastError    string     `json:"lastError"`
 	NextSearchAt *time.Time `json:"nextSearchAt,omitempty"`
+	ReleaseKey   string     `json:"releaseKey"`
 	ReleaseTitle string     `json:"releaseTitle"`
 	File         string     `json:"file"`
 	MediaKey     string     `json:"mediaKey"`
@@ -111,18 +113,18 @@ func (e Episode) Before(o Episode) bool {
 	return e.Season < o.Season || (e.Season == o.Season && e.Episode < o.Episode)
 }
 
-const seriesColumns = `id, tmdb_id, tvdb_id, imdb_id, title, original_title, year, overview, poster_path, status, runtime, alt_titles,
+const seriesColumns = `id, tmdb_id, tvdb_id, imdb_id, title, original_title, year, overview, poster_path, status, runtime, genres, alt_titles,
 	COALESCE(profile_id, 0), COALESCE(requested_by, 0), COALESCE((SELECT username FROM users WHERE id = series.requested_by), ''),
 	seasons, future_seasons, known_seasons, start_season, start_episode, window_size, delete_trigger, trigger_value, keep, paused,
 	folder, refreshed_at, created_at`
 
 func scanSeries(row interface{ Scan(...any) error }) (Series, error) {
 	var s Series
-	var alt, seasons string
+	var alt, seasons, genres string
 	var refreshed sql.NullInt64
 	var created int64
 	err := row.Scan(&s.ID, &s.TMDBID, &s.TVDBID, &s.IMDbID, &s.Title, &s.OriginalTitle, &s.Year, &s.Overview, &s.PosterPath,
-		&s.Status, &s.Runtime, &alt, &s.ProfileID, &s.RequestedBy, &s.RequestedByName, &seasons, &s.FutureSeasons, &s.KnownSeasons, &s.StartSeason, &s.StartEpisode, &s.WindowSize, &s.DeleteTrigger,
+		&s.Status, &s.Runtime, &genres, &alt, &s.ProfileID, &s.RequestedBy, &s.RequestedByName, &seasons, &s.FutureSeasons, &s.KnownSeasons, &s.StartSeason, &s.StartEpisode, &s.WindowSize, &s.DeleteTrigger,
 		&s.TriggerValue, &s.Keep, &s.Paused, &s.Folder, &refreshed, &created)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Series{}, ErrNotFound
@@ -130,6 +132,7 @@ func scanSeries(row interface{ Scan(...any) error }) (Series, error) {
 	if err != nil {
 		return Series{}, err
 	}
+	_ = json.Unmarshal([]byte(genres), &s.Genres)
 	_ = json.Unmarshal([]byte(alt), &s.AltTitles)
 	_ = json.Unmarshal([]byte(seasons), &s.Seasons)
 	if s.AltTitles == nil {
@@ -146,6 +149,7 @@ func scanSeries(row interface{ Scan(...any) error }) (Series, error) {
 // CreateSeries stores a new series request.
 func (s *Store) CreateSeries(ctx context.Context, se Series, requestedBy int64) (Series, error) {
 	alt, _ := json.Marshal(se.AltTitles)
+	genres, _ := json.Marshal(se.Genres)
 	seasons, _ := json.Marshal(se.Seasons)
 	now := s.ms()
 	var user, profile any
@@ -156,12 +160,12 @@ func (s *Store) CreateSeries(ctx context.Context, se Series, requestedBy int64) 
 		profile = se.ProfileID
 	}
 	res, err := s.db.ExecContext(ctx, `
-		INSERT INTO series (tmdb_id, tvdb_id, imdb_id, title, original_title, year, overview, poster_path, status, runtime, alt_titles,
+		INSERT INTO series (tmdb_id, tvdb_id, imdb_id, title, original_title, year, overview, poster_path, status, runtime, genres, alt_titles,
 			profile_id, requested_by, seasons, future_seasons, known_seasons, start_season, start_episode, window_size, delete_trigger,
 			trigger_value, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		se.TMDBID, se.TVDBID, se.IMDbID, se.Title, se.OriginalTitle, se.Year, se.Overview, se.PosterPath, se.Status, se.Runtime,
-		string(alt), profile, user, string(seasons), se.FutureSeasons, se.KnownSeasons, se.StartSeason, se.StartEpisode, se.WindowSize, se.DeleteTrigger, se.TriggerValue,
+		string(genres), string(alt), profile, user, string(seasons), se.FutureSeasons, se.KnownSeasons, se.StartSeason, se.StartEpisode, se.WindowSize, se.DeleteTrigger, se.TriggerValue,
 		now, now)
 	if err != nil {
 		return Series{}, err
@@ -204,13 +208,14 @@ func (s *Store) SeriesList(ctx context.Context) ([]Series, error) {
 // UpdateSeries writes the settings and metadata of a series.
 func (s *Store) UpdateSeries(ctx context.Context, se Series) error {
 	alt, _ := json.Marshal(se.AltTitles)
+	genres, _ := json.Marshal(se.Genres)
 	seasons, _ := json.Marshal(se.Seasons)
 	return affected(s.db.ExecContext(ctx, `
 		UPDATE series SET tvdb_id = ?, imdb_id = ?, title = ?, original_title = ?, overview = ?, poster_path = ?, status = ?,
-			runtime = ?, alt_titles = ?, seasons = ?, future_seasons = ?, known_seasons = ?, start_season = ?, start_episode = ?, window_size = ?, delete_trigger = ?,
+			runtime = ?, genres = ?, alt_titles = ?, seasons = ?, future_seasons = ?, known_seasons = ?, start_season = ?, start_episode = ?, window_size = ?, delete_trigger = ?,
 			trigger_value = ?, keep = ?, paused = ?, folder = ?, refreshed_at = ?, updated_at = ?
 		WHERE id = ?`,
-		se.TVDBID, se.IMDbID, se.Title, se.OriginalTitle, se.Overview, se.PosterPath, se.Status, se.Runtime, string(alt),
+		se.TVDBID, se.IMDbID, se.Title, se.OriginalTitle, se.Overview, se.PosterPath, se.Status, se.Runtime, string(genres), string(alt),
 		string(seasons), se.FutureSeasons, se.KnownSeasons, se.StartSeason, se.StartEpisode, se.WindowSize, se.DeleteTrigger, se.TriggerValue, se.Keep, se.Paused,
 		se.Folder, timeArg(se.RefreshedAt), s.ms(), se.ID))
 }
@@ -247,13 +252,13 @@ func (s *Store) UpsertEpisodes(ctx context.Context, seriesID int64, eps []Episod
 }
 
 const episodeColumns = `id, series_id, season, episode, title, air_date, runtime, state, attempts, last_error, next_search_at,
-	release_title, file, media_key, progress, started_at, available_at, watched_at, delete_at, base_set, base_views, base_offset`
+	release_key, release_title, file, media_key, progress, started_at, available_at, watched_at, delete_at, base_set, base_views, base_offset`
 
 func scanEpisode(row interface{ Scan(...any) error }) (Episode, error) {
 	var e Episode
 	var next, started, avail, watched, del sql.NullInt64
 	err := row.Scan(&e.ID, &e.SeriesID, &e.Season, &e.Episode, &e.Title, &e.AirDate, &e.Runtime, &e.State, &e.Attempts, &e.LastError,
-		&next, &e.ReleaseTitle, &e.File, &e.MediaKey, &e.Progress, &started, &avail, &watched, &del, &e.Base.Set, &e.Base.Views,
+		&next, &e.ReleaseKey, &e.ReleaseTitle, &e.File, &e.MediaKey, &e.Progress, &started, &avail, &watched, &del, &e.Base.Set, &e.Base.Views,
 		&e.Base.Offset)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Episode{}, ErrNotFound
@@ -302,11 +307,20 @@ func (s *Store) Episode(ctx context.Context, id int64) (Episode, error) {
 // UpdateEpisode writes the mutable fields of an episode.
 func (s *Store) UpdateEpisode(ctx context.Context, e Episode) error {
 	return affected(s.db.ExecContext(ctx, `
-		UPDATE episodes SET state = ?, attempts = ?, last_error = ?, next_search_at = ?, release_title = ?, file = ?, media_key = ?,
+		UPDATE episodes SET state = ?, attempts = ?, last_error = ?, next_search_at = ?, release_key = ?, release_title = ?, file = ?, media_key = ?,
 			progress = ?, started_at = ?, available_at = ?, watched_at = ?, delete_at = ?, base_set = ?, base_views = ?, base_offset = ?,
 			updated_at = ?
 		WHERE id = ?`,
-		e.State, e.Attempts, e.LastError, timeArg(e.NextSearchAt), e.ReleaseTitle, e.File, e.MediaKey, e.Progress,
+		e.State, e.Attempts, e.LastError, timeArg(e.NextSearchAt), e.ReleaseKey, e.ReleaseTitle, e.File, e.MediaKey, e.Progress,
 		timeArg(e.StartedAt), timeArg(e.AvailableAt), timeArg(e.WatchedAt), timeArg(e.DeleteAt), e.Base.Set, e.Base.Views,
 		e.Base.Offset, s.ms(), e.ID))
+}
+
+// SetSeriesGenres fills metadata without rewriting concurrently changing settings.
+func (s *Store) SetSeriesGenres(ctx context.Context, id int64, genres []string) error {
+	data, err := json.Marshal(genres)
+	if err != nil {
+		return err
+	}
+	return affected(s.db.ExecContext(ctx, `UPDATE series SET genres = ? WHERE id = ?`, string(data), id))
 }

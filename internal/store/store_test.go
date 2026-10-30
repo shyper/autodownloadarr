@@ -408,3 +408,55 @@ func TestNotification(t *testing.T) {
 		t.Errorf("unknown provider error = %v", err)
 	}
 }
+
+func TestReleaseIdentitySurvivesSearchReplacement(t *testing.T) {
+	st, ctx := newStore(t), t.Context()
+	mv, err := st.CreateMovie(ctx, Movie{TMDBID: 321, Title: "Movie", State: MovieAvailable}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := Release{GUID: "upload-a", Title: "Same title", Size: 100, Fingerprint: "fp-a"}
+	second := Release{GUID: "upload-b", Title: "Same title", Size: 200, Fingerprint: "fp-b"}
+	if first.Identity() == second.Identity() {
+		t.Fatal("distinct uploads have identical identity")
+	}
+	id, err := st.StartAttempt(ctx, mv.ID, second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.FinishAttempt(ctx, id, "success", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	mv.ReleaseTitle, mv.ReleaseKey = second.Title, second.Identity()
+	if err := st.UpdateMovie(ctx, mv); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if err := st.ReplaceReleases(ctx, mv.ID, []Release{first, second}); err != nil {
+			t.Fatal(err)
+		}
+		releases, err := st.Releases(ctx, mv.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if releases[1].ReleaseKey != second.Identity() {
+			t.Fatal("identity changed on search replacement")
+		}
+	}
+	got, err := st.Movie(ctx, mv.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	attempts, err := st.Attempts(ctx, mv.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ReleaseKey != second.Identity() || len(attempts) != 1 || attempts[0].ReleaseKey != second.Identity() {
+		t.Fatalf("lost identity: movie=%+v attempts=%+v", got, attempts)
+	}
+	third := second
+	third.IndexerID = 77
+	if third.Identity() == second.Identity() {
+		t.Fatal("GUID not scoped to indexer")
+	}
+}

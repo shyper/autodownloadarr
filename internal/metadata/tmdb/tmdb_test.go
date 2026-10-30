@@ -31,7 +31,7 @@ func fake(t *testing.T) *httptest.Server {
 			_, _ = w.Write([]byte(`{"results":[{"id":693134,"title":"Dune: Part Two","original_title":"Dune: Part Two","release_date":"2024-02-27","poster_path":"/p.jpg"}]}`))
 		case "/movie/693134":
 			_, _ = w.Write([]byte(`{"id":693134,"imdb_id":"tt15239678","title":"Dune: Part Two","original_title":"Dune: Part Two",
-				"release_date":"2024-02-27","runtime":167,"alternative_titles":{"titles":[{"title":"Dune: Teil Zwei"},{"title":"dune: part two"}]}}`))
+				"release_date":"2024-02-27","runtime":167,"genres":[{"id":878,"name":"Science Fiction"},{"id":12,"name":"Abenteuer"}],"alternative_titles":{"titles":[{"title":"Dune: Teil Zwei"},{"title":"dune: part two"}]}}`))
 		case "/configuration":
 			_, _ = w.Write([]byte(`{}`))
 		default:
@@ -58,6 +58,9 @@ func TestSearchAndDetails(t *testing.T) {
 	m, err := c.Movie(context.Background(), 693134)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !slices.Equal(m.Genres, []string{"Science Fiction", "Abenteuer"}) {
+		t.Errorf("genres = %v", m.Genres)
 	}
 	if m.IMDbID != "tt15239678" || m.Runtime != 167 || !slices.Equal(m.AltTitles, []string{"Dune: Teil Zwei"}) {
 		t.Errorf("movie = %+v", m)

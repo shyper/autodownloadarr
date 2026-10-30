@@ -64,7 +64,13 @@ export const useRequestSeries = () => useSeriesMutation((v: SeriesRequest) => ap
 export const useUpdateSeries = () =>
   useSeriesMutation((v: { id: number; settings: SeriesSettings }) => api<SeriesDetail>(`/series/${v.id}`, { method: 'PUT', body: v.settings }))
 
-export const useDeleteSeries = () => useSeriesMutation((id: number) => api<void>(`/series/${id}`, { method: 'DELETE' }))
+export function useDeleteSeries() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => api<void>(`/series/${id}`, { method: 'DELETE' }),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: seriesKeys.list }) },
+  })
+}
 
 export const useSearchEpisode = () => useSeriesMutation((id: number) => api<Episode>(`/episodes/${id}/search`, { method: 'POST' }))
 

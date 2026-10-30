@@ -43,7 +43,7 @@ func (m *Manager) runDownload(ctx context.Context, e store.Episode, rel store.Re
 		delete(m.active, e.ID)
 		m.mu.Unlock()
 		close(done)
-		m.startQueued()
+		m.svc.ReleaseDownload()
 	}()
 	bg := context.WithoutCancel(ctx)
 	se, err := m.store.Series(bg, e.SeriesID)
@@ -56,6 +56,7 @@ func (m *Manager) runDownload(ctx context.Context, e store.Episode, rel store.Re
 		m.log.Error("record attempt", "err", err)
 		return
 	}
+	e.ReleaseKey = rel.Identity()
 	e.State, e.ReleaseTitle = store.MovieDownloading, rel.Title
 	if err := m.store.UpdateEpisode(bg, e); err != nil {
 		m.log.Error("update episode", "err", err)
@@ -272,7 +273,7 @@ func (m *Manager) finishPack(ctx, dctx context.Context, se store.Series, e store
 		used[key] = true
 		matched++
 		ep.State, ep.File, ep.AvailableAt, ep.Attempts, ep.LastError = store.MovieAvailable, final, &now, 0, ""
-		ep.ReleaseTitle = rel.Title
+		ep.ReleaseKey, ep.ReleaseTitle = rel.Identity(), rel.Title
 		ep.Progress, ep.StartedAt, ep.WatchedAt, ep.DeleteAt, ep.Base = 0, nil, nil, nil, store.WatchBase{}
 		if err := m.store.UpdateEpisode(ctx, *ep); err != nil {
 			return err

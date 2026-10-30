@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -23,6 +24,7 @@ const (
 
 // Movie is a requested movie.
 type Movie struct {
+	Genres          []string   `json:"genres"`
 	ID              int64      `json:"id"`
 	TMDBID          int        `json:"tmdbId"`
 	IMDbID          string     `json:"imdbId"`
@@ -41,10 +43,12 @@ type Movie struct {
 	Attempts        int        `json:"attempts"`
 	LastError       string     `json:"lastError"`
 	NextSearchAt    *time.Time `json:"nextSearchAt,omitempty"`
+	ReleaseKey      string     `json:"releaseKey"`
 	ReleaseTitle    string     `json:"releaseTitle"`
 	Folder          string     `json:"folder"`
 	MediaKey        string     `json:"mediaKey"`
 	AvailableAt     *time.Time `json:"availableAt,omitempty"`
+	StartedAt       *time.Time `json:"startedAt,omitempty"`
 	WatchedAt       *time.Time `json:"watchedAt,omitempty"`
 	DeleteAt        *time.Time `json:"deleteAt,omitempty"`
 	Progress        float64    `json:"progress"` // 0..1, watched since the file is there
@@ -62,30 +66,32 @@ type WatchBase struct {
 	Offset int64 // resume position in ms
 }
 
-const movieColumns = `id, tmdb_id, imdb_id, title, original_title, year, overview, poster_path, runtime, alt_titles,
+const movieColumns = `id, tmdb_id, imdb_id, title, original_title, year, overview, poster_path, runtime, genres, alt_titles,
 	COALESCE(profile_id, 0), COALESCE(requested_by, 0), COALESCE((SELECT username FROM users WHERE id = movies.requested_by), ''),
-	state, keep, attempts, last_error, next_search_at, release_title, folder, media_key,
-	available_at, watched_at, delete_at, progress, base_set, base_views, base_offset, created_at, updated_at`
+	state, keep, attempts, last_error, next_search_at, release_key, release_title, folder, media_key,
+	available_at, watched_at, delete_at, started_at, progress, base_set, base_views, base_offset, created_at, updated_at`
 
 func scanMovie(row interface{ Scan(...any) error }) (Movie, error) {
 	var m Movie
-	var alt string
-	var next, avail, watched, del sql.NullInt64
+	var alt, genres string
+	var next, avail, watched, del, started sql.NullInt64
 	var created, updated int64
-	err := row.Scan(&m.ID, &m.TMDBID, &m.IMDbID, &m.Title, &m.OriginalTitle, &m.Year, &m.Overview, &m.PosterPath, &m.Runtime, &alt,
-		&m.ProfileID, &m.RequestedBy, &m.RequestedByName, &m.State, &m.Keep, &m.Attempts, &m.LastError, &next, &m.ReleaseTitle, &m.Folder, &m.MediaKey,
-		&avail, &watched, &del, &m.Progress, &m.Base.Set, &m.Base.Views, &m.Base.Offset, &created, &updated)
+	err := row.Scan(&m.ID, &m.TMDBID, &m.IMDbID, &m.Title, &m.OriginalTitle, &m.Year, &m.Overview, &m.PosterPath, &m.Runtime, &genres, &alt,
+		&m.ProfileID, &m.RequestedBy, &m.RequestedByName, &m.State, &m.Keep, &m.Attempts, &m.LastError, &next, &m.ReleaseKey, &m.ReleaseTitle, &m.Folder, &m.MediaKey,
+		&avail, &watched, &del, &started, &m.Progress, &m.Base.Set, &m.Base.Views, &m.Base.Offset, &created, &updated)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Movie{}, ErrNotFound
 	}
 	if err != nil {
 		return Movie{}, err
 	}
+	_ = json.Unmarshal([]byte(genres), &m.Genres)
 	_ = json.Unmarshal([]byte(alt), &m.AltTitles)
 	if m.AltTitles == nil {
 		m.AltTitles = []string{}
 	}
 	m.NextSearchAt, m.AvailableAt, m.WatchedAt, m.DeleteAt = nullTime(next), nullTime(avail), nullTime(watched), nullTime(del)
+	m.StartedAt = nullTime(started)
 	m.CreatedAt, m.UpdatedAt = time.UnixMilli(created), time.UnixMilli(updated)
 	return m, nil
 }
@@ -93,6 +99,7 @@ func scanMovie(row interface{ Scan(...any) error }) (Movie, error) {
 // CreateMovie stores a new request and returns it with its ID.
 func (s *Store) CreateMovie(ctx context.Context, m Movie, requestedBy int64) (Movie, error) {
 	alt, _ := json.Marshal(m.AltTitles)
+	genres, _ := json.Marshal(m.Genres)
 	now := s.ms()
 	var user any
 	if requestedBy > 0 {
@@ -103,10 +110,10 @@ func (s *Store) CreateMovie(ctx context.Context, m Movie, requestedBy int64) (Mo
 		profile = m.ProfileID
 	}
 	res, err := s.db.ExecContext(ctx, `
-		INSERT INTO movies (tmdb_id, imdb_id, title, original_title, year, overview, poster_path, runtime, alt_titles,
+		INSERT INTO movies (tmdb_id, imdb_id, title, original_title, year, overview, poster_path, runtime, genres, alt_titles,
 			profile_id, requested_by, state, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		m.TMDBID, m.IMDbID, m.Title, m.OriginalTitle, m.Year, m.Overview, m.PosterPath, m.Runtime, string(alt),
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		m.TMDBID, m.IMDbID, m.Title, m.OriginalTitle, m.Year, m.Overview, m.PosterPath, m.Runtime, string(genres), string(alt),
 		profile, user, m.State, now, now)
 	if err != nil {
 		return Movie{}, err
@@ -157,12 +164,12 @@ func (s *Store) Movies(ctx context.Context, states ...string) ([]Movie, error) {
 // UpdateMovie writes the mutable fields of m.
 func (s *Store) UpdateMovie(ctx context.Context, m Movie) error {
 	return affected(s.db.ExecContext(ctx, `
-		UPDATE movies SET state = ?, keep = ?, attempts = ?, last_error = ?, next_search_at = ?, release_title = ?,
-			folder = ?, media_key = ?, available_at = ?, watched_at = ?, delete_at = ?, progress = ?, base_set = ?, base_views = ?,
+		UPDATE movies SET state = ?, keep = ?, attempts = ?, last_error = ?, next_search_at = ?, release_key = ?, release_title = ?,
+			folder = ?, media_key = ?, available_at = ?, watched_at = ?, delete_at = ?, started_at = ?, progress = ?, base_set = ?, base_views = ?,
 			base_offset = ?, updated_at = ?
 		WHERE id = ?`,
-		m.State, m.Keep, m.Attempts, m.LastError, timeArg(m.NextSearchAt), m.ReleaseTitle,
-		m.Folder, m.MediaKey, timeArg(m.AvailableAt), timeArg(m.WatchedAt), timeArg(m.DeleteAt), m.Progress, m.Base.Set,
+		m.State, m.Keep, m.Attempts, m.LastError, timeArg(m.NextSearchAt), m.ReleaseKey, m.ReleaseTitle,
+		m.Folder, m.MediaKey, timeArg(m.AvailableAt), timeArg(m.WatchedAt), timeArg(m.DeleteAt), timeArg(m.StartedAt), m.Progress, m.Base.Set,
 		m.Base.Views, m.Base.Offset, s.ms(), m.ID))
 }
 
@@ -185,6 +192,7 @@ func ForEpisode(id int64) Owner { return Owner{"episode_id", id} }
 // Release is a search result for a movie or episode, with the profile's
 // verdict.
 type Release struct {
+	ReleaseKey  string     `json:"releaseKey"`
 	ID          int64      `json:"id"`
 	MovieID     int64      `json:"movieId,omitempty"`
 	EpisodeID   int64      `json:"episodeId,omitempty"`
@@ -248,6 +256,7 @@ func scanRelease(row interface{ Scan(...any) error }) (Release, error) {
 	if errors.Is(err, sql.ErrNoRows) {
 		return Release{}, ErrNotFound
 	}
+	r.ReleaseKey = r.Identity()
 	r.PublishedAt = nullTime(pub)
 	return r, err
 }
@@ -368,6 +377,7 @@ func (s *Store) RemoveBlocklistEntry(ctx context.Context, id int64) error {
 
 // Attempt is one download try.
 type Attempt struct {
+	ReleaseKey   string     `json:"releaseKey"`
 	ID           int64      `json:"id"`
 	MovieID      int64      `json:"movieId,omitempty"`
 	ReleaseTitle string     `json:"releaseTitle"`
@@ -390,16 +400,16 @@ func (s *Store) StartAttemptOf(ctx context.Context, o Owner, r Release) (int64, 
 	// after the movie or series is removed.
 	var q string
 	if o.col == "movie_id" {
-		q = `INSERT INTO attempts (movie_id, kind, label, size, release_title, indexer_name, started_at)
-			SELECT id, 'movie', title || CASE WHEN year > 0 THEN ' (' || year || ')' ELSE '' END, ?, ?, ?, ?
+		q = `INSERT INTO attempts (movie_id, kind, label, size, release_key, release_title, indexer_name, started_at)
+			SELECT id, 'movie', title || CASE WHEN year > 0 THEN ' (' || year || ')' ELSE '' END, ?, ?, ?, ?, ?
 			FROM movies WHERE id = ?`
 	} else {
-		q = `INSERT INTO attempts (episode_id, series_id, kind, label, size, release_title, indexer_name, started_at)
+		q = `INSERT INTO attempts (episode_id, series_id, kind, label, size, release_key, release_title, indexer_name, started_at)
 			SELECT e.id, e.series_id, 'episode', s.title || ' · S' || printf('%02d', e.season) || 'E' || printf('%02d', e.episode),
-				?, ?, ?, ?
+				?, ?, ?, ?, ?
 			FROM episodes e JOIN series s ON s.id = e.series_id WHERE e.id = ?`
 	}
-	res, err := s.db.ExecContext(ctx, q, r.Size, r.Title, r.IndexerName, s.ms(), o.ID)
+	res, err := s.db.ExecContext(ctx, q, r.Size, r.Identity(), r.Title, r.IndexerName, s.ms(), o.ID)
 	if err != nil {
 		return 0, err
 	}
@@ -420,7 +430,7 @@ func (s *Store) Attempts(ctx context.Context, movieID int64) ([]Attempt, error) 
 // AttemptsOf lists the attempts of a movie or episode, newest first.
 func (s *Store) AttemptsOf(ctx context.Context, o Owner) ([]Attempt, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, COALESCE(movie_id, 0), release_title, indexer_name, started_at, finished_at, result, error_kind, message
+		SELECT id, COALESCE(movie_id, 0), release_key, release_title, indexer_name, started_at, finished_at, result, error_kind, message
 		FROM attempts WHERE `+o.col+` = ? ORDER BY id DESC`, o.ID)
 	if err != nil {
 		return nil, err
@@ -431,7 +441,7 @@ func (s *Store) AttemptsOf(ctx context.Context, o Owner) ([]Attempt, error) {
 		var a Attempt
 		var started int64
 		var finished sql.NullInt64
-		if err := rows.Scan(&a.ID, &a.MovieID, &a.ReleaseTitle, &a.IndexerName, &started, &finished, &a.Result, &a.ErrorKind, &a.Message); err != nil {
+		if err := rows.Scan(&a.ID, &a.MovieID, &a.ReleaseKey, &a.ReleaseTitle, &a.IndexerName, &started, &finished, &a.Result, &a.ErrorKind, &a.Message); err != nil {
 			return nil, err
 		}
 		a.StartedAt, a.FinishedAt = time.UnixMilli(started), nullTime(finished)
@@ -578,4 +588,23 @@ func (s *Store) Queue(ctx context.Context) ([]QueueEntry, error) {
 		out = append(out, q)
 	}
 	return out, rows.Err()
+}
+
+// Identity survives search result replacement and distinguishes uploads with
+// identical titles. Indexer GUIDs are scoped to their indexer.
+func (r Release) Identity() string {
+	prefix := strconv.FormatInt(r.IndexerID, 10)
+	if r.GUID != "" {
+		return prefix + ":guid:" + r.GUID
+	}
+	return prefix + ":fp:" + r.Fingerprint
+}
+
+// SetMovieGenres fills metadata without rewriting concurrently changing state.
+func (s *Store) SetMovieGenres(ctx context.Context, id int64, genres []string) error {
+	data, err := json.Marshal(genres)
+	if err != nil {
+		return err
+	}
+	return affected(s.db.ExecContext(ctx, `UPDATE movies SET genres = ? WHERE id = ?`, string(data), id))
 }

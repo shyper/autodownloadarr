@@ -35,6 +35,7 @@ func New(key, language string) *Client {
 
 // Movie is the subset of TMDB data AutoDownloadarr uses.
 type Movie struct {
+	Genres        []string `json:"genres"`
 	ID            int      `json:"tmdbId"`
 	IMDbID        string   `json:"imdbId,omitempty"`
 	Title         string   `json:"title"`
@@ -47,6 +48,9 @@ type Movie struct {
 }
 
 type apiMovie struct {
+	Genres []struct {
+		Name string `json:"name"`
+	} `json:"genres"`
 	ID            int    `json:"id"`
 	IMDbID        string `json:"imdb_id"`
 	Title         string `json:"title"`
@@ -71,6 +75,12 @@ func (m apiMovie) convert() Movie {
 		Overview:      m.Overview,
 		PosterPath:    m.PosterPath,
 		Runtime:       m.Runtime,
+	}
+	out.Genres = []string{}
+	for _, genre := range m.Genres {
+		if genre.Name != "" {
+			out.Genres = append(out.Genres, genre.Name)
+		}
 	}
 	if len(m.ReleaseDate) >= 4 {
 		out.Year, _ = strconv.Atoi(m.ReleaseDate[:4])

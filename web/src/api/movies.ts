@@ -55,9 +55,16 @@ export const useDownloadRelease = () =>
     api<Movie>(`/movies/${v.id}/releases/${v.releaseId}/download`, { method: 'POST' }),
   )
 
-export const useDeleteMovie = () =>
-  useMovieMutation((v: { id: number; forget: boolean }) =>
-    api<void>(`/movies/${v.id}${v.forget ? '?forget=1' : ''}`, { method: 'DELETE' }),
-  )
+export function useDeleteMovie() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (v: { id: number; forget: boolean }) =>
+      api<void>(`/movies/${v.id}${v.forget ? '?forget=1' : ''}`, { method: 'DELETE' }),
+    onSuccess: (_, v) => {
+      void qc.invalidateQueries({ queryKey: movieKeys.list })
+      if (!v.forget) void qc.invalidateQueries({ queryKey: movieKeys.detail(v.id) })
+    },
+  })
+}
 
 export const useRemoveBlocklist = () => useMovieMutation((id: number) => api<void>(`/blocklist/${id}`, { method: 'DELETE' }))

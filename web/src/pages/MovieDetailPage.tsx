@@ -42,7 +42,7 @@ function Detail({ m }: { m: MovieDetail }) {
 
   const confirmDelete = (forget: boolean) => {
     if (!window.confirm(t(forget ? 'movies.confirmForget' : 'movies.confirmDelete', { title: m.title }))) return
-    remove.mutate({ id: m.id, forget }, { onSuccess: () => forget && navigate('/movies') })
+    void remove.mutateAsync({ id: m.id, forget }).then(() => { if (forget) navigate('/movies') }).catch(() => {})
   }
 
   return (
@@ -59,6 +59,7 @@ function Detail({ m }: { m: MovieDetail }) {
             </h1>
             <div className="flex flex-wrap gap-2">
               <StateBadge state={m.state} />
+              {m.genres?.map((genre) => <Badge key={genre} tone="muted">{genre}</Badge>)}
               {m.keep && <Badge tone="ok">{t('movies.kept')}</Badge>}
               {m.runtime > 0 && <Badge tone="muted">{t('movies.runtime', { minutes: m.runtime })}</Badge>}
             </div>
@@ -70,7 +71,7 @@ function Detail({ m }: { m: MovieDetail }) {
             )}
           </div>
           {error && <Alert>{errorMessage(t, error)}</Alert>}
-          <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-[auto_1fr]">
+          <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-[auto_1fr] sm:items-baseline">
             {m.requestedByName && (
               <>
                 <dt className="text-muted">{t('movies.requestedByLabel')}</dt>

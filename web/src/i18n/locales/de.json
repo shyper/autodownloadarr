@@ -273,7 +273,7 @@
       "unwatchedExpiryDaysHint": "0 behält ungesehene Filme.",
       "maxSources": "Zu versuchende Releases",
       "maxSourcesHint": "Nach so vielen fehlgeschlagenen Releases braucht der Film deine Aufmerksamkeit.",
-      "parallelDownloads": "Parallele Downloads",
+      "parallelDownloads": "Parallele Downloads (Filme und Episoden zusammen)",
       "watchPollMinutes": "Gesehen-Status prüfen alle (Minuten)",
       "watchPollMinutesHint": "Wie oft Plex gefragt wird, was geschaut wurde.",
       "language": "Sprache der Metadaten",
@@ -286,7 +286,9 @@
       "maxLibraryGB": "Obergrenze der temporären Bibliothek (GB)",
       "maxLibraryGBHint": "Downloads warten, solange die Film- und Serienordner zusammen größer sind. 0 bedeutet unbegrenzt.",
       "minFreeGB": "Freien Speicherplatz behalten (GB)",
-      "minFreeGBHint": "Es startet kein Download, wenn die Platte darunter fallen würde. 0 bedeutet aus."
+      "minFreeGBHint": "Es startet kein Download, wenn die Platte darunter fallen würde. 0 bedeutet aus.",
+      "startedExpiryDays": "Angefangene Filme löschen nach (Tage)",
+      "startedExpiryDaysHint": "Ab dem ersten Abspielen. 0 behält angefangene Filme unbegrenzt."
     },
     "tmdb": {
       "title": "TMDB",
@@ -558,6 +560,14 @@
       "progress": "löschen ab {{value}} % der nächsten",
       "minutes": "löschen {{value}} min nach Start der nächsten",
       "watched": "löschen nach dem Schauen"
+    },
+    "lifecycle": {
+      "Returning Series": "Fortlaufend",
+      "Ended": "Beendet",
+      "Canceled": "Abgesetzt",
+      "In Production": "In Produktion",
+      "Planned": "Geplant",
+      "Pilot": "Pilotfolge"
     }
   },
   "warnings": {
