@@ -235,7 +235,8 @@
       "plex": "Medienserver",
       "profile": "Qualität",
       "passwords": "Passwörter",
-      "notifications": "Benachrichtigungen"
+      "notifications": "Benachrichtigungen",
+      "bots": "Bots"
     },
     "saved": "Gespeichert.",
     "unchanged": "unverändert",
@@ -495,7 +496,8 @@
     "path_not_writable": "Der Ordner existiert nicht oder ist nicht beschreibbar. Gib einen absoluten Pfad im Container an.",
     "invalid_state": "Im aktuellen Zustand nicht möglich.",
     "forbidden": "Das dürfen nur Administratoren.",
-    "not_found": "Nicht gefunden."
+    "not_found": "Nicht gefunden.",
+    "bot_connection_failed": "Die Bot-Verbindung konnte nicht hergestellt werden. Bitte Einstellungen prüfen."
   },
   "series": {
     "title": "Serien",
@@ -614,5 +616,38 @@
       "offline_access": "Verbindung über die aktuelle Sitzung hinaus nutzen"
     },
     "clientId": "Client-ID"
+  },
+  "bots": {
+    "settingsTitle": "Telegram- und Discord-Bots",
+    "settingsHint": "Interaktive Suche und Verwaltung mit deinem AutoDownloadarr-Konto. Die öffentliche HTTPS-Adresse muss über AUTODOWNLOADARR_PUBLIC_URL eingerichtet sein.",
+    "telegramEnabled": "Telegram-Bot aktivieren",
+    "token": "Bot-Token",
+    "telegramHint": "Bot in Telegram über @BotFather erstellen. Ein leerer Wert behält das gespeicherte Token.",
+    "mode": "Empfangsart",
+    "polling": "Long Polling (kein eingehender Webhook nötig)",
+    "webhook": "Webhook (öffentliche HTTPS-Adresse)",
+    "discordEnabled": "Discord-Bot aktivieren",
+    "discordHint": "Application ID und Public Key aus dem Discord Developer Portal eintragen. Guild Install und User Install aktivieren; privilegierte Message-Content-Rechte werden nicht benötigt.",
+    "applicationId": "Application ID",
+    "publicKey": "Public Key",
+    "guilds": "Erlaubte Discord-Server-IDs",
+    "guildsHint": "Kommagetrennt. Leer erlaubt nur Direktnachrichten und persönliche App-Kontexte.",
+    "interactionsUrl": "Diese Adresse als Interactions Endpoint URL im Developer Portal eintragen:",
+    "installDiscord": "Discord-App installieren",
+    "syncHint": "Zuerst speichern, anschließend die Verbindung prüfen und Befehle synchronisieren. Beim Wechsel zwischen Polling und Webhook ebenfalls synchronisieren. Der Test versendet keine Nachrichten.",
+    "test": "Verbindung prüfen",
+    "sync": "Befehle synchronisieren",
+    "testSuccess": "Verbindung erfolgreich geprüft.",
+    "syncSuccess": "Befehle und Webhook-Einstellungen synchronisiert.",
+    "linksTitle": "Verbundene Bots",
+    "linksHint": "Zum Verbinden /connect im Bot ausführen und die Anmeldung hier bestätigen.",
+    "noLinks": "Keine Bots verbunden.",
+    "language": "Bot-Sprache",
+    "notifications": "Persönliche Meldungen bei Verfügbarkeit und Fehlern",
+    "disconnect": "Verbindung trennen",
+    "linkExpired": "Der Verbindungslink ist ungültig oder abgelaufen. Bitte /connect im Bot erneut ausführen.",
+    "connectTitle": "Bot mit deinem Konto verbinden",
+    "connectHint": "{{provider}}-Konto {{external}} darf nach der Bestätigung in deinem Namen Anforderungen verwalten. Deine Benutzerrechte und Quoten gelten. Eine vorhandene Verbindung zu diesem Anbieter wird ersetzt.",
+    "connect": "Verbindung bestätigen"
   }
 }

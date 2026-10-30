@@ -234,3 +234,26 @@ func TestDefaultBackoff(t *testing.T) {
 		}
 	}
 }
+
+func TestProviderRetryAfterIsPersisted(t *testing.T) {
+	d, s := setup(t)
+	ctx := t.Context()
+	now := time.Date(2026, 10, 30, 12, 0, 0, 0, time.UTC)
+	s.now = func() time.Time { return now }
+	s.Handle("limited", func(context.Context, Task) error { return RetryAfter(errors.New("rate limited"), 2*time.Minute) })
+	if _, err := s.Schedule(ctx, Spec{Type: "limited", Key: "limited"}); err != nil {
+		t.Fatal(err)
+	}
+	tasks, err := s.claim(ctx, 1)
+	if err != nil || len(tasks) != 1 {
+		t.Fatalf("claim %v %v", tasks, err)
+	}
+	s.execute(ctx, tasks[0])
+	var runAt int64
+	if err := d.QueryRowContext(ctx, `SELECT run_at FROM scheduled_tasks WHERE dedupe_key='limited'`).Scan(&runAt); err != nil {
+		t.Fatal(err)
+	}
+	if runAt != now.Add(2*time.Minute).UnixMilli() {
+		t.Fatalf("retry deadline=%d", runAt)
+	}
+}

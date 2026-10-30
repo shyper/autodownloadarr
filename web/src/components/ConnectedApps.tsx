@@ -1,3 +1,4 @@
+import { scopeLabel } from '../scopes'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMe } from '../api/hooks'
@@ -20,7 +21,7 @@ export function ConnectedApps() {
     {grants.data?.enabled ? <p className="break-all font-mono text-sm">{grants.data.mcpUrl}</p> : <Alert>{t('integrations.configure')}</Alert>}
     {grants.data?.grants.length === 0 && <p className="text-sm text-muted">{t('integrations.none')}</p>}
     {grants.data?.grants.map((g) => <div key={g.id} className="flex items-start justify-between gap-3 border-t border-line pt-3">
-      <div><p className="font-medium">{g.clientName}</p><p className="text-sm text-muted">{g.scopes.split(' ').map((s) => t(`integrations.scopes.${s}`)).join(' · ')}</p></div>
+      <div><p className="font-medium">{g.clientName}</p><p className="text-sm text-muted">{g.scopes.split(' ').map((s) => scopeLabel(t, s)).join(' · ')}</p></div>
       <Button variant="ghost" loading={revoke.isPending} onClick={() => revoke.mutate(g.id)}>{t('integrations.revoke')}</Button>
     </div>)}
     {user?.role === 'admin' && <form className="space-y-3 border-t border-line pt-4" onSubmit={(e) => { e.preventDefault(); create.mutate({ client_name: name, redirect_uris: redirect.split('\n').map((v) => v.trim()).filter(Boolean) }) }}>

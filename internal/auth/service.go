@@ -331,12 +331,20 @@ func (s *Service) setPassword(ctx context.Context, where string, arg any, passwo
 	if _, err := tx.ExecContext(ctx, `DELETE FROM oauth_grants WHERE user_id = ?`, userID); err != nil {
 		return err
 	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM bot_links WHERE user_id=?`, userID); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 
 // PurgeExpiredSessions deletes sessions that can no longer be used.
 func (s *Service) PurgeExpiredSessions(ctx context.Context) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE expires_at <= ?`, s.now().UnixMilli())
+	for _, stmt := range []string{`DELETE FROM sessions WHERE expires_at <= ?`, `DELETE FROM oauth_codes WHERE expires_at <= ?`, `DELETE FROM oauth_tokens WHERE expires_at <= ?`} {
+		if _, err := s.db.ExecContext(ctx, stmt, s.now().UnixMilli()); err != nil {
+			return err
+		}
+	}
+	_, err := s.db.ExecContext(ctx, `DELETE FROM oauth_grants WHERE revoked=1 OR (NOT EXISTS (SELECT 1 FROM oauth_codes c WHERE c.grant_id=oauth_grants.id) AND NOT EXISTS (SELECT 1 FROM oauth_tokens t WHERE t.grant_id=oauth_grants.id))`)
 	return err
 }
 

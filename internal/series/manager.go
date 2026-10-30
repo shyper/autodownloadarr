@@ -129,14 +129,14 @@ func (m *Manager) Start(ctx context.Context) error {
 
 // RequestOptions configure a new series.
 type RequestOptions struct {
-	ProfileID     int64  `json:"profileId"`
-	Seasons       []int  `json:"seasons"`       // empty: all
-	FutureSeasons bool   `json:"futureSeasons"` // also seasons that appear later
-	StartSeason   int    `json:"startSeason"`
-	StartEpisode  int    `json:"startEpisode"`
-	WindowSize    int    `json:"windowSize"`
-	Trigger       string `json:"deleteTrigger"`
-	TriggerValue  int    `json:"triggerValue"`
+	ProfileID     int64  `json:"profileId,omitempty"`
+	Seasons       []int  `json:"seasons,omitempty"`       // empty: all
+	FutureSeasons bool   `json:"futureSeasons,omitempty"` // also seasons that appear later
+	StartSeason   int    `json:"startSeason,omitempty"`
+	StartEpisode  int    `json:"startEpisode,omitempty"`
+	WindowSize    int    `json:"windowSize,omitempty"`
+	Trigger       string `json:"deleteTrigger,omitempty"`
+	TriggerValue  int    `json:"triggerValue,omitempty"`
 }
 
 // Request adds a series by its TMDB ID.

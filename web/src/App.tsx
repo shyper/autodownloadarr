@@ -3,6 +3,7 @@ import { DownloadsPage } from './pages/DownloadsPage'
 import { RequireAuth, RequireGuest } from './components/guards'
 import { Layout } from './components/Layout'
 import { AuthorizePage } from './pages/AuthorizePage'
+import { ConnectBotPage } from './pages/ConnectBotPage'
 import { AccountPage } from './pages/AccountPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { LoginPage } from './pages/LoginPage'
@@ -40,6 +41,7 @@ export function App() {
         <Route path="series/:id" element={<SeriesDetailPage />} />
         <Route path="downloads" element={<DownloadsPage />} />
         <Route path="settings/:tab?" element={<SettingsPage />} />
+        <Route path="connect-bot" element={<ConnectBotPage />} />
         <Route path="authorize" element={<AuthorizePage />} />
         <Route path="account" element={<AccountPage />} />
         <Route path="*" element={<NotFoundPage />} />

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strings"
 	"time"
@@ -72,7 +73,7 @@ func New(db *sql.DB, base string) *Service {
 			return nil, ErrInvalid
 		}
 		for _, ip := range ips {
-			if !ip.IP.IsGlobalUnicast() || ip.IP.IsPrivate() || ip.IP.IsLoopback() || ip.IP.IsLinkLocalUnicast() {
+			if !publicIP(ip.IP) {
 				return nil, ErrInvalid
 			}
 		}
@@ -301,4 +302,21 @@ func (s *Service) Revoke(ctx context.Context, userID int64, id string) error {
 func (s *Service) RevokeToken(ctx context.Context, clientID, token string) error {
 	_, err := s.DB.ExecContext(ctx, `UPDATE oauth_grants SET revoked=1 WHERE client_id=? AND id IN (SELECT grant_id FROM oauth_tokens WHERE hash=?)`, clientID, hash(token))
 	return err
+}
+
+func publicIP(ip net.IP) bool {
+	if !ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
+		return false
+	}
+	address, ok := netip.AddrFromSlice(ip)
+	if !ok {
+		return false
+	}
+	address = address.Unmap()
+	for _, cidr := range []string{"0.0.0.0/8", "100.64.0.0/10", "192.0.0.0/24", "192.0.2.0/24", "198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24", "240.0.0.0/4", "2001:db8::/32"} {
+		if netip.MustParsePrefix(cidr).Contains(address) {
+			return false
+		}
+	}
+	return true
 }

@@ -19,8 +19,10 @@ import (
 
 	"github.com/shyper/autodownloadarr/internal/api"
 	"github.com/shyper/autodownloadarr/internal/auth"
+	"github.com/shyper/autodownloadarr/internal/bots"
 	"github.com/shyper/autodownloadarr/internal/buildinfo"
 	"github.com/shyper/autodownloadarr/internal/config"
+	"github.com/shyper/autodownloadarr/internal/control"
 	"github.com/shyper/autodownloadarr/internal/db"
 	"github.com/shyper/autodownloadarr/internal/events"
 	"github.com/shyper/autodownloadarr/internal/movies"
@@ -138,6 +140,7 @@ func runServer(cfg config.Config, log *slog.Logger) error {
 	if err := seriesManager.Start(ctx); err != nil {
 		return fmt.Errorf("start series manager: %w", err)
 	}
+	botService := bots.New(st, authSvc, &control.Service{Store: st, Services: svc, Movies: manager, Series: seriesManager}, sched, cfg.PublicURL, log)
 	watchlistManager := watchlist.NewManager(st, svc, manager, seriesManager, log)
 	sched.Every("plex-watchlist", time.Minute, watchlistManager.Poll)
 
@@ -156,6 +159,7 @@ func runServer(cfg config.Config, log *slog.Logger) error {
 		Addr: cfg.ListenAddr,
 		Handler: api.New(api.Options{
 			PublicURL:  cfg.PublicURL,
+			Bots:       botService,
 			Log:        log,
 			DB:         sqldb,
 			Auth:       authSvc,

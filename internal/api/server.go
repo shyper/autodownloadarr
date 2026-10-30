@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/shyper/autodownloadarr/internal/auth"
+	"github.com/shyper/autodownloadarr/internal/bots"
 	"github.com/shyper/autodownloadarr/internal/control"
 	"github.com/shyper/autodownloadarr/internal/events"
 	"github.com/shyper/autodownloadarr/internal/movies"
@@ -26,6 +27,7 @@ import (
 // Options are the dependencies of the HTTP handler.
 type Options struct {
 	PublicURL string
+	Bots      *bots.Service
 	Log       *slog.Logger
 	DB        *sql.DB
 	Auth      *auth.Service
@@ -82,6 +84,8 @@ func New(opts Options) http.Handler {
 	r.With(noStore).Post("/oauth/token", s.handleOAuthToken)
 	r.With(noStore).Post("/oauth/revoke", s.handleOAuthRevoke)
 	r.Handle("/mcp", s.mcpHandler())
+	r.Post("/bots/telegram/webhook", s.handleTelegramWebhook)
+	r.Post("/bots/discord/interactions", s.handleDiscordInteraction)
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(noStore, csrf.Handler, s.loadSession)
 
@@ -96,6 +100,11 @@ func New(opts Options) http.Handler {
 			r.Get("/oauth/authorization", s.handleAuthorization)
 			r.Post("/oauth/authorize", s.handleAuthorize)
 			r.Get("/oauth/grants", s.handleGrants)
+			r.Get("/bots/links", s.handleBotLinks)
+			r.Get("/bots/link-code", s.handleBotLinkCode)
+			r.Post("/bots/links", s.handleConfirmBotLink)
+			r.Put("/bots/links", s.handleUpdateBotLink)
+			r.Delete("/bots/links/{id}", s.handleDeleteBotLink)
 			r.Post("/oauth/grants/revoke", s.handleRevokeGrant)
 			r.Get("/auth/me", s.handleMe)
 			r.Post("/auth/password", s.handleChangePassword)
@@ -144,6 +153,10 @@ func New(opts Options) http.Handler {
 			r.Put("/onboarding", s.handlePutOnboarding)
 
 			r.Post("/oauth/clients", s.handleCreateOAuthClient)
+			r.Get("/bots", s.handleGetBots)
+			r.Put("/bots", s.handleSaveBots)
+			r.Post("/bots/test", s.handleTestBots)
+			r.Post("/bots/sync", s.handleSyncBots)
 			r.Get("/users", s.handleListUsers)
 			r.Post("/users", s.handleCreateUser)
 			r.Put("/users/{id}", s.handleUpdateUser)

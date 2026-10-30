@@ -3,6 +3,7 @@ package oauth
 import (
 	"crypto/sha256"
 	"encoding/base64"
+	"net"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -127,5 +128,16 @@ func TestMetadataRejectsPrivateAddresses(t *testing.T) {
 		if _, err := s.Client(t.Context(), id); err == nil {
 			t.Errorf("accepted %s", id)
 		}
+	}
+}
+
+func TestClientMetadataAddressPolicy(t *testing.T) {
+	for _, ip := range []string{"127.0.0.1", "10.0.0.1", "169.254.169.254", "100.64.0.1", "0.0.0.1", "198.18.0.1", "::1", "::ffff:127.0.0.1", "fc00::1", "2001:db8::1"} {
+		if publicIP(net.ParseIP(ip)) {
+			t.Errorf("private/reserved address accepted: %s", ip)
+		}
+	}
+	if !publicIP(net.ParseIP("1.1.1.1")) {
+		t.Fatal("public address rejected")
 	}
 }

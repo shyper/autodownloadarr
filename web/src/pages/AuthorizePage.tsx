@@ -1,3 +1,4 @@
+import { scopeLabel } from '../scopes'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation } from 'react-router'
@@ -18,7 +19,7 @@ export function AuthorizePage() {
     <p>{t('integrations.consent', { name: request.data.clientName })}</p>
     <p className="break-all text-xs text-muted">{request.data.clientId}</p>
     <p className="text-sm text-muted">{t('integrations.callback')}: {request.data.redirectUri}</p>
-    {request.data.scopes.map((scope) => <Checkbox key={scope} label={t(`integrations.scopes.${scope}`)} checked={!excluded.includes(scope)} onChange={(e) => setExcluded((prev) => e.target.checked ? prev.filter((s) => s !== scope) : [...prev, scope])} />)}
+    {request.data.scopes.map((scope) => <Checkbox key={scope} label={scopeLabel(t, scope)} checked={!excluded.includes(scope)} onChange={(e) => setExcluded((prev) => e.target.checked ? prev.filter((s) => s !== scope) : [...prev, scope])} />)}
     {authorize.isError && <Alert>{errorMessage(t, authorize.error)}</Alert>}
     <div className="flex gap-2">
       <Button variant="secondary" loading={authorize.isPending} onClick={() => authorize.mutate({ allow: false, scope: '' })}>{t('integrations.deny')}</Button>

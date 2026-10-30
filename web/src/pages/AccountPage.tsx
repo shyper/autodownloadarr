@@ -1,3 +1,4 @@
+import { BotLinks } from '../components/BotLinks'
 import { ConnectedApps } from '../components/ConnectedApps'
 import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -28,6 +29,7 @@ export function AccountPage() {
         </dl>
       </Card>
       <ConnectedApps />
+      <BotLinks />
       <ChangePasswordCard />
     </div>
   )

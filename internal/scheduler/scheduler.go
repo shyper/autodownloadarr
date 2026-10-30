@@ -61,6 +61,17 @@ type permanentError struct{ err error }
 func (e permanentError) Error() string { return e.err.Error() }
 func (e permanentError) Unwrap() error { return e.err }
 
+// RetryAfter asks the persistent scheduler to wait at least delay before retrying.
+// Providers use it for rate limits without blocking a worker.
+type retryAfterError struct {
+	err   error
+	delay time.Duration
+}
+
+func (e retryAfterError) Error() string               { return e.err.Error() }
+func (e retryAfterError) Unwrap() error               { return e.err }
+func RetryAfter(err error, delay time.Duration) error { return retryAfterError{err: err, delay: delay} }
+
 // Permanent marks err as not worth retrying.
 func Permanent(err error) error { return permanentError{err} }
 
@@ -340,7 +351,12 @@ func (s *Scheduler) execute(ctx context.Context, t Task) {
 			`UPDATE scheduled_tasks SET status = 'failed', last_error = ?, updated_at = ? WHERE id = ? AND version = ?`,
 			err.Error(), now, t.ID, t.version)
 	default:
-		retryAt := s.now().Add(s.backoff(t.Attempt))
+		delay := s.backoff(t.Attempt)
+		var limited retryAfterError
+		if errors.As(err, &limited) {
+			delay = max(delay, limited.delay)
+		}
+		retryAt := s.now().Add(delay)
 		log.Warn("scheduler: task failed, will retry", "err", err, "retry_at", retryAt)
 		_, dbErr = s.db.ExecContext(bctx,
 			`UPDATE scheduled_tasks SET status = 'pending', run_at = ?, last_error = ?, updated_at = ? WHERE id = ? AND version = ?`,

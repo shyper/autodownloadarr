@@ -235,7 +235,8 @@
       "plex": "Media server",
       "profile": "Quality",
       "passwords": "Passwords",
-      "notifications": "Notifications"
+      "notifications": "Notifications",
+      "bots": "Bots"
     },
     "saved": "Saved.",
     "unchanged": "unchanged",
@@ -495,7 +496,8 @@
     "path_not_writable": "The folder does not exist or is not writable. Use an absolute path inside the container.",
     "invalid_state": "Not possible in the current state.",
     "forbidden": "Only administrators can do this.",
-    "not_found": "Not found."
+    "not_found": "Not found.",
+    "bot_connection_failed": "Could not connect to the bot service. Check the configuration."
   },
   "series": {
     "title": "Series",
@@ -614,5 +616,38 @@
       "offline_access": "Keep the connection beyond this session"
     },
     "clientId": "Client ID"
+  },
+  "bots": {
+    "settingsTitle": "Telegram and Discord bots",
+    "settingsHint": "Interactive search and management using your AutoDownloadarr account. Configure the public HTTPS origin with AUTODOWNLOADARR_PUBLIC_URL.",
+    "telegramEnabled": "Enable Telegram bot",
+    "token": "Bot token",
+    "telegramHint": "Create a bot using @BotFather on Telegram. A blank value keeps the stored token.",
+    "mode": "Update delivery",
+    "polling": "Long polling (no inbound webhook needed)",
+    "webhook": "Webhook (public HTTPS URL)",
+    "discordEnabled": "Enable Discord bot",
+    "discordHint": "Enter the Application ID and Public Key from the Discord Developer Portal. Enable Guild Install and User Install; privileged Message Content access is not required.",
+    "applicationId": "Application ID",
+    "publicKey": "Public Key",
+    "guilds": "Allowed Discord server IDs",
+    "guildsHint": "Comma-separated. Empty permits direct messages and personal app contexts only.",
+    "interactionsUrl": "Set this address as the Interactions Endpoint URL in the Developer Portal:",
+    "installDiscord": "Install Discord app",
+    "syncHint": "Save first, then test the connection and sync commands. Sync again when switching between polling and webhook. The test does not send messages.",
+    "test": "Test connection",
+    "sync": "Sync commands",
+    "testSuccess": "Connection tested successfully.",
+    "syncSuccess": "Commands and webhook settings synchronized.",
+    "linksTitle": "Connected bots",
+    "linksHint": "Run /connect in the bot and confirm the connection here.",
+    "noLinks": "No connected bots.",
+    "language": "Bot language",
+    "notifications": "Personal notifications for availability and failures",
+    "disconnect": "Disconnect",
+    "linkExpired": "This connection link is invalid or expired. Run /connect in the bot again.",
+    "connectTitle": "Connect bot to your account",
+    "connectHint": "After confirmation, {{provider}} account {{external}} can manage requests on your behalf. Your account permissions and quotas apply. An existing connection to this provider will be replaced.",
+    "connect": "Confirm connection"
   }
 }

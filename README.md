@@ -178,3 +178,39 @@ MCP tools cover catalog searches/details, movie/series requests, library and epi
 details, releases, downloads, queue/history, keep/pause/window settings, retries,
 release selection and deletion. The endpoint uses the official Go MCP SDK and
 stateless Streamable HTTP. It does not expose provider credentials or configuration.
+
+### Interactive Telegram and Discord bots
+
+Bots are configured independently of the existing notification destinations under
+Settings → Bots. Their tokens are encrypted in the database. Save configuration,
+then use **Test connection** and **Sync commands** (also after changing delivery
+mode). Connection tests do not send chat messages.
+
+- **Telegram:** create a bot with `@BotFather`, enter its token, and use long polling
+  by default. No inbound Telegram endpoint is required in this mode. Optional
+  webhook mode registers `<public-url>/bots/telegram/webhook` with a generated
+  secret header when commands are synced. Only private chats are accepted.
+- **Discord:** create an application in the Developer Portal, enable Guild Install
+  and User Install, and enter its Application ID, Public Key and Bot Token. Set the
+  Interactions Endpoint URL to `<public-url>/bots/discord/interactions`, then sync
+  commands and install the app. No Gateway connection or privileged Message Content
+  intent is needed. Server interactions require an explicit server-ID allowlist;
+  direct messages and personal app contexts work without a server allowlist.
+
+Run `/connect` in either bot, sign in on the linked AutoDownloadarr page and confirm
+account linking. Links expire after ten minutes and cannot replace another user's
+existing connection. Account → Connected bots controls language, personal
+availability/failure notifications and disconnection. Password changes and resets
+also disconnect bots.
+
+Commands: `/search` (movies), `/series`, `/library`, `/downloads`, `/language`,
+`/connect`, `/help`. Telegram also accepts a movie title as an ordinary message.
+Discord offers title autocomplete, private responses and Components V2 menus.
+Both bots offer posters, genres, seasons, rolling windows, keep/pause controls and
+confirmed deletion. Shared library browsing is available; write operations always
+use the linked account's ownership permissions and quotas.
+
+Inbound updates and prepared replies are persisted; retries of a failed reply do
+not repeat its media operation. Buttons are short-lived, bound to the invoking
+platform user and single-use. Notifications are recovered by polling persistent
+media state. API rate limits respect provider retry delays through the scheduler.
