@@ -8,7 +8,7 @@ import (
 
 func botUser(t *testing.T, s *Store, id int) {
 	t.Helper()
-	if _, err := s.db.Exec(`INSERT INTO users(id,username,password_hash,role,created_at,updated_at) VALUES(?,?,'unused','user',0,0)`, id, string(rune('a'+id))); err != nil {
+	if _, err := s.db.ExecContext(t.Context(), `INSERT INTO users(id,username,password_hash,role,created_at,updated_at) VALUES(?,?,'unused','user',0,0)`, id, string(rune('a'+id))); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -54,7 +54,7 @@ func TestBotLinkCodesAndOwnership(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.db.Exec(`UPDATE bot_link_codes SET expires_at=0`); err != nil {
+	if _, err = s.db.ExecContext(t.Context(), `UPDATE bot_link_codes SET expires_at=0`); err != nil {
 		t.Fatal(err)
 	}
 	if err = s.ConfirmBotLink(ctx, 1, expired); err == nil {
@@ -71,11 +71,11 @@ func TestBotUpdatesAreDurableEncryptedAndDeduplicated(t *testing.T) {
 		}
 	}
 	var count int
-	if err := s.db.QueryRow(`SELECT count(*) FROM scheduled_tasks WHERE type='bot.update'`).Scan(&count); err != nil || count != 1 {
+	if err := s.db.QueryRowContext(t.Context(), `SELECT count(*) FROM scheduled_tasks WHERE type='bot.update'`).Scan(&count); err != nil || count != 1 {
 		t.Fatalf("tasks=%d %v", count, err)
 	}
 	var raw string
-	if err := s.db.QueryRow(`SELECT payload_enc FROM bot_updates`).Scan(&raw); err != nil {
+	if err := s.db.QueryRowContext(t.Context(), `SELECT payload_enc FROM bot_updates`).Scan(&raw); err != nil {
 		t.Fatal(err)
 	}
 	if bytes.Contains([]byte(raw), []byte("sensitive-secret")) {
@@ -125,7 +125,7 @@ func TestBotConfigKeepsSecretsEncrypted(t *testing.T) {
 		t.Fatal(err)
 	}
 	var raw string
-	if err := s.db.QueryRow(`SELECT value FROM settings WHERE key='bots'`).Scan(&raw); err != nil {
+	if err := s.db.QueryRowContext(t.Context(), `SELECT value FROM settings WHERE key='bots'`).Scan(&raw); err != nil {
 		t.Fatal(err)
 	}
 	if bytes.Contains([]byte(raw), []byte("123:secret")) || bytes.Contains([]byte(raw), []byte("discord-secret")) {

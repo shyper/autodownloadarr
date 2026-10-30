@@ -194,7 +194,7 @@ func (s *Service) Authorize(ctx context.Context, userID int64, r Request, scope 
 	if err != nil {
 		return "", err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	grant, code := random(), random()
 	if _, err = tx.ExecContext(ctx, `INSERT INTO oauth_grants(id,user_id,client_id,client_name,scopes,created_at) VALUES(?,?,?,?,?,?)`, grant, userID, c.ID, c.Name, scope, time.Now().UnixMilli()); err != nil {
 		return "", err
@@ -225,7 +225,7 @@ func (s *Service) Exchange(ctx context.Context, clientID, code, redirect, verifi
 	if err != nil {
 		return Tokens{}, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var grant, challenge, scope string
 	err = tx.QueryRowContext(ctx, `SELECT c.grant_id,c.challenge,g.scopes FROM oauth_codes c JOIN oauth_grants g ON g.id=c.grant_id WHERE c.hash=? AND c.redirect_uri=? AND c.expires_at>? AND g.client_id=? AND g.revoked=0`, hash(code), redirect, time.Now().UnixMilli(), clientID).Scan(&grant, &challenge, &scope)
 	if err != nil || base64.RawURLEncoding.EncodeToString(hash(verifier)) != challenge {
@@ -245,7 +245,7 @@ func (s *Service) Refresh(ctx context.Context, clientID, token string) (Tokens, 
 	if err != nil {
 		return Tokens{}, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var grant, scope string
 	var used int
 	err = tx.QueryRowContext(ctx, `SELECT t.grant_id,g.scopes,t.used FROM oauth_tokens t JOIN oauth_grants g ON g.id=t.grant_id WHERE t.hash=? AND t.kind='refresh' AND t.expires_at>? AND g.client_id=? AND g.revoked=0`, hash(token), time.Now().UnixMilli(), clientID).Scan(&grant, &scope, &used)

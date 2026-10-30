@@ -2,8 +2,9 @@ package api
 
 import (
 	"errors"
-	"github.com/shyper/autodownloadarr/internal/access"
 	"net/http"
+
+	"github.com/shyper/autodownloadarr/internal/access"
 )
 
 func (s *server) requireOwner(kind string) func(http.Handler) http.Handler {

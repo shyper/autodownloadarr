@@ -3,10 +3,11 @@ package db
 import (
 	"context"
 	"database/sql"
-	"github.com/pressly/goose/v3"
 	"io/fs"
 	"path/filepath"
 	"testing"
+
+	"github.com/pressly/goose/v3"
 )
 
 func TestOpenMigratesAndIsReopenable(t *testing.T) {

@@ -288,7 +288,7 @@ func (s *Service) telegram(ctx context.Context, c store.BotConfig, method string
 		if strings.Contains(envelope.Description, "message is not modified") {
 			return nil
 		}
-		return errors.New("Telegram API rejected request")
+		return errors.New("telegram API rejected request")
 	}
 	if out != nil {
 		return json.Unmarshal(envelope.Result, out)

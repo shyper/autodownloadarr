@@ -3,6 +3,7 @@ package bots
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -42,7 +43,7 @@ func (s *Service) failure(lang, code string) Message {
 }
 func (s *Service) Render(ctx context.Context, in Inbound) (Message, error) {
 	link, err := s.Store.BotLink(ctx, in.Provider, in.External)
-	if in.Command == "connect" || err == store.ErrNotFound {
+	if in.Command == "connect" || errors.Is(err, store.ErrNotFound) {
 		if s.PublicURL == "" {
 			return Message{Title: "AutoDownloadarr", Text: text(in.Language, "Die öffentliche Adresse ist noch nicht eingerichtet.", "The public URL is not configured yet.")}, nil
 		}
@@ -393,7 +394,14 @@ func (s *Service) show(ctx context.Context, in Inbound, u auth.User, id int64) (
 		return Message{}, err
 	}
 	status := se.Status
-	names := map[string][2]string{"Returning Series": {"Fortlaufend", "Ongoing"}, "Ended": {"Beendet", "Ended"}, "Canceled": {"Abgesetzt", "Canceled"}, "In Production": {"In Produktion", "In production"}, "Planned": {"Geplant", "Planned"}, "Pilot": {"Pilotfolge", "Pilot"}}
+	names := map[string][2]string{
+		"Returning Series": {"Fortlaufend", "Ongoing"},
+		"Ended":            {"Beendet", "Ended"},
+		"Canceled":         {"Abgesetzt", "Canceled"},
+		"In Production":    {"In Produktion", "In production"}, //nolint:misspell // German translation, not an English misspelling.
+		"Planned":          {"Geplant", "Planned"},
+		"Pilot":            {"Pilotfolge", "Pilot"},
+	}
 	if pair, ok := names[status]; ok {
 		status = text(in.Language, pair[0], pair[1])
 	}

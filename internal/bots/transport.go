@@ -28,7 +28,7 @@ func (s *Service) Send(ctx context.Context, c store.BotConfig, in Inbound, msg M
 		return err
 	}
 	if channel.ID == "" {
-		return errors.New("Discord did not return a DM channel")
+		return errors.New("discord did not return a DM channel")
 	}
 	return s.request(ctx, http.MethodPost, s.DiscordURL+"/channels/"+channel.ID+"/messages", c.DiscordToken, body, nil)
 }

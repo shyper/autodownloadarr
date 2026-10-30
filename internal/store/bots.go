@@ -136,7 +136,7 @@ func (s *Store) ConfirmBotLink(ctx context.Context, userID int64, code string) e
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var l BotLink
 	err = tx.QueryRowContext(ctx, `DELETE FROM bot_link_codes WHERE hash=? AND expires_at>? RETURNING provider,external_id,chat_id,language`, botHash(code), s.ms()).Scan(&l.Provider, &l.ExternalID, &l.ChatID, &l.Language)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -186,7 +186,7 @@ func (s *Store) QueueBotUpdate(ctx context.Context, provider, id string, payload
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	result, err := tx.ExecContext(ctx, `INSERT INTO bot_updates(provider,id,payload_enc,created_at) VALUES(?,?,?,?) ON CONFLICT DO NOTHING`, provider, id, encrypted, s.ms())
 	if err != nil {
 		return err

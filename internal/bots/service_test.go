@@ -38,7 +38,7 @@ func testService(t *testing.T) (*Service, *sql.DB) {
 	}
 	t.Cleanup(func() { d.Close() })
 	for id := 1; id <= 2; id++ {
-		if _, err = d.Exec(`INSERT INTO users(id,username,password_hash,role,created_at,updated_at) VALUES(?,?,'unused','user',0,0)`, id, fmt.Sprintf("user%d", id)); err != nil {
+		if _, err = d.ExecContext(t.Context(), `INSERT INTO users(id,username,password_hash,role,created_at,updated_at) VALUES(?,?,'unused','user',0,0)`, id, fmt.Sprintf("user%d", id)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -158,7 +158,7 @@ func TestTelegramDuplicateUpdatesAndPrivateChats(t *testing.T) {
 		}
 	}
 	var n int
-	if err := d.QueryRow(`SELECT count(*) FROM bot_updates`).Scan(&n); err != nil || n != 1 {
+	if err := d.QueryRowContext(t.Context(), `SELECT count(*) FROM bot_updates`).Scan(&n); err != nil || n != 1 {
 		t.Fatalf("updates=%d %v", n, err)
 	}
 	message.Chat.Type = "group"
@@ -166,7 +166,7 @@ func TestTelegramDuplicateUpdatesAndPrivateChats(t *testing.T) {
 	if err := s.ReceiveTelegram(ctx, u); err != nil {
 		t.Fatal(err)
 	}
-	_ = d.QueryRow(`SELECT count(*) FROM bot_updates`).Scan(&n)
+	_ = d.QueryRowContext(t.Context(), `SELECT count(*) FROM bot_updates`).Scan(&n)
 	if n != 1 {
 		t.Fatal("group Telegram message accepted")
 	}
@@ -324,7 +324,7 @@ func TestBotRequestsCarryUserAndSeriesSelection(t *testing.T) {
 	if err != nil || se.RequestedBy != 2 || se.WindowSize != 5 || len(se.Seasons) != 2 || se.Seasons[0] != 1 || se.Seasons[1] != 3 {
 		t.Fatalf("series selection %+v %v", se, err)
 	}
-	if _, err = d.Exec(`UPDATE users SET quota_requests=1 WHERE id=2`); err != nil {
+	if _, err = d.ExecContext(t.Context(), `UPDATE users SET quota_requests=1 WHERE id=2`); err != nil {
 		t.Fatal(err)
 	}
 	action, _ = json.Marshal(Action{Op: "request_movie", TMDBID: 101})
@@ -360,7 +360,7 @@ func TestNotificationsArePersonalDurableAndCancelable(t *testing.T) {
 	}
 	var count int
 	var id string
-	if err := d.QueryRow(`SELECT count(*),min(id) FROM bot_updates WHERE id LIKE 'notice:%'`).Scan(&count, &id); err != nil || count != 1 {
+	if err := d.QueryRowContext(t.Context(), `SELECT count(*),min(id) FROM bot_updates WHERE id LIKE 'notice:%'`).Scan(&count, &id); err != nil || count != 1 {
 		t.Fatalf("notifications %d %s %v", count, id, err)
 	}
 	link, _ := s.Store.BotLink(ctx, "telegram", "42")

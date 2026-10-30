@@ -19,7 +19,7 @@ func setup(t *testing.T) (*Service, Request, string) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { d.Close() })
-	if _, err = d.Exec(`INSERT INTO users(id,username,password_hash,role,created_at,updated_at) VALUES(1,'test','unused','admin',0,0)`); err != nil {
+	if _, err = d.ExecContext(t.Context(), `INSERT INTO users(id,username,password_hash,role,created_at,updated_at) VALUES(1,'test','unused','admin',0,0)`); err != nil {
 		t.Fatal(err)
 	}
 	svc := New(d, "https://media.example")
@@ -115,7 +115,7 @@ func TestScopeConsentExpiryAndRevocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.DB.Exec(`UPDATE oauth_codes SET expires_at=?`, time.Now().Add(-time.Second).UnixMilli()); err != nil {
+	if _, err = s.DB.ExecContext(t.Context(), `UPDATE oauth_codes SET expires_at=?`, time.Now().Add(-time.Second).UnixMilli()); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = s.Exchange(ctx, r.ClientID, code, r.Redirect, v); err == nil {

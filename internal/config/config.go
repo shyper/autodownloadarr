@@ -91,7 +91,12 @@ func Load(getenv func(string) string) (Config, error) {
 	c.PublicURL = strings.TrimRight(get("PUBLIC_URL"), "/")
 	if c.PublicURL != "" {
 		u, err := url.Parse(c.PublicURL)
-		if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Path != "" || (u.Scheme != "https" && !(u.Scheme == "http" && (u.Hostname() == "localhost" || net.ParseIP(u.Hostname()).IsLoopback()))) {
+		valid := err == nil && u.Host != "" && u.User == nil && u.RawQuery == "" && u.Fragment == "" && u.Path == ""
+		if valid {
+			loopback := u.Hostname() == "localhost" || net.ParseIP(u.Hostname()).IsLoopback()
+			valid = u.Scheme == "https" || (u.Scheme == "http" && loopback)
+		}
+		if !valid {
 			errs = append(errs, fmt.Errorf("%sPUBLIC_URL: must be an HTTPS origin (HTTP allowed for localhost)", EnvPrefix))
 		}
 	}

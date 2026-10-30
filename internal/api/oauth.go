@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/shyper/autodownloadarr/internal/control"
 	"github.com/shyper/autodownloadarr/internal/oauth"
 )

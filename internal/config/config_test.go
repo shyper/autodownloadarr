@@ -65,3 +65,29 @@ func TestLoadReportsAllErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestPublicURLRequiresSecureOrigin(t *testing.T) {
+	for _, tc := range []struct {
+		url   string
+		valid bool
+	}{
+		{"https://media.example", true},
+		{"https://media.example/", true},
+		{"http://localhost:8686", true},
+		{"http://127.0.0.1:8686", true},
+		{"http://[::1]:8686", true},
+		{"http://media.example", false},
+		{"https://user:password@media.example", false},
+		{"https://media.example/path", false},
+		{"https://media.example?query=1", false},
+		{"https://media.example#fragment", false},
+		{"https://%invalid", false},
+	} {
+		t.Run(tc.url, func(t *testing.T) {
+			_, err := Load(env(map[string]string{"AUTODOWNLOADARR_PUBLIC_URL": tc.url}))
+			if (err == nil) != tc.valid {
+				t.Fatalf("valid=%v, err=%v", tc.valid, err)
+			}
+		})
+	}
+}
