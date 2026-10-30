@@ -9,8 +9,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
+	"net/url"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -19,6 +22,7 @@ const EnvPrefix = "AUTODOWNLOADARR_"
 
 // Config is the bootstrap configuration.
 type Config struct {
+	PublicURL string
 	// ListenAddr is the HTTP listen address, e.g. ":8686".
 	ListenAddr string
 	// ConfigDir holds the database and other persistent state.
@@ -84,6 +88,13 @@ func Load(getenv func(string) string) (Config, error) {
 		c.TrustProxy = b
 	}
 	c.TMDBURL = get("TMDB_URL")
+	c.PublicURL = strings.TrimRight(get("PUBLIC_URL"), "/")
+	if c.PublicURL != "" {
+		u, err := url.Parse(c.PublicURL)
+		if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Path != "" || (u.Scheme != "https" && !(u.Scheme == "http" && (u.Hostname() == "localhost" || net.ParseIP(u.Hostname()).IsLoopback()))) {
+			errs = append(errs, fmt.Errorf("%sPUBLIC_URL: must be an HTTPS origin (HTTP allowed for localhost)", EnvPrefix))
+		}
+	}
 	if v := get("SESSION_TTL"); v != "" {
 		d, err := time.ParseDuration(v)
 		switch {

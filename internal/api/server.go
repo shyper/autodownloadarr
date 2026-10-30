@@ -15,19 +15,22 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/shyper/autodownloadarr/internal/auth"
+	"github.com/shyper/autodownloadarr/internal/control"
 	"github.com/shyper/autodownloadarr/internal/events"
 	"github.com/shyper/autodownloadarr/internal/movies"
+	"github.com/shyper/autodownloadarr/internal/oauth"
 	"github.com/shyper/autodownloadarr/internal/series"
 	"github.com/shyper/autodownloadarr/internal/store"
 )
 
 // Options are the dependencies of the HTTP handler.
 type Options struct {
-	Log     *slog.Logger
-	DB      *sql.DB
-	Auth    *auth.Service
-	Limiter *auth.Limiter
-	Bus     *events.Bus
+	PublicURL string
+	Log       *slog.Logger
+	DB        *sql.DB
+	Auth      *auth.Service
+	Limiter   *auth.Limiter
+	Bus       *events.Bus
 	// Store, Services and Movies serve the configuration and movie endpoints.
 	Store    *store.Store
 	Services *movies.Services
@@ -48,7 +51,9 @@ type Options struct {
 
 type server struct {
 	Options
-	plex plexLogins
+	plex    plexLogins
+	oauth   *oauth.Service
+	control *control.Service
 }
 
 // New returns the root HTTP handler.
@@ -57,6 +62,8 @@ func New(opts Options) http.Handler {
 		opts.Heartbeat = 25 * time.Second
 	}
 	s := &server{Options: opts}
+	s.oauth = oauth.New(opts.DB, opts.PublicURL)
+	s.control = &control.Service{Store: opts.Store, Services: opts.Services, Movies: opts.Movies, Series: opts.Series}
 
 	csrf := http.NewCrossOriginProtection()
 	csrf.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -66,6 +73,15 @@ func New(opts Options) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID, s.logRequests, middleware.Recoverer, securityHeaders)
 
+	r.Get("/.well-known/oauth-protected-resource", s.oauthMetadata)
+	r.Get("/.well-known/oauth-protected-resource/mcp", s.oauthMetadata)
+	r.Get("/.well-known/oauth-authorization-server", s.oauthMetadata)
+	r.With(noStore).Get("/oauth/authorize", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/authorize?"+r.URL.RawQuery, http.StatusSeeOther)
+	})
+	r.With(noStore).Post("/oauth/token", s.handleOAuthToken)
+	r.With(noStore).Post("/oauth/revoke", s.handleOAuthRevoke)
+	r.Handle("/mcp", s.mcpHandler())
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(noStore, csrf.Handler, s.loadSession)
 
@@ -77,6 +93,10 @@ func New(opts Options) http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(s.requireUser)
 			r.Post("/auth/logout", s.handleLogout)
+			r.Get("/oauth/authorization", s.handleAuthorization)
+			r.Post("/oauth/authorize", s.handleAuthorize)
+			r.Get("/oauth/grants", s.handleGrants)
+			r.Post("/oauth/grants/revoke", s.handleRevokeGrant)
 			r.Get("/auth/me", s.handleMe)
 			r.Post("/auth/password", s.handleChangePassword)
 			r.Get("/events", s.handleEvents)
@@ -86,11 +106,11 @@ func New(opts Options) http.Handler {
 			r.Post("/movies", s.handleRequestMovie)
 			r.Get("/movies/search", s.handleSearchMovies)
 			r.Get("/movies/{id}", s.handleGetMovie)
-			r.Delete("/movies/{id}", s.handleDeleteMovie)
-			r.Post("/movies/{id}/search", s.handleMovieSearch)
-			r.Post("/movies/{id}/keep", s.handleMovieKeep)
-			r.Post("/movies/{id}/skip", s.handleMovieSkip)
-			r.Post("/movies/{id}/releases/{releaseId}/download", s.handleMovieDownloadRelease)
+			r.With(s.requireOwner("movie")).Delete("/movies/{id}", s.handleDeleteMovie)
+			r.With(s.requireOwner("movie")).Post("/movies/{id}/search", s.handleMovieSearch)
+			r.With(s.requireOwner("movie")).Post("/movies/{id}/keep", s.handleMovieKeep)
+			r.With(s.requireOwner("movie")).Post("/movies/{id}/skip", s.handleMovieSkip)
+			r.With(s.requireOwner("movie")).Post("/movies/{id}/releases/{releaseId}/download", s.handleMovieDownloadRelease)
 			r.Get("/downloads", s.handleDownloads)
 			r.Get("/downloads/queue", s.handleQueue)
 			r.Get("/downloads/history", s.handleHistory)
@@ -101,12 +121,12 @@ func New(opts Options) http.Handler {
 			r.Get("/series/shows/{tmdbId}", s.handleShowDetails)
 			r.Get("/series/downloads", s.handleEpisodeDownloads)
 			r.Get("/series/{id}", s.handleGetSeries)
-			r.Put("/series/{id}", s.handleUpdateSeries)
-			r.Delete("/series/{id}", s.handleDeleteSeries)
+			r.With(s.requireOwner("series")).Put("/series/{id}", s.handleUpdateSeries)
+			r.With(s.requireOwner("series")).Delete("/series/{id}", s.handleDeleteSeries)
 			r.Get("/episodes/{id}", s.handleGetEpisode)
-			r.Post("/episodes/{id}/search", s.handleEpisodeSearch)
-			r.Post("/episodes/{id}/skip", s.handleEpisodeSkip)
-			r.Post("/episodes/{id}/releases/{releaseId}/download", s.handleEpisodeDownloadRelease)
+			r.With(s.requireOwner("episode")).Post("/episodes/{id}/search", s.handleEpisodeSearch)
+			r.With(s.requireOwner("episode")).Post("/episodes/{id}/skip", s.handleEpisodeSkip)
+			r.With(s.requireOwner("episode")).Post("/episodes/{id}/releases/{releaseId}/download", s.handleEpisodeDownloadRelease)
 			r.Get("/profiles", s.handleListProfiles)
 		})
 
@@ -123,6 +143,7 @@ func New(opts Options) http.Handler {
 			r.Get("/onboarding", s.handleGetOnboarding)
 			r.Put("/onboarding", s.handlePutOnboarding)
 
+			r.Post("/oauth/clients", s.handleCreateOAuthClient)
 			r.Get("/users", s.handleListUsers)
 			r.Post("/users", s.handleCreateUser)
 			r.Put("/users/{id}", s.handleUpdateUser)

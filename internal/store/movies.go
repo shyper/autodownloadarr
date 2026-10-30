@@ -102,6 +102,9 @@ func (s *Store) CreateMovie(ctx context.Context, m Movie, requestedBy int64) (Mo
 	genres, _ := json.Marshal(m.Genres)
 	now := s.ms()
 	var user any
+	if requestedBy == 0 {
+		_ = s.db.QueryRowContext(ctx, `SELECT id FROM users ORDER BY id LIMIT 1`).Scan(&requestedBy)
+	}
 	if requestedBy > 0 {
 		user = requestedBy
 	}

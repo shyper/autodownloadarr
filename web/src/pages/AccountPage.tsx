@@ -1,3 +1,4 @@
+import { ConnectedApps } from '../components/ConnectedApps'
 import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useChangePassword, useMe } from '../api/hooks'
@@ -26,6 +27,7 @@ export function AccountPage() {
           <dd>{new Date(user.createdAt).toLocaleDateString(i18n.resolvedLanguage)}</dd>
         </dl>
       </Card>
+      <ConnectedApps />
       <ChangePasswordCard />
     </div>
   )

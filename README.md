@@ -81,6 +81,7 @@ needed before the database is available:
 | `AUTODOWNLOADARR_LOG_FORMAT` | `text` | `text` or `json` |
 | `AUTODOWNLOADARR_TRUST_PROXY` | `false` | Honour `X-Forwarded-For`/`-Proto`. Enable only behind a reverse proxy. |
 | `AUTODOWNLOADARR_SESSION_TTL` | `720h` | How long a login stays valid without activity |
+| `AUTODOWNLOADARR_PUBLIC_URL` | disabled | Public HTTPS origin, e.g. `https://media.example.com`. Required for OAuth/MCP and bot account linking. HTTP is allowed only on loopback for development. |
 | `AUTODOWNLOADARR_TMDB_URL` | TMDB API | Alternative TMDB endpoint (proxies, tests) |
 | `PUID` / `PGID` | `1000` | User and group the server runs as (Docker image) |
 
@@ -154,3 +155,26 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for conventions.
 ## License
 
 [GPL-3.0](LICENSE)
+
+### MCP and delegated access
+
+Set `AUTODOWNLOADARR_PUBLIC_URL` to the externally reachable HTTPS origin, then
+connect an MCP client to `<public-url>/mcp`. AutoDownloadarr exposes OAuth discovery
+metadata and an authorization-code flow with S256 PKCE using existing user accounts.
+Clients can use a public HTTPS Client ID Metadata Document; administrators can also
+register fixed clients with exact redirect URLs under Account → Connected applications.
+Only the authorization-code and refresh-token grants are supported. Request
+`offline_access` when the client needs a rotating refresh token.
+
+The consent page allows separate `media:read`, `media:request`, `media:manage` and
+`media:delete` permissions. A grant never expands the user's account permissions:
+everyone can read the shared library; users change only their own requests;
+administrators can manage all requests. Movie restoration also checks ownership.
+Unassigned legacy requests and new watchlist requests belong to the first account;
+existing explicit owners are preserved. Grants can be revoked from Account and
+are revoked on password changes or resets. Tokens are stored only as hashes.
+
+MCP tools cover catalog searches/details, movie/series requests, library and episode
+details, releases, downloads, queue/history, keep/pause/window settings, retries,
+release selection and deletion. The endpoint uses the official Go MCP SDK and
+stateless Streamable HTTP. It does not expose provider credentials or configuration.

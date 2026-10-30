@@ -19,6 +19,7 @@ import (
 	"github.com/shyper/autodownloadarr/internal/db"
 	"github.com/shyper/autodownloadarr/internal/events"
 	"github.com/shyper/autodownloadarr/internal/movies"
+	"github.com/shyper/autodownloadarr/internal/oauth"
 	"github.com/shyper/autodownloadarr/internal/scheduler"
 	"github.com/shyper/autodownloadarr/internal/secrets"
 	"github.com/shyper/autodownloadarr/internal/series"
@@ -28,6 +29,7 @@ import (
 const testToken = "ABCD-EFGH-JKLM"
 
 type env struct {
+	oauth *oauth.Service
 	srv   *httptest.Server
 	bus   *events.Bus
 	store *store.Store
@@ -64,6 +66,7 @@ func newEnvWith(t *testing.T, configure func(*movies.Services)) *env {
 	seriesManager := series.NewManager(st, services, sched, bus, log, manager.Limiter())
 	done := make(chan struct{})
 	h := New(Options{
+		PublicURL:  "https://media.example",
 		Store:      st,
 		Services:   services,
 		Movies:     manager,
@@ -87,7 +90,7 @@ func newEnvWith(t *testing.T, configure func(*movies.Services)) *env {
 		close(done)
 		srv.Close()
 	})
-	return &env{srv: srv, bus: bus, store: st, svc: services}
+	return &env{oauth: oauth.New(sqldb, "https://media.example"), srv: srv, bus: bus, store: st, svc: services}
 }
 
 // client returns an HTTP client with its own cookie jar.

@@ -1,3 +1,4 @@
+import { useMe } from '../api/hooks'
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams } from 'react-router'
@@ -37,6 +38,8 @@ const wide = () => typeof window !== 'undefined' && window.matchMedia?.('(min-wi
 
 function Detail({ s }: { s: SeriesDetail }) {
   const { t } = useTranslation()
+  const { data: user } = useMe()
+  const canManage = user?.role === 'admin' || (!!user && user.id === s.requestedBy)
   const seasons = [...new Set(s.episodes.map((e) => e.season))].sort((a, b) => a - b)
   const openSeason = s.current?.season ?? seasons.find((n) => n > 0) ?? seasons[0]
 
@@ -46,11 +49,11 @@ function Detail({ s }: { s: SeriesDetail }) {
         ← {t('series.title')}
       </Link>
       <Header s={s} />
-      <DeleteSeries s={s} />
+      {canManage && <DeleteSeries s={s} />}
       <StatusLine s={s} />
-      <SettingsSection s={s} />
+      {canManage && <SettingsSection s={s} />}
       {seasons.map((season) => (
-        <SeasonSection key={season} season={season} episodes={s.episodes.filter((e) => e.season === season)} defaultOpen={season === openSeason} />
+        <SeasonSection canManage={canManage} key={season} season={season} episodes={s.episodes.filter((e) => e.season === season)} defaultOpen={season === openSeason} />
       ))}
     </div>
   )
@@ -218,7 +221,7 @@ function SettingsForm({ s }: { s: SeriesDetail }) {
 
 const summaryStates: EpisodeState[] = ['available', 'downloading', 'watched', 'deleted', 'failed']
 
-function SeasonSection({ season, episodes, defaultOpen }: { season: number; episodes: Episode[]; defaultOpen: boolean }) {
+function SeasonSection({ season, episodes, defaultOpen, canManage }: { canManage: boolean; season: number; episodes: Episode[]; defaultOpen: boolean }) {
   const { t } = useTranslation()
   const summary = summaryStates
     .map((st) => [st, episodes.filter((e) => e.state === st).length] as const)
@@ -229,14 +232,14 @@ function SeasonSection({ season, episodes, defaultOpen }: { season: number; epis
     <Section title={season === 0 ? t('series.specials') : t('series.season', { number: season })} summary={summary} defaultOpen={defaultOpen}>
       <ul className="-my-2 divide-y divide-line">
         {episodes.map((e) => (
-          <EpisodeRow key={e.id} e={e} />
+          <EpisodeRow key={e.id} e={e} canManage={canManage} />
         ))}
       </ul>
     </Section>
   )
 }
 
-function EpisodeRow({ e }: { e: Episode }) {
+function EpisodeRow({ e, canManage }: { e: Episode; canManage: boolean }) {
   const { t, i18n } = useTranslation()
   const downloads = useEpisodeDownloads()
   const [open, setOpen] = useState(false)
@@ -277,24 +280,24 @@ function EpisodeRow({ e }: { e: Episode }) {
           {e.nextSearchAt && <> · {t('movies.nextSearch')}: {formatDateTime(e.nextSearchAt, lang)}</>}
         </p>
       )}
-      {open && <EpisodeDetails e={e} />}
+      {open && <EpisodeDetails e={e} canManage={canManage} />}
     </li>
   )
 }
 
-function EpisodeDetails({ e }: { e: Episode }) {
+function EpisodeDetails({ e, canManage }: { e: Episode; canManage: boolean }) {
   const { t } = useTranslation()
   const ep = useEpisode(e.id, true)
   const search = useSearchEpisode()
   const skip = useSkipEpisodeRelease()
   const pick = useDownloadEpisodeRelease()
-  const canSearch = ['waiting', 'failed', 'deleted', 'pending', 'skipped'].includes(e.state)
+  const canSearch = canManage && ['waiting', 'failed', 'deleted', 'pending', 'skipped'].includes(e.state)
   const error = search.error ?? skip.error ?? pick.error
 
   return (
     <div className="space-y-3 rounded-xl bg-surface-2 p-3 text-sm">
       {error && <Alert>{errorMessage(t, error)}</Alert>}
-      {(canSearch || e.state === 'downloading') && (
+      {canManage && (canSearch || e.state === 'downloading') && (
         <div className="flex flex-col gap-2 sm:flex-row">
           {canSearch && (
             <Button variant="secondary" className="w-full sm:w-auto" loading={search.isPending} onClick={() => search.mutate(e.id)}>
@@ -329,7 +332,7 @@ function EpisodeDetails({ e }: { e: Episode }) {
                       <span>{formatBytes(r.size)}</span>
                       <ReleaseStatus r={r} mark={mark} />
                     </div>
-                    {mark?.kind !== 'loaded' && mark?.kind !== 'loading' && (
+                    {canManage && mark?.kind !== 'loaded' && mark?.kind !== 'loading' && (
                       <Button
                         variant="ghost"
                         className="w-full sm:w-auto"

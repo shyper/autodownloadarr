@@ -2,6 +2,9 @@ package db
 
 import (
 	"context"
+	"database/sql"
+	"github.com/pressly/goose/v3"
+	"io/fs"
 	"path/filepath"
 	"testing"
 )
@@ -34,4 +37,44 @@ func TestOpenMigratesAndIsReopenable(t *testing.T) {
 		t.Fatalf("reopen: %v", err)
 	}
 	_ = second.Close()
+}
+
+func TestLegacyRequestOwnershipMigration(t *testing.T) {
+	ctx := t.Context()
+	d, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "legacy.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	fsys, err := fs.Sub(migrations, "migrations")
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider, err := goose.NewProvider(goose.DialectSQLite3, d, fsys)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = provider.UpTo(ctx, 13); err != nil {
+		t.Fatal(err)
+	}
+	for _, stmt := range []string{
+		`INSERT INTO users(id,username,password_hash,role,created_at,updated_at) VALUES(3,'first','unused','admin',0,0),(7,'second','unused','user',1,1)`,
+		`INSERT INTO movies(tmdb_id,title,state,requested_by,created_at,updated_at) VALUES(1,'Legacy','available',NULL,0,0),(2,'Owned','available',7,0,0)`,
+		`INSERT INTO series(tmdb_id,title,requested_by,created_at,updated_at) VALUES(1,'Legacy',NULL,0,0),(2,'Owned',7,0,0)`,
+	} {
+		if _, err = d.ExecContext(ctx, stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err = migrate(ctx, d); err != nil {
+		t.Fatal(err)
+	}
+	for _, table := range []string{"movies", "series"} {
+		for id, want := range map[int]int{1: 3, 2: 7} {
+			var got int
+			if err = d.QueryRowContext(ctx, `SELECT requested_by FROM `+table+` WHERE tmdb_id=?`, id).Scan(&got); err != nil || got != want {
+				t.Fatalf("%s owner %d=%d want %d (%v)", table, id, got, want, err)
+			}
+		}
+	}
 }

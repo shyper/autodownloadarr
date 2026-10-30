@@ -155,6 +155,7 @@ func runServer(cfg config.Config, log *slog.Logger) error {
 	srv := &http.Server{
 		Addr: cfg.ListenAddr,
 		Handler: api.New(api.Options{
+			PublicURL:  cfg.PublicURL,
 			Log:        log,
 			DB:         sqldb,
 			Auth:       authSvc,

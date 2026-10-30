@@ -1,3 +1,4 @@
+import { useMe } from '../api/hooks'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams } from 'react-router'
 import {
@@ -33,6 +34,8 @@ function Detail({ m }: { m: MovieDetail }) {
   const downloads = useDownloads()
   const keep = useKeepMovie()
   const search = useSearchAgain()
+  const { data: user } = useMe()
+  const canManage = user?.role === 'admin' || (!!user && user.id === m.requestedBy)
   const skip = useSkipRelease()
   const remove = useDeleteMovie()
   const pick = useDownloadRelease()
@@ -116,7 +119,7 @@ function Detail({ m }: { m: MovieDetail }) {
               <DownloadProgress download={dl} />
             </div>
           )}
-          <div className="flex flex-wrap gap-2">
+          {canManage && <div className="flex flex-wrap gap-2">
             {m.state !== 'deleted' && (
               <Button variant="secondary" loading={keep.isPending} onClick={() => keep.mutate({ id: m.id, keep: !m.keep })}>
                 {m.keep ? t('movies.actions.unkeep') : t('movies.actions.keep')}
@@ -140,7 +143,7 @@ function Detail({ m }: { m: MovieDetail }) {
             <Button variant="ghost" onClick={() => confirmDelete(true)}>
               {t('movies.actions.forget')}
             </Button>
-          </div>
+          </div>}
         </div>
       </div>
 
@@ -178,7 +181,7 @@ function Detail({ m }: { m: MovieDetail }) {
                       <ReleaseStatus r={r} mark={mark} />
                     </td>
                     <td className="py-2 text-right">
-                      {mark?.kind !== 'loaded' && mark?.kind !== 'loading' && (
+                      {canManage && mark?.kind !== 'loaded' && mark?.kind !== 'loading' && (
                         <Button variant="ghost" loading={pick.isPending && pick.variables?.releaseId === r.id} onClick={() => pick.mutate({ id: m.id, releaseId: r.id })}>
                           {t('movies.releases.download')}
                         </Button>
@@ -234,9 +237,9 @@ function Detail({ m }: { m: MovieDetail }) {
                       <Problem value={b.reason} />
                     </p>
                   </div>
-                  <Button variant="ghost" onClick={() => unblock.mutate(b.id)}>
+                  {user?.role === 'admin' && <Button variant="ghost" onClick={() => unblock.mutate(b.id)}>
                     {t('movies.blocklist.remove')}
-                  </Button>
+                  </Button>}
                 </li>
               ))}
             </ul>

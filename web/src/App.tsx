@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router'
 import { DownloadsPage } from './pages/DownloadsPage'
 import { RequireAuth, RequireGuest } from './components/guards'
 import { Layout } from './components/Layout'
+import { AuthorizePage } from './pages/AuthorizePage'
 import { AccountPage } from './pages/AccountPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { LoginPage } from './pages/LoginPage'
@@ -39,6 +40,7 @@ export function App() {
         <Route path="series/:id" element={<SeriesDetailPage />} />
         <Route path="downloads" element={<DownloadsPage />} />
         <Route path="settings/:tab?" element={<SettingsPage />} />
+        <Route path="authorize" element={<AuthorizePage />} />
         <Route path="account" element={<AccountPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>

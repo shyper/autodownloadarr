@@ -153,6 +153,9 @@ func (s *Store) CreateSeries(ctx context.Context, se Series, requestedBy int64) 
 	seasons, _ := json.Marshal(se.Seasons)
 	now := s.ms()
 	var user, profile any
+	if requestedBy == 0 {
+		_ = s.db.QueryRowContext(ctx, `SELECT id FROM users ORDER BY id LIMIT 1`).Scan(&requestedBy)
+	}
 	if requestedBy > 0 {
 		user = requestedBy
 	}

@@ -328,6 +328,9 @@ func (s *Service) setPassword(ctx context.Context, where string, arg any, passwo
 	if _, err := tx.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = ? AND id != ?`, userID, keepSessionID); err != nil {
 		return err
 	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM oauth_grants WHERE user_id = ?`, userID); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 

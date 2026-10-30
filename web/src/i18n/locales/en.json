@@ -592,5 +592,27 @@
     "removed": "removed",
     "duration": "{{minutes}} min",
     "playable": "Watchable now"
+  },
+  "integrations": {
+    "title": "Connected applications",
+    "authorize": "Connect application",
+    "consent": "“{{name}}” wants access to your AutoDownloadarr account. Choose the permitted actions. Your account permissions and quotas still apply.",
+    "callback": "Redirect URL",
+    "deny": "Deny",
+    "allow": "Allow access",
+    "configure": "Set AUTODOWNLOADARR_PUBLIC_URL to the public HTTPS origin to enable integrations.",
+    "none": "No connected applications.",
+    "revoke": "Revoke access",
+    "register": "Register OAuth client",
+    "registerHint": "For clients with a fixed client ID. Clients using a Client ID Metadata Document do not need manual registration.",
+    "clientName": "Application name",
+    "scopes": {
+      "media:read": "Read library and downloads",
+      "media:request": "Request movies and series",
+      "media:manage": "Manage own requests",
+      "media:delete": "Delete own requests and files",
+      "offline_access": "Keep the connection beyond this session"
+    },
+    "clientId": "Client ID"
   }
 }
