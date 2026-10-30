@@ -6,7 +6,7 @@ import { useCreateOAuthClient, useGrants, useRevokeGrant } from '../api/integrat
 import { Alert, Button, Card, Field, Input } from './ui'
 import { errorMessage } from '../i18n'
 
-export function ConnectedApps() {
+export function ConnectedApps({ showEndpoint = true }: { showEndpoint?: boolean }) {
   const { t } = useTranslation()
   const { data: user } = useMe()
   const grants = useGrants()
@@ -18,7 +18,7 @@ export function ConnectedApps() {
     <h2 className="font-semibold">{t('integrations.title')}</h2>
     {grants.isError && <Alert>{errorMessage(t, grants.error)}</Alert>}
     {revoke.isError && <Alert>{errorMessage(t, revoke.error)}</Alert>}
-    {grants.data?.enabled ? <p className="break-all font-mono text-sm">{grants.data.mcpUrl}</p> : <Alert>{t('integrations.configure')}</Alert>}
+    {showEndpoint && (grants.data?.enabled ? <p className="break-all font-mono text-sm">{grants.data.mcpUrl}</p> : <Alert>{t('integrations.configure')}</Alert>)}
     {grants.data?.grants.length === 0 && <p className="text-sm text-muted">{t('integrations.none')}</p>}
     {grants.data?.grants.map((g) => <div key={g.id} className="flex items-start justify-between gap-3 border-t border-line pt-3">
       <div><p className="font-medium">{g.clientName}</p><p className="text-sm text-muted">{g.scopes.split(' ').map((s) => scopeLabel(t, s)).join(' · ')}</p></div>

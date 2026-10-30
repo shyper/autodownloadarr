@@ -236,7 +236,8 @@
       "profile": "Quality",
       "passwords": "Passwords",
       "notifications": "Notifications",
-      "bots": "Bots"
+      "bots": "Bots",
+      "mcp": "MCP"
     },
     "saved": "Saved.",
     "unchanged": "unchanged",
@@ -432,7 +433,8 @@
       "chatId": "Chat ID",
       "chatIdHint": "The chat or channel that receives the messages.",
       "sendTest": "Send test",
-      "testSent": "Test notification sent."
+      "testSent": "Test notification sent.",
+      "urlLabel": "URL"
     },
     "mediaServer": {
       "title": "Media server",
@@ -648,6 +650,31 @@
     "linkExpired": "This connection link is invalid or expired. Run /connect in the bot again.",
     "connectTitle": "Connect bot to your account",
     "connectHint": "After confirmation, {{provider}} account {{external}} can manage requests on your behalf. Your account permissions and quotas apply. An existing connection to this provider will be replaced.",
-    "connect": "Confirm connection"
+    "connect": "Confirm connection",
+    "telegramNotificationsTitle": "Telegram notifications",
+    "telegramNotificationsHint": "Send shared notifications to a fixed Telegram chat or channel. Save the bot token above and enter the chat ID here. Interactive bot control does not need to be enabled. Manage personal notifications for your requests under Account → Connected bots.",
+    "useBotToken": "Use token from bot settings",
+    "useBotTokenHint": "Always uses the current Telegram token saved under Bots. Save the bot token above first.",
+    "replacesNotificationChannel": "{{channel}} is currently configured as the shared notification channel. Enabling and saving Telegram here will replace that channel."
+  },
+  "mcp": {
+    "title": "Set up MCP",
+    "description": "Connect an AI agent to AutoDownloadarr to search, request and manage movies and series. The MCP server is built into AutoDownloadarr; no additional container is needed.",
+    "disabled": "MCP is not enabled yet. Configure the public URL as described below and restart AutoDownloadarr first.",
+    "serverUrl": "MCP server URL",
+    "copy": "Copy URL",
+    "copied": "Copied",
+    "copyFailed": "Could not copy. Select and copy the displayed URL manually.",
+    "setupTitle": "Step-by-step setup",
+    "setupServer": "Set AUTODOWNLOADARR_PUBLIC_URL to the public HTTPS origin of your installation. For example, add the following under the AutoDownloadarr service in docker-compose.yml:",
+    "restart": "Replace the example address with your own domain and recreate the container with docker compose up -d. The MCP URL will then appear above.",
+    "proxy": "The domain must reach AutoDownloadarr over HTTPS. Behind a reverse proxy, forward /mcp, /oauth and /.well-known as well. Set AUTODOWNLOADARR_TRUST_PROXY=true only when AutoDownloadarr is reachable exclusively through the trusted proxy.",
+    "setupClient": "Add a remote MCP server named AutoDownloadarr in your agent. Use the MCP server URL shown above, Streamable HTTP and OAuth authentication.",
+    "setupLogin": "Open the browser sign-in started by your agent. Sign in with your AutoDownloadarr account, review the application and grant the desired permissions.",
+    "setupUse": "Then ask the agent, for example: “Search for Dune and show me matching movies.” Requests and deletions require the corresponding permissions.",
+    "compatibility": "The agent must support remote MCP over Streamable HTTP and OAuth with PKCE. Clients using a Client ID Metadata Document connect without manual registration. If your client requires a fixed client ID, register it below with the redirect URL supplied by the client. Older clients that require Dynamic Client Registration (DCR) exclusively are currently unsupported.",
+    "permissionsTitle": "Permissions and access",
+    "permissionsHint": "All users can read the shared library. Regular users manage their own requests; administrators can manage all requests. Quotas also apply to agents. Revoke access below or under Account → Connected applications at any time.",
+    "accountLink": "Open connected applications in your account"
   }
 }

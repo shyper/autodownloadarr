@@ -39,8 +39,19 @@ func (s *server) handleTestNotification(w http.ResponseWriter, r *http.Request) 
 	if !decodeJSON(w, r, &n) {
 		return
 	}
-	if n.Token == "" {
-		if cur, err := s.Store.Notification(r.Context()); err == nil {
+	if n.Provider == "telegram" && n.UseBotToken {
+		bots, err := s.Store.BotConfig(r.Context())
+		if err != nil {
+			s.internalError(w, "read bot token", err)
+			return
+		}
+		n.Token = bots.TelegramToken
+		if n.Token == "" {
+			writeError(w, http.StatusBadRequest, "invalid_input", "configure the Telegram bot token first")
+			return
+		}
+	} else if n.Token == "" {
+		if cur, err := s.Store.Notification(r.Context()); err == nil && !cur.UseBotToken {
 			n.Token = cur.Token
 		}
 	}

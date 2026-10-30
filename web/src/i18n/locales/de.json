@@ -236,7 +236,8 @@
       "profile": "Qualität",
       "passwords": "Passwörter",
       "notifications": "Benachrichtigungen",
-      "bots": "Bots"
+      "bots": "Bots",
+      "mcp": "MCP"
     },
     "saved": "Gespeichert.",
     "unchanged": "unverändert",
@@ -432,7 +433,8 @@
       "chatId": "Chat-ID",
       "chatIdHint": "Der Chat oder Kanal, der die Meldungen erhält.",
       "sendTest": "Test senden",
-      "testSent": "Testbenachrichtigung gesendet."
+      "testSent": "Testbenachrichtigung gesendet.",
+      "urlLabel": "Adresse"
     },
     "mediaServer": {
       "title": "Medienserver",
@@ -648,6 +650,31 @@
     "linkExpired": "Der Verbindungslink ist ungültig oder abgelaufen. Bitte /connect im Bot erneut ausführen.",
     "connectTitle": "Bot mit deinem Konto verbinden",
     "connectHint": "{{provider}}-Konto {{external}} darf nach der Bestätigung in deinem Namen Anforderungen verwalten. Deine Benutzerrechte und Quoten gelten. Eine vorhandene Verbindung zu diesem Anbieter wird ersetzt.",
-    "connect": "Verbindung bestätigen"
+    "connect": "Verbindung bestätigen",
+    "telegramNotificationsTitle": "Telegram-Benachrichtigungen",
+    "telegramNotificationsHint": "Sende gemeinsame Meldungen an einen festen Telegram-Chat oder Kanal. Speichere oben den Bot-Token und trage hier die Chat-ID ein. Die interaktive Bot-Steuerung muss dafür nicht aktiviert sein. Persönliche Meldungen für eigene Anforderungen verwaltest du unter Konto → Verbundene Bots.",
+    "useBotToken": "Token aus den Bot-Einstellungen verwenden",
+    "useBotTokenHint": "Verwendet immer den aktuell unter Bots gespeicherten Telegram-Token. Den Bot-Token oben zuerst speichern.",
+    "replacesNotificationChannel": "Aktuell ist {{channel}} als gemeinsamer Benachrichtigungskanal eingerichtet. Wenn du Telegram hier aktivierst und speicherst, ersetzt es diesen Kanal."
+  },
+  "mcp": {
+    "title": "MCP einrichten",
+    "description": "Verbinde einen AI-Agenten mit AutoDownloadarr, um Filme und Serien zu suchen, anzufordern und zu verwalten. Der MCP-Server ist bereits in AutoDownloadarr enthalten; ein zusätzlicher Container ist nicht nötig.",
+    "disabled": "MCP ist noch nicht aktiviert. Richte zuerst die öffentliche Adresse wie unten beschrieben ein und starte AutoDownloadarr neu.",
+    "serverUrl": "MCP-Server-URL",
+    "copy": "URL kopieren",
+    "copied": "Kopiert",
+    "copyFailed": "Kopieren nicht möglich. Bitte die angezeigte URL markieren und kopieren.",
+    "setupTitle": "Einrichtung Schritt für Schritt",
+    "setupServer": "Setze AUTODOWNLOADARR_PUBLIC_URL auf die öffentliche HTTPS-Adresse deiner Installation. Ergänze zum Beispiel in deiner docker-compose.yml unter dem AutoDownloadarr-Service:",
+    "restart": "Ersetze die Beispieladresse durch deine eigene Domain und erstelle den Container mit docker compose up -d neu. Danach ist die MCP-URL oben sichtbar.",
+    "proxy": "Die Domain muss AutoDownloadarr über HTTPS erreichen. Hinter einem Reverse Proxy leite auch /mcp und /oauth sowie /.well-known weiter. AUTODOWNLOADARR_TRUST_PROXY=true nur setzen, wenn AutoDownloadarr ausschließlich über den vertrauenswürdigen Proxy erreichbar ist.",
+    "setupClient": "Füge in deinem Agenten einen Remote-MCP-Server mit dem Namen AutoDownloadarr hinzu. Verwende die oben angezeigte MCP-Server-URL, Streamable HTTP und OAuth als Anmeldung.",
+    "setupLogin": "Öffne die vom Agenten gestartete Anmeldung im Browser. Melde dich mit deinem AutoDownloadarr-Benutzer an, prüfe die Anwendung und erlaube die gewünschten Berechtigungen.",
+    "setupUse": "Bitte den Agenten anschließend zum Beispiel: „Suche nach Dune und zeige mir die passenden Filme.“ Anforderungen und Löschungen sind nur mit den entsprechenden Freigaben möglich.",
+    "compatibility": "Der Agent muss Remote MCP über Streamable HTTP und OAuth mit PKCE unterstützen. Clients mit einem Client-Metadatendokument verbinden sich ohne manuelle Registrierung. Verlangt dein Client eine feste Client-ID, registriere ihn unten mit der vom Client angegebenen Rücksprungadresse. Ältere Clients, die ausschließlich dynamische Registrierung (DCR) verlangen, werden derzeit nicht unterstützt.",
+    "permissionsTitle": "Berechtigungen und Zugriff",
+    "permissionsHint": "Alle Benutzer können die gemeinsame Bibliothek lesen. Normale Benutzer verwalten nur eigene Anforderungen; Administratoren dürfen alle verwalten. Quoten gelten auch für Agenten. Du kannst den Zugriff jederzeit unten oder unter Konto → Verbundene Anwendungen widerrufen.",
+    "accountLink": "Verbundene Anwendungen im Konto öffnen"
   }
 }

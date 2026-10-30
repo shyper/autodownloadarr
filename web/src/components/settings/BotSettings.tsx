@@ -1,3 +1,4 @@
+import { NotificationSettings } from './NotificationSettings'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useBotConfig, useSaveBotConfig, useSyncBots, useTestBots, type BotConfig } from '../../api/integrations'
@@ -9,7 +10,7 @@ export function BotSettings() {
   const { t } = useTranslation()
   if (config.isPending) return <Spinner />
   if (config.isError) return <Alert>{errorMessage(t, config.error)}</Alert>
-  return <BotForm initial={config.data} />
+  return <div className="space-y-8"><BotForm initial={config.data} /><div className="border-t border-line pt-6"><NotificationSettings provider="telegram" /></div></div>
 }
 function BotForm({ initial }: { initial: BotConfig }) {
   const { t } = useTranslation()

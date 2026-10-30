@@ -158,7 +158,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for conventions.
 
 ### MCP and delegated access
 
-Set `AUTODOWNLOADARR_PUBLIC_URL` to the externally reachable HTTPS origin, then
+Settings → MCP contains setup instructions, the configured server URL and client
+registration. Set `AUTODOWNLOADARR_PUBLIC_URL` to the externally reachable HTTPS origin, then
 connect an MCP client to `<public-url>/mcp`. AutoDownloadarr exposes OAuth discovery
 metadata and an authorization-code flow with S256 PKCE using existing user accounts.
 Clients can use a public HTTPS Client ID Metadata Document; administrators can also
@@ -185,6 +186,13 @@ Bots are configured independently of the existing notification destinations unde
 Settings → Bots. Their tokens are encrypted in the database. Save configuration,
 then use **Test connection** and **Sync commands** (also after changing delivery
 mode). Connection tests do not send chat messages.
+
+Settings → Bots also configures shared Telegram notifications to a fixed chat or
+channel. Choose **Use token from bot settings** to reuse the current bot token,
+including after rotation, without entering it twice. Interactive bot control can
+stay disabled for notification-only use. This uses the existing shared notification
+channel; the UI explains when enabling Telegram would replace another provider.
+Personal notifications for linked accounts remain under Account → Connected bots.
 
 - **Telegram:** create a bot with `@BotFather`, enter its token, and use long polling
   by default. No inbound Telegram endpoint is required in this mode. Optional

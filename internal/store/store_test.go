@@ -460,3 +460,53 @@ func TestReleaseIdentitySurvivesSearchReplacement(t *testing.T) {
 		t.Fatal("GUID not scoped to indexer")
 	}
 }
+
+func TestTelegramNotificationsShareCurrentBotToken(t *testing.T) {
+	s, ctx := newStore(t), t.Context()
+	if err := s.SetNotification(ctx, Notification{Provider: "telegram", ChatID: "42", UseBotToken: true}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("missing bot token accepted: %v", err)
+	}
+	cfg := BotConfig{TelegramMode: "polling", TelegramToken: "123:shared-one"}
+	if err := s.SaveBotConfig(ctx, cfg); err != nil {
+		t.Fatal(err)
+	}
+	n := Notification{Enabled: true, Provider: "telegram", ChatID: "42", UseBotToken: true}
+	if err := s.SetNotification(ctx, n); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Notification(ctx)
+	if err != nil || got.Token != cfg.TelegramToken || !got.UseBotToken || !got.HasToken {
+		t.Fatalf("shared token not resolved: %+v %v", got, err)
+	}
+	var raw string
+	if err := s.db.QueryRowContext(ctx, `SELECT value FROM settings WHERE key='notifications'`).Scan(&raw); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(raw, "shared-one") || strings.Contains(raw, "tokenEnc") {
+		t.Fatal("shared bot token was copied into notification settings")
+	}
+	cfg.TelegramToken = "123:shared-two"
+	if err := s.SaveBotConfig(ctx, cfg); err != nil {
+		t.Fatal(err)
+	}
+	got, err = s.Notification(ctx)
+	if err != nil || got.Token != cfg.TelegramToken {
+		t.Fatal("bot token rotation not reflected in notifications")
+	}
+	n.UseBotToken = false
+	if err := s.SetNotification(ctx, n); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("switching to a separate token silently reused shared credentials: %v", err)
+	}
+	n.Token = "456:separate"
+	if err := s.SetNotification(ctx, n); err != nil {
+		t.Fatal(err)
+	}
+	cfg.TelegramToken = "123:shared-three"
+	if err := s.SaveBotConfig(ctx, cfg); err != nil {
+		t.Fatal(err)
+	}
+	got, err = s.Notification(ctx)
+	if err != nil || got.Token != n.Token || got.UseBotToken {
+		t.Fatal("separate notification token was changed by bot token rotation")
+	}
+}

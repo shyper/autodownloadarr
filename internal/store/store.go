@@ -147,10 +147,11 @@ func (s *Store) SetTMDBKey(ctx context.Context, key string) error {
 
 // Notification is the configured notification channel.
 type Notification struct {
-	Enabled  bool   `json:"enabled"`
-	Provider string `json:"provider"` // webhook, discord, ntfy or telegram
-	URL      string `json:"url"`
-	ChatID   string `json:"chatId"`
+	UseBotToken bool   `json:"useBotToken"`
+	Enabled     bool   `json:"enabled"`
+	Provider    string `json:"provider"` // webhook, discord, ntfy or telegram
+	URL         string `json:"url"`
+	ChatID      string `json:"chatId"`
 	// Token is the Telegram bot token. It is write-only: handlers clear it
 	// before sending the configuration to the UI.
 	Token    string `json:"token,omitempty"`
@@ -160,11 +161,12 @@ type Notification struct {
 // notificationConfig is how the channel is stored: the token is encrypted
 // next to the other fields.
 type notificationConfig struct {
-	Enabled  bool   `json:"enabled"`
-	Provider string `json:"provider"`
-	URL      string `json:"url"`
-	ChatID   string `json:"chatId"`
-	TokenEnc string `json:"tokenEnc,omitempty"`
+	UseBotToken bool   `json:"useBotToken"`
+	Enabled     bool   `json:"enabled"`
+	Provider    string `json:"provider"`
+	URL         string `json:"url"`
+	ChatID      string `json:"chatId"`
+	TokenEnc    string `json:"tokenEnc,omitempty"`
 }
 
 // Validate checks the fields of a notification channel. An empty token is
@@ -197,8 +199,15 @@ func (s *Store) Notification(ctx context.Context) (Notification, error) {
 	if _, err := s.getSetting(ctx, keyNotifications, &c); err != nil {
 		return Notification{}, err
 	}
-	n := Notification{Enabled: c.Enabled, Provider: c.Provider, URL: c.URL, ChatID: c.ChatID}
+	n := Notification{Enabled: c.Enabled, Provider: c.Provider, URL: c.URL, ChatID: c.ChatID, UseBotToken: c.UseBotToken}
 	n.Token = s.decrypt(c.TokenEnc)
+	if n.Provider == "telegram" && n.UseBotToken {
+		bots, err := s.BotConfig(ctx)
+		if err != nil {
+			return Notification{}, err
+		}
+		n.Token = bots.TelegramToken
+	}
 	n.HasToken = n.Token != ""
 	return n, nil
 }
@@ -213,13 +222,26 @@ func (s *Store) SetNotification(ctx context.Context, n Notification) error {
 		return err
 	}
 	token := n.Token
-	if token == "" {
+	if token == "" && !cur.UseBotToken {
 		token = cur.Token
 	}
-	if n.Provider == "telegram" && token == "" {
+	if n.Provider != "telegram" {
+		n.UseBotToken = false
+	}
+	if n.UseBotToken {
+		bots, err := s.BotConfig(ctx)
+		if err != nil {
+			return err
+		}
+		if bots.TelegramToken == "" {
+			return fmt.Errorf("%w: configure the Telegram bot token first", ErrInvalid)
+		}
+		token = ""
+	}
+	if n.Provider == "telegram" && !n.UseBotToken && token == "" {
 		return fmt.Errorf("%w: bot token is required", ErrInvalid)
 	}
-	c := notificationConfig{Enabled: n.Enabled, Provider: n.Provider, URL: n.URL, ChatID: n.ChatID}
+	c := notificationConfig{Enabled: n.Enabled, Provider: n.Provider, URL: n.URL, ChatID: n.ChatID, UseBotToken: n.UseBotToken}
 	if token != "" {
 		if c.TokenEnc, err = s.encrypt(token); err != nil {
 			return err
