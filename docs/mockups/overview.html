@@ -1,0 +1,151 @@
+<div id="ada-preview" class="viz-carousel" aria-label="Entwürfe für die Übersicht" data-previous-label="Vorheriger Entwurf" data-next-label="Nächster Entwurf">
+  <section data-variant="Entdecken" aria-label="Medienorientierte Übersicht"></section>
+  <section data-variant="Meine Mediathek" aria-label="Persönliche Übersicht" hidden></section>
+</div>
+<style>
+#ada-preview .ada {
+  --page:light-dark(#f5f6f8,#0e1118);--panel:light-dark(#fff,#171c26);--ink:light-dark(#182234,#f2f5fb);--dim:light-dark(#58657a,#a7b2c4);--line:light-dark(#dfe5ed,#2a3343);--cyan:light-dark(#087b96,#55d8ed);--soft:light-dark(#e0f4f7,#163640);--green:light-dark(#08734c,#6de3b2);
+  background:var(--page);color:var(--ink);font:14px/1.5 system-ui,sans-serif;border-radius:16px;overflow:hidden;min-height:1040px;
+}
+#ada-preview .ada *{box-sizing:border-box}
+#ada-preview .ada button,#ada-preview .ada input{font:inherit}
+#ada-preview .ada button{cursor:pointer}
+#ada-preview .ada button:focus-visible{outline:3px solid var(--cyan);outline-offset:3px}
+#ada-preview .ada-header{display:flex;align-items:center;gap:25px;padding:22px 26px;border-bottom:1px solid var(--line);background:var(--panel);padding-right:105px;flex-wrap:wrap}
+#ada-preview .ada-brand{display:flex;gap:9px;align-items:center;font-weight:700;letter-spacing:-.5px}
+#ada-preview .ada-logo{background:var(--cyan);color:var(--page);border-radius:10px;padding:7px;display:flex}
+#ada-preview .ada-nav{display:flex;align-items:center;gap:17px;flex-wrap:wrap;color:var(--dim);font-size:12px}
+#ada-preview .ada-nav strong{color:var(--cyan);font-weight:600}
+#ada-preview .ada-account{margin-left:auto;color:var(--dim);font-size:12px}
+#ada-preview .ada-main{padding:30px;display:grid;gap:26px}
+#ada-preview .ada-greeting{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+#ada-preview .ada h1{font-size:27px;line-height:1.2;font-weight:650;letter-spacing:-.8px;margin:0 0 7px}
+#ada-preview .ada p{margin:0}
+#ada-preview .ada-muted{color:var(--dim);font-size:12px}
+#ada-preview .ada-demo{border:1px solid var(--line);border-radius:6px;padding:3px 8px;color:var(--dim);font-size:11px;white-space:nowrap}
+#ada-preview .ada-feature{position:relative;isolation:isolate;overflow:hidden;border-radius:14px;min-height:225px;background:linear-gradient(100deg,#151c29 15%,#243e4a 65%,#7c8b7b);color:#f6f7fa;padding:27px 30px;display:flex;align-items:center}
+#ada-preview .ada-feature:before{content:"";position:absolute;z-index:-1;width:320px;height:320px;border-radius:50%;background:radial-gradient(circle at 45% 38%,#d7dcac,#7b998c 42%,#3c5960 63%,transparent 64%);right:-15px;top:-45px;opacity:.65}
+#ada-preview .ada-feature:after{content:"";position:absolute;z-index:-1;inset:0;background:linear-gradient(150deg,transparent 55%,#192d35 55.3%,#16242b 69%,#0d1c26 69.3%);opacity:.8}
+#ada-preview .ada-feature-copy{max-width:470px}
+#ada-preview .ada-eyebrow{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#9dd8e2;font-weight:650;display:flex;gap:7px;align-items:center;margin-bottom:10px}
+#ada-preview .ada-feature h2{font-size:31px;letter-spacing:-1px;line-height:1.15;margin:0 0 9px;font-weight:650}
+#ada-preview .ada-feature p{color:#c0cfda;font-size:12px;max-width:330px;margin-bottom:18px}
+#ada-preview .ada-action{border:0;border-radius:7px;padding:8px 12px;background:var(--cyan);color:var(--page);font-weight:600;font-size:12px;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+#ada-preview .ada-feature .ada-action{background:#8ce4ee;color:#10252b}
+#ada-preview .ada-section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+#ada-preview .ada h3{font-size:18px;letter-spacing:-.4px;font-weight:650;margin:0;display:flex;gap:8px;align-items:center}
+#ada-preview .ada-section-note{font-size:11px;color:var(--dim);margin-top:3px}
+#ada-preview .ada-controls{display:flex;gap:5px;flex-wrap:wrap}
+#ada-preview .ada-filter{border:1px solid var(--line);border-radius:6px;padding:5px 10px;background:var(--panel);color:var(--dim);font-size:11px}
+#ada-preview .ada-filter[aria-pressed=true]{color:var(--cyan);border-color:var(--cyan);background:var(--soft)}
+#ada-preview .ada-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:15px}
+#ada-preview .ada-media{min-width:0}
+#ada-preview .ada-poster-button{position:relative;display:block;width:100%;padding:0;overflow:hidden;border:0;border-radius:9px;background:#233346;color:#fff;text-align:left}
+#ada-preview .ada-art{aspect-ratio:2/2.65;position:relative;overflow:hidden;display:flex;align-items:flex-end;padding:14px 11px 34px;isolation:isolate}
+#ada-preview .ada-art:after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(transparent 20%,#050b1680 70%,#050b16e0)}
+#ada-preview .ada-art-title{font-family:Georgia,serif;font-size:clamp(14px,1.55vw,21px);line-height:1.05;letter-spacing:1px;overflow-wrap:anywhere;color:#fff;text-shadow:0 2px 8px #0008}
+#ada-preview .art-dune{background:radial-gradient(ellipse at 65% 15%,#f9d5a2 0,transparent 32%),linear-gradient(158deg,transparent 48%,#a95e35 49%,#ca9664 63%,#5e3430 64%),#b48761}
+#ada-preview .art-severance{background:repeating-linear-gradient(90deg,transparent 0 28px,#6e9a8e55 29px 31px),linear-gradient(165deg,#9dbfb1,#426b66 50%,#183c40)}
+#ada-preview .art-interstellar{background:radial-gradient(ellipse at 60% 32%,#202b36 16%,#d4dcdb 17%,#b7b9a0 18%,#61717c 21%,transparent 25%),linear-gradient(155deg,#8a9faa,#273448 55%,#15232b)}
+#ada-preview .art-bear{background:repeating-linear-gradient(0deg,transparent 0 28px,#48637766 29px 30px),linear-gradient(145deg,#95a6b4,#314c63 50%,#102531)}
+#ada-preview .art-shogun{background:radial-gradient(circle at 65% 25%,#d26c59 0 22%,transparent 22.5%),linear-gradient(155deg,transparent 50%,#344b43 50.5%,#1b302b 75%),#bdbea2}
+#ada-preview .art-silo{background:repeating-radial-gradient(ellipse at 65% 20%,#9b9a7c 0 6px,#474f45 7px 10px,#1f302f 11px 28px)}
+#ada-preview .ada-status{position:absolute;bottom:0;left:0;right:0;padding:8px;background:#0c182be8;font-size:10px;display:flex;align-items:center;gap:5px;color:#e2edf7}
+#ada-preview .ada-status.ready{color:#8eebc4}
+#ada-preview .ada-status svg{width:13px;height:13px;flex-shrink:0}
+#ada-preview .ada-ready-icon{position:absolute;top:9px;right:9px;border-radius:50%;background:#124832;color:#a1f3ce;display:flex;align-items:center;justify-content:center;width:26px;height:26px;box-shadow:0 2px 8px #0003}
+#ada-preview .ada-ready-icon svg{width:13px;height:13px;fill:currentColor}
+#ada-preview .ada-rank{position:absolute;top:8px;left:9px;padding:2px 6px;border-radius:4px;background:#0b1526b8;color:#fff;font-size:10px}
+#ada-preview .ada-download{height:3px;position:absolute;bottom:0;left:0;right:0;background:#30495a}
+#ada-preview .ada-download span{height:100%;display:block;background:#62e0ed}
+#ada-preview .ada-name{font-size:12px;font-weight:600;margin-top:8px;overflow-wrap:anywhere}
+#ada-preview .ada-meta{color:var(--dim);font-size:10px;margin-top:2px}
+#ada-preview .ada-continue{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px}
+#ada-preview .ada-resume{padding:13px;background:var(--panel);border:1px solid var(--line);border-radius:9px;display:flex;gap:12px;align-items:center;min-width:0}
+#ada-preview .ada-thumb{width:48px;height:64px;flex-shrink:0;border-radius:5px}
+#ada-preview .ada-resume-copy{min-width:0;flex:1}
+#ada-preview .ada-resume-title{font-size:12px;font-weight:600}
+#ada-preview .ada-watch-track{height:3px;background:var(--line);margin:8px 0 5px;border-radius:3px}
+#ada-preview .ada-watch-track span{display:block;height:100%;background:var(--cyan);border-radius:3px}
+#ada-preview .ada-play{border:1px solid var(--line);background:var(--page);color:var(--cyan);border-radius:50%;width:29px;height:29px;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:6px}
+#ada-preview .ada svg{width:16px;height:16px}
+#ada-preview .ada i[data-lucide]{font-style:normal}
+#ada-preview .ada i[data-lucide="play"]:empty:before{content:"▶";font-size:11px}
+#ada-preview .ada i[data-lucide="arrow-down-to-line"]:empty:before{content:"↓"}
+#ada-preview .ada i[data-lucide="plus"]:empty:before{content:"+"}
+#ada-preview .ada i[data-lucide="flame"]:empty:before{content:"↗"}
+#ada-preview .ada-footer{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:17px;font-size:11px;color:var(--dim)}
+#ada-preview .ada-live{color:var(--green)}
+#ada-preview .ada-detail{background:var(--panel);border:1px solid var(--line);padding:16px;border-radius:10px;display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+#ada-preview .ada-detail[hidden]{display:none}
+#ada-preview .ada-notice{font-size:12px;color:var(--cyan);min-height:18px}
+#ada-preview .personal .ada-feature{min-height:150px}
+#ada-preview .personal .ada-grid{grid-template-columns:repeat(6,minmax(0,1fr))}
+@media(max-width:760px){#ada-preview .ada-header{padding:18px;gap:15px;padding-right:95px}#ada-preview .ada-nav{gap:12px}#ada-preview .ada-account{display:none}#ada-preview .ada-main{padding:20px;gap:24px}#ada-preview .ada-grid,#ada-preview .personal .ada-grid{grid-template-columns:repeat(3,minmax(0,1fr))}#ada-preview .ada-continue{grid-template-columns:1fr}#ada-preview .ada{min-height:1510px}}
+@media(max-width:420px){#ada-preview .ada-main{padding:15px}#ada-preview .ada-grid,#ada-preview .personal .ada-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#ada-preview .ada-feature{padding:22px 19px}#ada-preview .ada-art-title{font-size:17px}#ada-preview .ada{min-height:2070px}#ada-preview .ada-nav{font-size:11px;gap:10px}#ada-preview .ada h1{font-size:24px}}
+@media(pointer:coarse){#ada-preview .ada-filter,#ada-preview .ada-play,#ada-preview .ada-action{min-height:44px;min-width:44px}}
+</style>
+<script>
+(() => {
+  const root = document.getElementById('ada-preview');
+  const media = [
+    {title:'Dune: Part Two', art:'dune', display:'DUNE', kind:'movie', year:'2024', status:'ready'},
+    {title:'Severance', art:'severance', display:'SEVERANCE', kind:'tv', year:'2022', status:'download', progress:68, eta:'4 Min.'},
+    {title:'Interstellar', art:'interstellar', display:'INTERSTELLAR', kind:'movie', year:'2014', status:'ready'},
+    {title:'The Bear', art:'bear', display:'THE BEAR', kind:'tv', year:'2022', status:'new'},
+    {title:'Shōgun', art:'shogun', display:'SHŌGUN', kind:'tv', year:'2024', status:'download', progress:32, eta:'12 Min.'},
+    {title:'Silo', art:'silo', display:'SILO', kind:'tv', year:'2023', status:'new'},
+  ];
+  const states = [];
+  const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  function card(m,rank){
+    const label = m.status === 'ready' ? 'Abspielbereit' : m.status === 'download' ? `${m.progress} % · noch ${m.eta}` : m.status === 'queued' ? 'In der Warteschlange' : 'Zur Mediathek hinzufügen';
+    return `<article class="ada-media"><button type="button" class="ada-poster-button" data-media="${escape(m.title)}" aria-label="${escape(m.title)}: ${label}"><div class="ada-art art-${m.art}"><span class="ada-art-title">${m.display}</span></div><span class="ada-rank">#${rank}</span>${m.status === 'ready' ? '<span class="ada-ready-icon" data-tooltip="Abspielbereit"><i data-lucide="play" aria-hidden="true"></i></span>' : ''}<span class="ada-status ${m.status === 'ready'?'ready':''}"><i data-lucide="${m.status === 'ready'?'play':m.status === 'download'?'arrow-down-to-line':m.status === 'queued'?'clock':'plus'}" aria-hidden="true"></i>${label}</span>${m.status === 'download' ? `<span class="ada-download" role="progressbar" aria-label="Download ${escape(m.title)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${m.progress}"><span style="width:${m.progress}%"></span></span>`:''}</button><div class="ada-name">${m.title}</div><div class="ada-meta">${m.year} · ${m.kind === 'movie'?'Film':'Serie'}</div></article>`;
+  }
+  function resume(){
+    return `<section><div class="ada-section-head"><h3>Weiterschauen</h3><span class="ada-muted">Dein nächster Filmabend</span></div><div class="ada-continue">${[
+      ['Interstellar','interstellar','Noch 48 Min.',71],['Severance','severance','S01 E04 · noch 18 Min.',62],['Dune: Part Two','dune','Noch 1 Std. 12 Min.',57]
+    ].map(([title,art,detail,progress])=>`<article class="ada-resume"><div class="ada-thumb art-${art}"></div><div class="ada-resume-copy"><div class="ada-resume-title">${title}</div><div class="ada-watch-track" role="progressbar" aria-label="Gesehen: ${title}" aria-valuenow="${progress}" aria-valuemin="0" aria-valuemax="100"><span style="width:${progress}%"></span></div><div class="ada-meta">${detail}</div></div><button type="button" class="ada-play" data-resume="${title}" aria-label="${title} weiterschauen"><i data-lucide="play" aria-hidden="true"></i></button></article>`).join('')}</div></section>`;
+  }
+  root.querySelectorAll('[data-variant]').forEach((stage,index)=>{
+    const saved = window.openai?.widgetState?.privateContent?.views?.[index];
+    const state = {filter:saved?.filter || 'all',window:saved?.window || 'week',showResume:true};
+    states.push(state);
+    const localMedia = media.map(m=>({...m}));
+    stage.innerHTML = `<div class="ada ${index?'personal':''}" aria-label="${index?'Meine Mediathek':'Entdecken'}"><header class="ada-header"><div class="ada-brand"><span class="ada-logo"><i data-lucide="arrow-down-to-line" aria-hidden="true"></i></span>AutoDownloadarr</div><nav class="ada-nav" aria-label="Hauptnavigation"><strong>Übersicht</strong><span>Filme</span><span>Serien</span><span>Downloads</span><span>Einstellungen</span></nav><div class="ada-account">Nick</div></header><main class="ada-main"><div class="ada-greeting"><div><h1>Guten Abend, Nick.</h1><p class="ada-muted">${index?'Deine Mediathek. Dein nächster Filmabend.':'Entdecke etwas Neues für deinen nächsten Filmabend.'}</p></div><span class="ada-demo">Mockup · Beispieldaten</span></div>${index?resume():''}<section class="ada-feature"><div class="ada-feature-copy"><div class="ada-eyebrow"><i data-lucide="sparkles" aria-hidden="true"></i>${index?'Für später vorgemerkt':'Heute für dich'}</div><h2>${index?'Dein Abend beginnt hier.':'Dune: Part Two'}</h2><p>${index?'2 Downloads laufen. Währenddessen wartet deine Mediathek auf dich.':'2024 · Science-Fiction · 2 Std. 47 Min. · Abspielbereit'}</p><button type="button" class="ada-action" data-discover><i data-lucide="compass" aria-hidden="true"></i>Trending entdecken</button></div></section>${index?'':resume()}<section class="ada-trending"><div class="ada-section-head"><div><h3><i data-lucide="flame" aria-hidden="true"></i>Trending</h3><p class="ada-section-note">Was gerade angesagt ist</p></div><div class="ada-controls" aria-label="Trending-Zeitraum"><button type="button" class="ada-filter" data-window="day">Heute</button><button type="button" class="ada-filter" data-window="week">Diese Woche</button></div></div><div class="ada-section-head"><div class="ada-controls" aria-label="Medientyp"><button type="button" class="ada-filter" data-filter="all">Alle</button><button type="button" class="ada-filter" data-filter="movie">Filme</button><button type="button" class="ada-filter" data-filter="tv">Serien</button></div><span class="ada-section-note">Play = abspielbereit · Balken = Download</span></div><div class="ada-grid"></div></section><section class="ada-detail" aria-live="polite" hidden></section><p class="ada-notice" aria-live="polite"></p><footer class="ada-footer"><span>124 Filme · 38 Serien in deiner Mediathek</span><span class="ada-live">● Verbunden · 2 Downloads aktiv</span></footer></main></div>`;
+    const app = stage.querySelector('.ada');
+    const grid = stage.querySelector('.ada-grid');
+    const detail = stage.querySelector('.ada-detail');
+    function icons(){globalThis.lucide?.createIcons({attrs:{width:16,height:16}});}
+    function persist(){window.openai?.setWidgetState?.({modelContent:{mockup:'AutoDownloadarr Übersicht',features:['Trending','Downloadfortschritt auf Postern','Play-Symbol für verfügbare Titel']},privateContent:{views:states.map(s=>({filter:s.filter,window:s.window}))}})?.catch(()=>{});}
+    function render(){
+      const ordered=state.window==='day'?[localMedia[1],localMedia[0],localMedia[4],localMedia[3],localMedia[2],localMedia[5]]:localMedia;
+      grid.innerHTML=ordered.map((m,i)=>({m,rank:i+1})).filter(({m})=>state.filter==='all'||m.kind===state.filter).map(({m,rank})=>card(m,rank)).join('');
+      app.querySelectorAll('[data-filter]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.filter===state.filter)));
+      app.querySelectorAll('[data-window]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.window===state.window)));
+      const continueSection=app.querySelector('.ada-continue')?.parentElement;
+      if(continueSection)continueSection.hidden=!state.showResume;
+      icons();
+    }
+    app.addEventListener('click',event=>{
+      const button=event.target.closest('button');if(!button)return;
+      if(button.dataset.filter){state.filter=button.dataset.filter;render();persist();}
+      if(button.dataset.window){state.window=button.dataset.window;render();persist();}
+      if(button.hasAttribute('data-discover'))app.querySelector('.ada-trending').scrollIntoView({behavior:'auto',block:'nearest'});
+      if(button.dataset.resume)app.querySelector('.ada-notice').textContent=`Vorschau: „${button.dataset.resume}“ würde im verbundenen Mediaplayer geöffnet.`;
+      if(button.dataset.media){
+        const m=localMedia.find(item=>item.title===button.dataset.media);
+        detail.hidden=false;
+        detail.innerHTML=`<div><strong>${escape(m.title)}</strong><p class="ada-muted">${m.status==='ready'?'In deiner Mediathek · abspielbereit':m.status==='download'?`Download läuft · ${m.progress} % · noch ${m.eta}`:m.status==='queued'?'Zum Download vorgemerkt':'Noch nicht in deiner Mediathek'}</p></div><div class="ada-controls">${m.status==='ready'?'<button type="button" class="ada-action" data-play>Abspielen</button>':m.status==='new'?'<button type="button" class="ada-action" data-add>＋ Hinzufügen</button>':''}<button type="button" class="ada-filter" data-close>Schließen</button></div>`;
+        detail.dataset.title=m.title;
+      }
+      if(button.hasAttribute('data-close'))detail.hidden=true;
+      if(button.hasAttribute('data-play'))app.querySelector('.ada-notice').textContent=`Vorschau: „${detail.dataset.title}“ würde im verbundenen Mediaplayer geöffnet.`;
+      if(button.hasAttribute('data-add')){const m=localMedia.find(item=>item.title===detail.dataset.title);m.status='queued';render();detail.hidden=true;app.querySelector('.ada-notice').textContent=`Vorschau: „${m.title}“ wurde zur Warteschlange hinzugefügt.`;}
+    });
+    window.addEventListener('openai:set_globals',event=>{const view=event.detail?.globals?.widgetState?.privateContent?.views?.[index];if(view){state.filter=view.filter||'all';state.window=view.window||'week';render();}});
+    render();
+    if(globalThis.Tweak){const tweak=new Tweak({container:app,onChange:render});tweak.addToggle(state,'showResume',{label:'Weiterschauen anzeigen'});}
+  });
+})();
+</script>

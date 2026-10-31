@@ -110,7 +110,27 @@
     "seriesCount_one": "{{count}} series",
     "seriesCount_other": "{{count}} series",
     "noMovies": "No movies requested yet.",
-    "noSeries": "No series requested yet."
+    "noSeries": "No series requested yet.",
+    "recentlyDownloaded": "Recently Downloaded",
+    "recentlyRequested": "Recently Requested",
+    "trending": "Trending",
+    "thisWeek": "This week",
+    "search": "Discover movies and series…",
+    "results": "Search results",
+    "empty": "No titles to display yet.",
+    "downloading": "Downloading",
+    "pending": "Pending",
+    "queue": "Queued",
+    "checking": "Checking",
+    "remaining": "{{minutes}} min left",
+    "progress": "Download progress: {{title}}",
+    "previous": "{{section}}: previous posters",
+    "next": "{{section}}: more posters",
+    "movieType": "Movie",
+    "seriesType": "Series",
+    "notRequested": "Not requested",
+    "pendingCount_one": "{{count}} pending",
+    "pendingCount_other": "{{count}} pending"
   },
   "movies": {
     "title": "Movies",
@@ -262,7 +282,8 @@
       "resetPassword": "Reset password",
       "newPassword": "New password",
       "resetDone": "The password has been reset and all sessions of the user were signed out.",
-      "deleteConfirm": "Delete the account {{name}}? Their requests remain but are no longer assigned to anyone."
+      "deleteConfirm": "Delete the account {{name}}? Their requests remain but are no longer assigned to anyone.",
+      "cannotDeleteSelf": "You cannot delete your own account."
     },
     "general": {
       "title": "General",
@@ -499,7 +520,8 @@
     "invalid_state": "Not possible in the current state.",
     "forbidden": "Only administrators can do this.",
     "not_found": "Not found.",
-    "bot_connection_failed": "Could not connect to the bot service. Check the configuration."
+    "bot_connection_failed": "Could not connect to the bot service. Check the configuration.",
+    "self_deletion": "You cannot delete your own account."
   },
   "series": {
     "title": "Series",

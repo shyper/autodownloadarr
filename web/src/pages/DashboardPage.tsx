@@ -1,194 +1,130 @@
-import { Queue } from './DownloadsPage'
-import type { ReactNode } from 'react'
+import { useEffect, useId, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
+import { ApiError } from '../api/client'
 import { useOnboarding } from '../api/config'
+import { useTrending } from '../api/discover'
+import { useQueue } from '../api/downloads'
 import { useMe, useWarnings } from '../api/hooks'
-import { useDownloads, useMovies } from '../api/movies'
-import { useEpisodeDownloads, useSeriesList } from '../api/series'
-import type { EpisodeDownload } from '../api/types'
-import { DownloadProgress, WatchProgress } from '../components/MovieBits'
-import { Alert, Badge, Card } from '../components/ui'
-
-const code = (season: number, episode: number) => `S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')}`
+import { useDownloads, useMovieSearch, useMovies, useRequestMovie } from '../api/movies'
+import { useEpisodeDownloads, useSeriesList, useShowSearch } from '../api/series'
+import type { TrendingTitle } from '../api/types'
+import { OverviewPoster } from '../components/OverviewPoster'
+import { Alert, Button, Card, Input, Spinner } from '../components/ui'
+import { overviewTitles, recentlyDownloaded, recentlyRequested, type OverviewTitle } from '../dashboard'
+import { errorMessage } from '../i18n'
+import { RequestPanel } from './SeriesPage'
 
 export function DashboardPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { data: user } = useMe()
   const onboarding = useOnboarding(user?.role === 'admin')
   const warnings = useWarnings()
-
+  const movies = useMovies()
+  const series = useSeriesList()
+  const downloads = useDownloads()
+  const episodes = useEpisodeDownloads()
+  const queue = useQueue()
+  const trending = useTrending(i18n.resolvedLanguage?.split('-')[0] ?? 'en')
+  const [query, setQuery] = useState('')
+  const [debounced, setDebounced] = useState('')
+  const [chosen, setChosen] = useState<TrendingTitle | null>(null)
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(query.trim()), 350)
+    return () => window.clearTimeout(timer)
+  }, [query])
+  const movieSearch = useMovieSearch(debounced)
+  const seriesSearch = useShowSearch(debounced)
+  const titles = overviewTitles(movies.data ?? [], series.data ?? [], downloads.data ?? [], episodes.data ?? [], queue.data ?? [])
+  const activeCount = titles.filter((item) => item.download || item.state === 'downloading').length
+  const pendingCount = titles.filter((item) => !item.download && (item.state === 'queued' || item.state === 'searching')).length
+  const downloadCaption = [activeCount ? t('dashboard.loading', { count: activeCount }) : '', pendingCount ? t('dashboard.pendingCount', { count: pendingCount }) : ''].filter(Boolean).join(' · ')
+  const local = new Map(titles.map((item) => [item.key, item]))
+  const annotate = (item: TrendingTitle): OverviewTitle => local.get(`${item.mediaType}-${item.tmdbId}`) ?? { ...item, key: `${item.mediaType}-${item.tmdbId}` }
+  const searching = debounced.length >= 2
+  const searchTitles = searching ? [
+    ...(movieSearch.data ?? []).map((m) => annotate({ ...m, mediaType: 'movie', year: m.year ?? 0, overview: m.overview ?? '' })),
+    ...(seriesSearch.data ?? []).map((s) => annotate({ ...s, mediaType: 'tv', year: s.year ?? 0, overview: s.overview ?? '' })),
+  ] : []
+  const errors = [movies.error, series.error, downloads.error, episodes.error, queue.error]
   return (
-    <div className="space-y-6">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold">{t('dashboard.greeting', { name: user?.username })}</h1>
-        <p className="text-sm text-muted">{t('dashboard.subtitle')}</p>
-      </div>
-
-      {warnings.data?.map((w) => (
-        <Alert key={w.code}>{t(`warnings.${w.code}`, { detail: w.detail, defaultValue: w.detail })}</Alert>
-      ))}
-
+    <div className="space-y-8">
+      <h1 className="sr-only">{t('nav.dashboard')}</h1>
+      {warnings.data?.map((w) => <Alert key={w.code}>{t(`warnings.${w.code}`, { detail: w.detail, defaultValue: w.detail })}</Alert>)}
       {onboarding.data && !onboarding.data.finished && (
         <Card className="flex flex-wrap items-center justify-between gap-3 border-accent/40">
           <p className="text-sm">{t('dashboard.setupPending')}</p>
-          <Link to="/setup" className="text-sm font-medium text-accent hover:underline">
-            {t('dashboard.continueSetup')}
-          </Link>
+          <Link to="/setup" className="text-sm font-medium text-accent hover:underline">{t('dashboard.continueSetup')}</Link>
         </Card>
       )}
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <MoviesCard />
-        <SeriesCard />
-      </div>
-
-      <DownloadsCard />
-      <Queue />
+      <Input type="search" aria-label={t('dashboard.search')} placeholder={t('dashboard.search')} value={query} onChange={(e) => setQuery(e.target.value)} className="rounded-full px-5 py-3" />
+      {chosen && (chosen.mediaType === 'tv'
+        ? <RequestPanel key={`tv-${chosen.tmdbId}`} show={chosen} onClose={() => setChosen(null)} />
+        : <MovieRequest key={`movie-${chosen.tmdbId}`} movie={chosen} onClose={() => setChosen(null)} />)}
+      {errors.find(Boolean) && <Alert>{errorMessage(t, errors.find(Boolean))}</Alert>}
+      {searching && (
+        <PosterShelf title={t('dashboard.results')} items={searchTitles} onChoose={setChosen}>
+          {movieSearch.isPending || seriesSearch.isPending ? <Spinner /> : null}
+          {movieSearch.error && <Alert>{errorMessage(t, movieSearch.error)}</Alert>}
+          {seriesSearch.error && <Alert>{errorMessage(t, seriesSearch.error)}</Alert>}
+        </PosterShelf>
+      )}
+      <PosterShelf title={t('dashboard.recentlyDownloaded')} caption={downloadCaption} items={recentlyDownloaded(titles)} onChoose={setChosen} showPlayable>
+        {movies.isPending || series.isPending ? <Spinner /> : null}
+      </PosterShelf>
+      <PosterShelf title={t('dashboard.recentlyRequested')} items={recentlyRequested(titles)} onChoose={setChosen}>
+        {movies.isPending || series.isPending ? <Spinner /> : null}
+      </PosterShelf>
+      <PosterShelf title={t('dashboard.trending')} caption={t('dashboard.thisWeek')} items={(trending.data ?? []).map(annotate)} onChoose={setChosen}>
+        {trending.isPending && <Spinner />}
+        {trending.error && <Alert>{trending.error instanceof ApiError && trending.error.code === 'not_configured' ? t('movies.tmdbMissing') : errorMessage(t, trending.error)}</Alert>}
+      </PosterShelf>
     </div>
   )
 }
 
-/** A dashboard card: title with a link, a line of figures and a list. */
-function SummaryCard({ title, to, figures, children }: { title: string; to: string; figures: ReactNode; children?: ReactNode }) {
+function MovieRequest({ movie, onClose }: { movie: TrendingTitle; onClose: () => void }) {
   const { t } = useTranslation()
+  const request = useRequestMovie()
+  const navigate = useNavigate()
   return (
-    <Card className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="font-semibold">{title}</h2>
-        <Link to={to} className="text-sm text-accent hover:underline">
-          {t('dashboard.open')}
-        </Link>
+    <Card className="space-y-4 border-accent/40">
+      <div className="flex items-start justify-between gap-4">
+        <div><h2 className="text-lg font-semibold">{movie.title}</h2><p className="text-sm text-muted">{movie.overview}</p></div>
+        <Button variant="ghost" onClick={onClose}>{t('common.cancel')}</Button>
       </div>
-      <div className="flex flex-wrap gap-2">{figures}</div>
+      {request.error && <Alert>{errorMessage(t, request.error)}</Alert>}
+      <Button loading={request.isPending} onClick={() => request.mutate({ tmdbId: movie.tmdbId }, { onSuccess: (result) => { onClose(); void navigate(`/movies/${result.id}`) } })}>{t('movies.request')}</Button>
+    </Card>
+  )
+}
+
+function PosterShelf({ title, caption, items, onChoose, showPlayable = false, children }: {
+  title: string; caption?: string; items: OverviewTitle[]; onChoose: (item: TrendingTitle) => void; showPlayable?: boolean; children?: ReactNode
+}) {
+  const { t } = useTranslation()
+  const id = useId()
+  const [page, setPage] = useState(0)
+  const pages = Math.max(1, Math.ceil(items.length / 6))
+  const current = Math.min(page, pages - 1)
+  return (
+    <section aria-labelledby={id} className="space-y-3">
+      <div className="flex items-end justify-between gap-3">
+        <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h2 id={id} className="text-xl font-semibold tracking-tight">{title}</h2>
+          {caption && <span className="text-xs text-muted">{caption}</span>}
+        </div>
+        <div className="flex shrink-0 gap-1">
+          <button type="button" disabled={current === 0} aria-label={t('dashboard.previous', { section: title })} onClick={() => setPage(current - 1)} className="grid size-11 place-items-center rounded-full border border-line text-xl text-muted hover:bg-surface-2 disabled:opacity-30">‹</button>
+          <button type="button" disabled={current >= pages - 1} aria-label={t('dashboard.next', { section: title })} onClick={() => setPage(current + 1)} className="grid size-11 place-items-center rounded-full border border-line text-xl text-muted hover:bg-surface-2 disabled:opacity-30">›</button>
+        </div>
+      </div>
       {children}
-    </Card>
-  )
-}
-
-function MoviesCard() {
-  const { t } = useTranslation()
-  const movies = useMovies()
-  const list = movies.data ?? []
-  const count = (...states: string[]) => list.filter((m) => states.includes(m.state)).length
-  const ready = count('available')
-  const loading = count('downloading', 'queued', 'searching')
-  const problems = count('failed', 'waiting')
-  const watching = list.filter((m) => m.state === 'available' && m.progress > 0 && m.progress < 1)
-
-  return (
-    <SummaryCard
-      title={t('nav.movies')}
-      to="/movies"
-      figures={
-        list.length === 0 ? (
-          <span className="text-sm text-muted">{t('dashboard.noMovies')}</span>
-        ) : (
-          <>
-            <Badge tone="ok">{t('dashboard.moviesReady', { count: ready })}</Badge>
-            {loading > 0 && <Badge>{t('dashboard.loading', { count: loading })}</Badge>}
-            {problems > 0 && <Badge tone="danger">{t('dashboard.problems', { count: problems })}</Badge>}
-          </>
-        )
-      }
-    >
-      {watching.length > 0 && (
-        <ul className="space-y-3 border-t border-line pt-3">
-          {watching.slice(0, 3).map((m) => (
-            <li key={m.id} className="space-y-1">
-              <Link to={`/movies/${m.id}`} className="text-sm font-medium hover:underline">
-                {m.title} {m.year > 0 && <span className="text-muted">({m.year})</span>}
-              </Link>
-              <WatchProgress progress={m.progress} runtime={m.runtime} />
-            </li>
-          ))}
-        </ul>
-      )}
-    </SummaryCard>
-  )
-}
-
-function SeriesCard() {
-  const { t } = useTranslation()
-  const series = useSeriesList()
-  const list = series.data ?? []
-  const sum = (state: 'available' | 'downloading' | 'queued' | 'searching' | 'failed') =>
-    list.reduce((n, s) => n + (s.counts[state] ?? 0), 0)
-  const ready = sum('available')
-  const loading = sum('downloading') + sum('queued') + sum('searching')
-  const problems = sum('failed')
-  const watching = list.filter((s) => s.current && s.current.progress > 0 && s.current.progress < 1)
-
-  return (
-    <SummaryCard
-      title={t('nav.series')}
-      to="/series"
-      figures={
-        list.length === 0 ? (
-          <span className="text-sm text-muted">{t('dashboard.noSeries')}</span>
-        ) : (
-          <>
-            <Badge tone="muted">{t('dashboard.seriesCount', { count: list.length })}</Badge>
-            <Badge tone="ok">{t('series.ready', { count: ready })}</Badge>
-            {loading > 0 && <Badge>{t('dashboard.loading', { count: loading })}</Badge>}
-            {problems > 0 && <Badge tone="danger">{t('dashboard.problems', { count: problems })}</Badge>}
-          </>
-        )
-      }
-    >
-      {watching.length > 0 && (
-        <ul className="space-y-3 border-t border-line pt-3">
-          {watching.slice(0, 3).map((s) => (
-            <li key={s.id} className="space-y-1">
-              <Link to={`/series/${s.id}`} className="text-sm font-medium hover:underline">
-                {s.title} · {code(s.current!.season, s.current!.episode)}
-              </Link>
-              <WatchProgress progress={s.current!.progress} runtime={0} />
-            </li>
-          ))}
-        </ul>
-      )}
-    </SummaryCard>
-  )
-}
-
-/** Running downloads of movies and episodes. */
-function DownloadsCard() {
-  const { t } = useTranslation()
-  const movies = useMovies()
-  const series = useSeriesList()
-  const downloads = useDownloads()
-  const episodeDownloads = useEpisodeDownloads()
-  const titleOf = (id: number) => movies.data?.find((m) => m.id === id)?.title ?? ''
-  const episodeLabel = (d: EpisodeDownload) => `${series.data?.find((s) => s.id === d.seriesId)?.title ?? ''} · ${code(d.season, d.episode)}`
-  const active = [
-    ...(downloads.data ?? []).map((d) => ({ key: `m${d.movieId}`, to: `/movies/${d.movieId}`, label: titleOf(d.movieId), download: d })),
-    ...(episodeDownloads.data ?? []).map((d) => ({ key: `e${d.episodeId}`, to: `/series/${d.seriesId}`, label: episodeLabel(d), download: d })),
-  ]
-
-  return (
-    <Card className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="font-semibold">{t('dashboard.downloads')}</h2>
-        <Link to="/downloads" className="text-sm text-accent hover:underline">
-          {t('dashboard.allDownloads')}
-        </Link>
-      </div>
-      {active.length ? (
-        <ul className="space-y-4">
-          {active.map((a) => (
-            <li key={a.key} className="space-y-1">
-              <Link to={a.to} className="text-sm font-medium hover:underline">
-                {a.label}
-              </Link>
-              <p className="font-mono text-xs break-all text-muted">{a.download.releaseTitle}</p>
-              <DownloadProgress download={a.download} />
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="text-sm text-muted">{t('dashboard.noDownloads')}</p>
-      )}
-    </Card>
+      {items.length ? (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6" aria-live="polite">
+          {items.slice(current * 6, current * 6 + 6).map((item) => <OverviewPoster key={item.key} item={item} showPlayable={showPlayable} onChoose={onChoose} />)}
+        </div>
+      ) : <p className="text-sm text-muted">{t('dashboard.empty')}</p>}
+    </section>
   )
 }

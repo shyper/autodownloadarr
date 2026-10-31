@@ -110,7 +110,27 @@
     "seriesCount_one": "{{count}} Serie",
     "seriesCount_other": "{{count}} Serien",
     "noMovies": "Noch keine Filme angefragt.",
-    "noSeries": "Noch keine Serien angefragt."
+    "noSeries": "Noch keine Serien angefragt.",
+    "recentlyDownloaded": "Zuletzt heruntergeladen",
+    "recentlyRequested": "Zuletzt angefragt",
+    "trending": "Aktuell beliebt",
+    "thisWeek": "Diese Woche",
+    "search": "Filme und Serien entdecken…",
+    "results": "Suchergebnisse",
+    "empty": "Noch keine Titel vorhanden.",
+    "downloading": "Lädt",
+    "pending": "Ausstehend",
+    "queue": "Warteschlange",
+    "checking": "Prüfung",
+    "remaining": "Noch {{minutes}} Min.",
+    "progress": "Download-Fortschritt: {{title}}",
+    "previous": "{{section}}: vorherige Poster",
+    "next": "{{section}}: weitere Poster",
+    "movieType": "Film",
+    "seriesType": "Serie",
+    "notRequested": "Noch nicht angefragt",
+    "pendingCount_one": "{{count}} in der Warteschlange",
+    "pendingCount_other": "{{count}} in der Warteschlange"
   },
   "movies": {
     "title": "Filme",
@@ -262,7 +282,8 @@
       "resetPassword": "Passwort zurücksetzen",
       "newPassword": "Neues Passwort",
       "resetDone": "Das Passwort wurde zurückgesetzt und alle Sitzungen des Benutzers beendet.",
-      "deleteConfirm": "Konto „{{name}}“ löschen? Die Anfragen bleiben erhalten, sind aber keinem Benutzer mehr zugeordnet."
+      "deleteConfirm": "Konto „{{name}}“ löschen? Die Anfragen bleiben erhalten, sind aber keinem Benutzer mehr zugeordnet.",
+      "cannotDeleteSelf": "Du kannst deinen eigenen Account nicht löschen."
     },
     "general": {
       "title": "Allgemein",
@@ -499,7 +520,8 @@
     "invalid_state": "Im aktuellen Zustand nicht möglich.",
     "forbidden": "Das dürfen nur Administratoren.",
     "not_found": "Nicht gefunden.",
-    "bot_connection_failed": "Die Bot-Verbindung konnte nicht hergestellt werden. Bitte Einstellungen prüfen."
+    "bot_connection_failed": "Die Bot-Verbindung konnte nicht hergestellt werden. Bitte Einstellungen prüfen.",
+    "self_deletion": "Du kannst deinen eigenen Account nicht löschen."
   },
   "series": {
     "title": "Serien",

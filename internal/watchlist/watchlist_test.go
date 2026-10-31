@@ -2,6 +2,7 @@ package watchlist
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -130,6 +131,30 @@ func TestPollRequestsWatchlist(t *testing.T) {
 	list, err := st.Movies(ctx)
 	if err != nil || len(list) != 2 {
 		t.Errorf("movies after second poll = %d, %v", len(list), err)
+	}
+
+	// Fully forgetting an unwatched movie must not make the next poll
+	// download it again, including after rebuilding the managers.
+	fallback, err := st.MovieByTMDB(ctx, 43)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := mv.Delete(ctx, fallback.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	mv = movies.NewManager(st, svc, sched, bus, log)
+	wm = NewManager(st, svc, mv, se, log)
+	for range 2 {
+		if err := wm.PollNow(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := st.MovieByTMDB(ctx, 43); !errors.Is(err, store.ErrNotFound) {
+			t.Fatalf("forgotten movie was reimported: %v", err)
+		}
+	}
+	// Explicitly requesting the title again remains possible.
+	if _, err := mv.Request(ctx, 43, 0, 0); err != nil {
+		t.Fatalf("manual request of excluded movie: %v", err)
 	}
 }
 

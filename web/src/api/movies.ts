@@ -32,7 +32,7 @@ export function useDownloads() {
   return useQuery({ queryKey: movieKeys.downloads, queryFn: () => api<Download[]>('/downloads') })
 }
 
-function useMovieMutation<V>(fn: (v: V) => Promise<unknown>) {
+function useMovieMutation<V, R>(fn: (v: V) => Promise<R>) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: fn,

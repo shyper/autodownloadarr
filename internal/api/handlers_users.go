@@ -85,6 +85,11 @@ func (s *server) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
 		s.writeUserError(w, auth.ErrUserNotFound)
 		return
 	}
+	user, _, _ := currentUser(r.Context())
+	if id == user.ID {
+		writeError(w, http.StatusConflict, "self_deletion", "you cannot delete your own account")
+		return
+	}
 	if err := s.Auth.DeleteUser(r.Context(), id); err != nil {
 		s.writeUserError(w, err)
 		return

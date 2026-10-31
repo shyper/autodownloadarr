@@ -112,6 +112,7 @@ func New(opts Options) http.Handler {
 			r.Get("/system/warnings", s.handleWarnings)
 
 			r.Get("/movies", s.handleListMovies)
+			r.Get("/discover/trending", s.handleTrending)
 			r.Post("/movies", s.handleRequestMovie)
 			r.Get("/movies/search", s.handleSearchMovies)
 			r.Get("/movies/{id}", s.handleGetMovie)

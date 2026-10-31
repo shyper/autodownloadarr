@@ -6,6 +6,7 @@ import {
   useResetUserPassword,
   useUpdateUser,
   useUsers,
+  useMe,
   type Role,
   type User,
 } from '../../api/hooks'
@@ -123,6 +124,8 @@ export function UserSettings() {
 
 function UserRow({ user }: { user: User }) {
   const { t, i18n } = useTranslation()
+  const me = useMe()
+  const isSelf = me.data?.id === user.id
   const update = useUpdateUser()
   const remove = useDeleteUser()
   const reset = useResetUserPassword()
@@ -147,6 +150,7 @@ function UserRow({ user }: { user: User }) {
     )
   }
   const doDelete = () => {
+    if (!me.data || isSelf) return
     if (!window.confirm(t('settings.users.deleteConfirm', { name: user.username }))) return
     remove.mutate(user.id)
   }
@@ -204,7 +208,7 @@ function UserRow({ user }: { user: User }) {
         <Button variant="ghost" onClick={() => setResetting((v) => !v)}>
           {t('settings.users.resetPassword')}
         </Button>
-        <Button variant="ghost" loading={remove.isPending} onClick={doDelete}>
+        <Button variant="ghost" loading={remove.isPending} disabled={!me.data || isSelf} title={isSelf ? t('settings.users.cannotDeleteSelf') : undefined} onClick={doDelete}>
           {t('common.delete')}
         </Button>
       </div>

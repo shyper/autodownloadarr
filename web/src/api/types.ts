@@ -255,6 +255,8 @@ export type ShowResult = {
 export type EpisodeState = MovieState | 'pending' | 'skipped'
 
 export type Series = {
+  createdAt: string
+  latestAvailableAt?: string
   genres?: string[]
   id: number
   tmdbId: number
@@ -322,4 +324,13 @@ export type SeriesSettings = {
   triggerValue: number
   keep: boolean
   paused: boolean
+}
+
+export type TrendingTitle = {
+  tmdbId: number
+  mediaType: 'movie' | 'tv'
+  title: string
+  year: number
+  overview: string
+  posterUrl?: string
 }

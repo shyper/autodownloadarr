@@ -50,14 +50,20 @@ const (
 // ErrAlreadyRequested is returned when a movie is requested twice.
 var ErrAlreadyRequested = errors.New("movie already requested")
 
+// ErrWatchlistExcluded prevents an automatic import of an explicitly removed movie.
+var ErrWatchlistExcluded = errors.New("movie excluded from watchlist imports")
+
 // Manager runs the lifecycle of all movies.
 type Manager struct {
-	store *store.Store
-	svc   *Services
-	sched *scheduler.Scheduler
-	bus   *events.Bus
-	log   *slog.Logger
-	now   func() time.Time
+	// Serialise requests and manual deletions so a concurrent poll cannot
+	// recreate a movie between its removal and the exclusion check.
+	requestMu sync.Mutex
+	store     *store.Store
+	svc       *Services
+	sched     *scheduler.Scheduler
+	bus       *events.Bus
+	log       *slog.Logger
+	now       func() time.Time
 
 	// ctx is the lifetime of the manager; downloads run under it.
 	ctx context.Context
@@ -142,6 +148,26 @@ func (m *Manager) Start(ctx context.Context) error {
 // Request adds a movie by its TMDB ID and starts searching. profileID 0
 // uses the default profile.
 func (m *Manager) Request(ctx context.Context, tmdbID int, userID, profileID int64) (store.Movie, error) {
+	m.requestMu.Lock()
+	defer m.requestMu.Unlock()
+	return m.request(ctx, tmdbID, userID, profileID)
+}
+
+// RequestFromWatchlist honours manual removals without blocking explicit requests.
+func (m *Manager) RequestFromWatchlist(ctx context.Context, tmdbID int) (store.Movie, error) {
+	m.requestMu.Lock()
+	defer m.requestMu.Unlock()
+	excluded, err := m.store.MovieExcludedFromWatchlist(ctx, tmdbID)
+	if err != nil {
+		return store.Movie{}, err
+	}
+	if excluded {
+		return store.Movie{}, ErrWatchlistExcluded
+	}
+	return m.request(ctx, tmdbID, 0, 0)
+}
+
+func (m *Manager) request(ctx context.Context, tmdbID int, userID, profileID int64) (store.Movie, error) {
 	existing, err := m.store.MovieByTMDB(ctx, tmdbID)
 	switch {
 	case err == nil && existing.State != store.MovieDeleted:
@@ -272,6 +298,8 @@ func (m *Manager) SkipRelease(_ context.Context, id int64) error {
 // Delete removes the movie's files now. With forget the movie itself is
 // removed as well.
 func (m *Manager) Delete(ctx context.Context, id int64, forget bool) error {
+	m.requestMu.Lock()
+	defer m.requestMu.Unlock()
 	// Mark the movie as deleting before looking at the running download: a
 	// download that has just been queued either registers before this lock
 	// (and is cancelled below) or sees the flag and does not start.

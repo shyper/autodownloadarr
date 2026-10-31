@@ -30,6 +30,9 @@ export function useServerEvents(): StreamState {
 
     const onMovie = (e: MessageEvent<string>) => {
       const ev = JSON.parse(e.data) as ServerEvent<Movie>
+      if (!qc.getQueryData<Movie[]>(movieKeys.list)?.some((m) => m.id === ev.data.id)) {
+        void qc.invalidateQueries({ queryKey: movieKeys.list })
+      }
       qc.setQueryData<Movie[]>(movieKeys.list, (list) =>
         list?.map((m) => (m.id === ev.data.id ? { ...m, ...ev.data, posterUrl: m.posterUrl } : m)),
       )

@@ -85,6 +85,14 @@ func TestUserManagementAPI(t *testing.T) {
 	if resp.StatusCode != http.StatusOK || body["role"] != "admin" || body["quotaRequests"] != float64(5) || body["quotaGb"] != float64(10) {
 		t.Fatalf("promote bob: %d %v", resp.StatusCode, body)
 	}
+	// Self-deletion is forbidden even when another administrator exists.
+	resp, body = e.do(t, c, "DELETE", "/api/v1/users/"+itoa(adminID), nil)
+	if resp.StatusCode != http.StatusConflict || errorCode(body) != "self_deletion" {
+		t.Fatalf("self-deletion with another admin: %d %v", resp.StatusCode, body)
+	}
+	if resp, _ := e.do(t, c, "GET", "/api/v1/auth/me", nil); resp.StatusCode != http.StatusOK {
+		t.Fatal("self-deletion invalidated the session")
+	}
 	if resp, _ := e.do(t, c, "POST", "/api/v1/users/"+itoa(bobID)+"/password",
 		map[string]string{"newPassword": "newpassword"}); resp.StatusCode != http.StatusNoContent {
 		t.Errorf("reset password: %d", resp.StatusCode)
@@ -99,7 +107,7 @@ func TestUserManagementAPI(t *testing.T) {
 		t.Errorf("users after delete: %v", users)
 	}
 	resp, body = e.do(t, c, "DELETE", "/api/v1/users/"+itoa(adminID), nil)
-	if resp.StatusCode != http.StatusConflict || errorCode(body) != "last_admin" {
+	if resp.StatusCode != http.StatusConflict || errorCode(body) != "self_deletion" {
 		t.Errorf("delete last admin: %d %v", resp.StatusCode, body)
 	}
 }

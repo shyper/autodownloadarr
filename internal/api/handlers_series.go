@@ -71,8 +71,9 @@ type seriesView struct {
 	Counts    map[string]int `json:"counts"`
 	// Current is the episode being watched or next up, Upcoming the next
 	// one still to be broadcast.
-	Current  *episodeRef `json:"current,omitempty"`
-	Upcoming *episodeRef `json:"upcoming,omitempty"`
+	Current           *episodeRef `json:"current,omitempty"`
+	Upcoming          *episodeRef `json:"upcoming,omitempty"`
+	LatestAvailableAt *time.Time  `json:"latestAvailableAt,omitempty"`
 }
 
 type episodeRef struct {
@@ -98,6 +99,10 @@ func (s *server) seriesView(r *http.Request, se store.Series) (seriesView, []sto
 	v := seriesView{Series: se, PosterURL: tmdb.PosterURL(se.PosterPath, "w342"), Counts: map[string]int{}}
 	for _, e := range eps {
 		v.Counts[e.State]++
+		if (e.State == store.MovieAvailable || e.State == store.MovieWatched) && e.AvailableAt != nil &&
+			(v.LatestAvailableAt == nil || e.AvailableAt.After(*v.LatestAvailableAt)) {
+			v.LatestAvailableAt = e.AvailableAt
+		}
 	}
 	current, upcoming := series.Position(se, eps, time.Now())
 	v.Current, v.Upcoming = refOf(current), refOf(upcoming)

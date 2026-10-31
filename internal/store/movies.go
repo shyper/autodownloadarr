@@ -178,7 +178,27 @@ func (s *Store) UpdateMovie(ctx context.Context, m Movie) error {
 
 // DeleteMovie removes a movie and its history.
 func (s *Store) DeleteMovie(ctx context.Context, id int64) error {
-	return affected(s.db.ExecContext(ctx, `DELETE FROM movies WHERE id = ?`, id))
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO watchlist_movie_exclusions (tmdb_id)
+		SELECT tmdb_id FROM movies WHERE id = ?`, id); err != nil {
+		return err
+	}
+	if err := affected(tx.ExecContext(ctx, `DELETE FROM movies WHERE id = ?`, id)); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// MovieExcludedFromWatchlist remembers an explicit removal, even after a restart.
+// Explicit user requests are still allowed.
+func (s *Store) MovieExcludedFromWatchlist(ctx context.Context, tmdbID int) (bool, error) {
+	var excluded bool
+	err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM watchlist_movie_exclusions WHERE tmdb_id = ?)`, tmdbID).Scan(&excluded)
+	return excluded, err
 }
 
 // Owner is the movie or episode that releases, attempts, blocklist entries

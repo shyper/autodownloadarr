@@ -115,11 +115,11 @@ func (m *Manager) requestMovie(ctx context.Context, tmdbID int, title string) {
 	if _, err := m.store.MovieByTMDB(ctx, tmdbID); err == nil || !errors.Is(err, store.ErrNotFound) {
 		return
 	}
-	mv, err := m.movies.Request(ctx, tmdbID, 0, 0)
+	mv, err := m.movies.RequestFromWatchlist(ctx, tmdbID)
 	switch {
 	case err == nil:
 		m.log.Info("movie requested from the Plex watchlist", "movie", mv.Title)
-	case errors.Is(err, movies.ErrAlreadyRequested):
+	case errors.Is(err, movies.ErrAlreadyRequested), errors.Is(err, movies.ErrWatchlistExcluded):
 	default:
 		m.log.Warn("request movie from the Plex watchlist failed", "title", title, "tmdb", tmdbID, "err", err)
 	}

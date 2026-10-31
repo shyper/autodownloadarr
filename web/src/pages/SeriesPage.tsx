@@ -96,7 +96,7 @@ function ShowResults({ q }: { q: string }) {
 }
 
 /** Options for a new series: seasons, window and delete trigger. */
-function RequestPanel({ show, onClose }: { show: ShowResult; onClose: () => void }) {
+export function RequestPanel({ show, onClose }: { show: ShowResult; onClose: () => void }) {
   const { t } = useTranslation()
   const { data: me } = useMe()
   const general = useGeneral()
