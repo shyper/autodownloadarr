@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams } from 'react-router'
 import {
   useDeleteSeries,
+  useRestoreSeries,
   useDownloadEpisodeRelease,
   useEpisode,
   useEpisodeDownloads,
@@ -65,13 +66,14 @@ function Header({ s }: { s: SeriesDetail }) {
   return (
     <div className="flex gap-4 md:gap-6">
       <div className="w-24 shrink-0 sm:w-32 md:w-44">
-        <Poster url={s.posterUrl} title={s.title} />
+        <Poster url={s.posterUrl} title={s.title} className={s.expiredAt ? 'grayscale opacity-70' : ''} />
       </div>
       <div className="min-w-0 space-y-2">
         <h1 className="text-xl font-semibold sm:text-2xl">
           {s.title} {s.year > 0 && <span className="text-muted">({s.year})</span>}
         </h1>
         <div className="flex flex-wrap gap-2">
+          {s.expiredAt && <Badge tone="muted">{t('movies.state.expired')}</Badge>}
           {s.genres?.map((genre) => <Badge key={genre} tone="muted">{genre}</Badge>)}
           {s.keep && <Badge tone="ok">{t('movies.kept')}</Badge>}
           {s.paused && <Badge tone="muted">{t('series.paused')}</Badge>}
@@ -219,7 +221,7 @@ function SettingsForm({ s }: { s: SeriesDetail }) {
   )
 }
 
-const summaryStates: EpisodeState[] = ['available', 'downloading', 'watched', 'deleted', 'failed']
+const summaryStates: EpisodeState[] = ['available', 'downloading', 'watched', 'deleted', 'expired', 'failed']
 
 function SeasonSection({ season, episodes, defaultOpen, canManage }: { canManage: boolean; season: number; episodes: Episode[]; defaultOpen: boolean }) {
   const { t } = useTranslation()
@@ -373,16 +375,24 @@ function DeleteSeries({ s }: { s: SeriesDetail }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const remove = useDeleteSeries()
+  const restore = useRestoreSeries()
   const confirmDelete = () => {
     if (!window.confirm(t('series.confirmDelete', { title: s.title }))) return
     void remove.mutateAsync(s.id).then(() => navigate('/series')).catch(() => {})
   }
   return (
     <div className="space-y-2 pt-2">
-      {remove.isError && <Alert>{errorMessage(t, remove.error)}</Alert>}
-      <Button variant="ghost" className="w-full sm:w-auto" loading={remove.isPending} onClick={confirmDelete}>
-        {t('series.delete')}
-      </Button>
+      {(remove.error ?? restore.error) && <Alert>{errorMessage(t, remove.error ?? restore.error)}</Alert>}
+      <div className="flex flex-wrap gap-2">
+        {s.expiredAt && (
+          <Button className="w-full sm:w-auto" loading={restore.isPending} onClick={() => restore.mutate(s.tmdbId)}>
+            {t('movies.actions.redownload')}
+          </Button>
+        )}
+        <Button variant="ghost" className="w-full sm:w-auto" loading={remove.isPending} onClick={confirmDelete}>
+          {t('series.delete')}
+        </Button>
+      </div>
     </div>
   )
 }

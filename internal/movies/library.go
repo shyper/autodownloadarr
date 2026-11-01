@@ -121,6 +121,9 @@ func (m *Manager) handleDelete(ctx context.Context, t scheduler.Task) error {
 		return err
 	}
 	mv.State, mv.DeleteAt = store.MovieDeleted, nil
+	if p.Reason != "watched" {
+		mv.State = store.MovieExpired // nobody watched it to the end
+	}
 	if err := m.store.UpdateMovie(ctx, mv); err != nil {
 		return err
 	}

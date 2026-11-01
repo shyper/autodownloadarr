@@ -23,11 +23,24 @@ describe('overview shelves', () => {
     expect(items[0]?.key).toBe('old')
   })
 
+  it('keeps removed movies out of the downloaded shelf but in the requested one', () => {
+    const items = [title('expired', 'expired', '2024-06-01'), title('deleted', 'deleted', '2024-05-01'), title('ready', 'available', '2024-01-01')]
+    expect(recentlyDownloaded(items).map((m) => m.key)).toEqual(['ready'])
+    expect(recentlyRequested(items).map((m) => m.key)).toEqual(['expired', 'deleted', 'ready'])
+  })
+
   it('uses completion time rather than request time for finished titles', () => {
     const earlyRequest = { ...title('early-request', 'available', '2024-01-01'), availableAt: '2024-06-01' }
     const lateRequest = title('late-request', 'available', '2024-05-01')
     expect(recentlyDownloaded([lateRequest, earlyRequest])[0]?.key).toBe('early-request')
     expect(recentlyRequested([earlyRequest, lateRequest])[0]?.key).toBe('late-request')
+  })
+
+  it('marks expired series as expired', () => {
+    const series = { id: 8, tmdbId: 80, title: 'Old show', counts: { expired: 2, deleted: 6 }, createdAt: '2024-01-01', expiredAt: '2024-02-01' } as Series
+    const items = overviewTitles([], [series], [], [], [])
+    expect(items[0]).toMatchObject({ state: 'expired', ready: false, playable: false })
+    expect(recentlyDownloaded(items)).toEqual([])
   })
 
   it('preserves partial series availability while a new episode downloads', () => {

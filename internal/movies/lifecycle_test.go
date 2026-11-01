@@ -1,12 +1,14 @@
 package movies
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/shyper/autodownloadarr/internal/scheduler"
 	"github.com/shyper/autodownloadarr/internal/store"
 )
 
@@ -121,5 +123,37 @@ func TestStartedDeadlinePersistsAndCanBeDisabled(t *testing.T) {
 	must(t, err)
 	if mv.DeleteAt != nil {
 		t.Fatal("disabled policy left a deletion deadline")
+	}
+}
+
+// An unwatched movie that runs out of time keeps its record as "expired"
+// and can be requested again.
+func TestExpiredMovieKeepsRecordAndCanBeRequestedAgain(t *testing.T) {
+	ctx, m, st, root := deleteTestManager(t)
+	available := m.now().Add(-15 * 24 * time.Hour)
+	mv, err := st.CreateMovie(ctx, store.Movie{TMDBID: 789, Title: "Unwatched", State: store.MovieAvailable}, 0)
+	must(t, err)
+	mv.AvailableAt = &available
+	must(t, st.UpdateMovie(ctx, mv))
+	file := filepath.Join(root, "movie.mkv")
+	must(t, os.WriteFile(file, []byte("video"), 0o600))
+	must(t, st.TrackFile(ctx, mv.ID, file, 5))
+
+	payload, err := json.Marshal(deletePayload{MovieID: mv.ID, Reason: "expired"})
+	must(t, err)
+	must(t, m.handleDelete(ctx, scheduler.Task{Payload: payload}))
+	mv, err = st.Movie(ctx, mv.ID)
+	must(t, err)
+	if mv.State != store.MovieExpired {
+		t.Fatalf("state = %s, want %s", mv.State, store.MovieExpired)
+	}
+	if _, err := os.Stat(file); !os.IsNotExist(err) {
+		t.Error("movie file still exists")
+	}
+
+	again, err := m.Request(ctx, mv.TMDBID, 0, 0)
+	must(t, err)
+	if again.ID != mv.ID || again.State != store.MovieSearching || again.AvailableAt != nil {
+		t.Fatalf("not restored: %+v", again)
 	}
 }

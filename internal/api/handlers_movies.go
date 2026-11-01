@@ -85,7 +85,7 @@ func (s *server) handleRequestMovie(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user, _, _ := currentUser(r.Context())
-	if existing, err := s.Store.MovieByTMDB(r.Context(), req.TMDBID); err == nil && existing.State == store.MovieDeleted && !access.CanManage(user, existing.RequestedBy) {
+	if existing, err := s.Store.MovieByTMDB(r.Context(), req.TMDBID); err == nil && store.MovieFilesRemoved(existing.State) && !access.CanManage(user, existing.RequestedBy) {
 		writeError(w, http.StatusForbidden, "forbidden", "only the request owner or an administrator may restore this item")
 		return
 	}

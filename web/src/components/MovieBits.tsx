@@ -14,6 +14,7 @@ const stateTone: Record<EpisodeState, BadgeTone> = {
   available: 'ok',
   watched: 'muted',
   deleted: 'muted',
+  expired: 'muted',
   failed: 'danger',
 }
 

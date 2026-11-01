@@ -163,6 +163,7 @@
       "available": "Ready to watch",
       "watched": "Watched",
       "deleted": "Deleted",
+      "expired": "Expired",
       "failed": "Needs attention",
       "pending": "Not needed yet",
       "skipped": "Skipped"
@@ -171,6 +172,7 @@
       "keep": "Keep",
       "unkeep": "Don't keep",
       "search": "Search again",
+      "redownload": "Download again",
       "skip": "Try next release",
       "delete": "Delete files",
       "forget": "Remove"
@@ -292,8 +294,8 @@
       "moviesPathHint": "Path inside the container. Add the same folder to Plex as a separate library.",
       "deleteAfterHours": "Delete after watching (hours)",
       "deleteAfterHoursHint": "0 deletes right after watching.",
-      "unwatchedExpiryDays": "Delete unwatched movies after (days)",
-      "unwatchedExpiryDaysHint": "0 keeps unwatched movies.",
+      "unwatchedExpiryDays": "Delete unwatched movies and series after (days)",
+      "unwatchedExpiryDaysHint": "For series, the last watched episode counts. Expired titles stay listed and can be downloaded again. 0 keeps them.",
       "maxSources": "Releases to try",
       "maxSourcesHint": "After this many failed releases the movie needs your attention.",
       "parallelDownloads": "Parallel downloads (movies and episodes combined)",

@@ -170,9 +170,13 @@ func (m *Manager) RequestFromWatchlist(ctx context.Context, tmdbID int) (store.M
 func (m *Manager) request(ctx context.Context, tmdbID int, userID, profileID int64) (store.Movie, error) {
 	existing, err := m.store.MovieByTMDB(ctx, tmdbID)
 	switch {
-	case err == nil && existing.State != store.MovieDeleted:
+	case err == nil && !store.MovieFilesRemoved(existing.State):
 		return existing, ErrAlreadyRequested
 	case err == nil:
+		// Downloading it again counts against the owner's quota again.
+		if err := m.store.CheckUserQuota(ctx, existing.RequestedBy); err != nil {
+			return store.Movie{}, err
+		}
 		existing.State = store.MovieSearching
 		existing.Attempts, existing.LastError = 0, ""
 		existing.WatchedAt, existing.DeleteAt, existing.AvailableAt, existing.NextSearchAt = nil, nil, nil, nil

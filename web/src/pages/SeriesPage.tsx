@@ -169,7 +169,7 @@ function SeriesCard({ series }: { series: Series }) {
   return (
     <Link to={`/series/${series.id}`} className="group rounded-2xl focus-visible:outline-2 focus-visible:outline-accent">
       <Card className="flex h-full flex-col gap-2 p-3 transition-colors group-hover:border-accent/50">
-        <Poster url={series.posterUrl} title={series.title} />
+        <Poster url={series.posterUrl} title={series.title} className={series.expiredAt ? 'grayscale opacity-70' : ''} />
         <p className="line-clamp-2 text-sm font-medium">
           {series.title} {series.year > 0 && <span className="text-muted">({series.year})</span>}
         </p>
@@ -177,7 +177,7 @@ function SeriesCard({ series }: { series: Series }) {
           <p className="truncate text-xs text-muted">{t('series.requestedBy', { name: series.requestedByName })}</p>
         )}
         <div className="flex flex-wrap gap-1">
-          <Badge tone="ok">{t('series.ready', { count: ready })}</Badge>
+          {series.expiredAt ? <Badge tone="muted">{t('movies.state.expired')}</Badge> : <Badge tone="ok">{t('series.ready', { count: ready })}</Badge>}
           {loading > 0 && <Badge>{t('series.loading', { count: loading })}</Badge>}
           {(series.counts.failed ?? 0) > 0 && <Badge tone="danger">{t('movies.state.failed')}</Badge>}
           {series.paused && <Badge tone="muted">{t('series.paused')}</Badge>}

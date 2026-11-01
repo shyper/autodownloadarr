@@ -7,6 +7,7 @@ import {
   useDownloads,
   useKeepMovie,
   useMovie,
+  useRequestMovie,
   useRemoveBlocklist,
   useSearchAgain,
   useSkipRelease,
@@ -40,8 +41,10 @@ function Detail({ m }: { m: MovieDetail }) {
   const remove = useDeleteMovie()
   const pick = useDownloadRelease()
   const unblock = useRemoveBlocklist()
+  const restore = useRequestMovie()
+  const removed = m.state === 'deleted' || m.state === 'expired'
   const dl = downloads.data?.find((d) => d.movieId === m.id)
-  const error = keep.error ?? search.error ?? skip.error ?? remove.error ?? pick.error ?? unblock.error
+  const error = keep.error ?? search.error ?? skip.error ?? remove.error ?? pick.error ?? unblock.error ?? restore.error
 
   const confirmDelete = (forget: boolean) => {
     if (!window.confirm(t(forget ? 'movies.confirmForget' : 'movies.confirmDelete', { title: m.title }))) return
@@ -54,7 +57,7 @@ function Detail({ m }: { m: MovieDetail }) {
         ← {t('movies.title')}
       </Link>
       <div className="grid gap-6 md:grid-cols-[200px_1fr]">
-        <Poster url={m.posterUrl} title={m.title} className="max-w-[200px]" />
+        <Poster url={m.posterUrl} title={m.title} className={`max-w-[200px] ${removed ? 'grayscale opacity-70' : ''}`} />
         <div className="space-y-4">
           <div className="space-y-2">
             <h1 className="text-2xl font-semibold">
@@ -120,7 +123,12 @@ function Detail({ m }: { m: MovieDetail }) {
             </div>
           )}
           {canManage && <div className="flex flex-wrap gap-2">
-            {m.state !== 'deleted' && (
+            {removed && (
+              <Button loading={restore.isPending} onClick={() => restore.mutate({ tmdbId: m.tmdbId })}>
+                {t('movies.actions.redownload')}
+              </Button>
+            )}
+            {!removed && (
               <Button variant="secondary" loading={keep.isPending} onClick={() => keep.mutate({ id: m.id, keep: !m.keep })}>
                 {m.keep ? t('movies.actions.unkeep') : t('movies.actions.keep')}
               </Button>
@@ -135,7 +143,7 @@ function Detail({ m }: { m: MovieDetail }) {
                 {t('movies.actions.skip')}
               </Button>
             )}
-            {m.state !== 'deleted' && (
+            {!removed && (
               <Button variant="ghost" onClick={() => confirmDelete(false)}>
                 {t('movies.actions.delete')}
               </Button>

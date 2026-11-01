@@ -28,7 +28,7 @@ export function overviewTitles(movies: Movie[], series: Series[], downloads: Dow
       return {
         ...s, mediaType: 'tv', key: `tv-${s.tmdbId}`, href: `/series/${s.id}`, requestedAt: s.createdAt,
         availableAt: s.latestAvailableAt, ready, playable: ready || active.some((d) => d.playable), download: active[0],
-        state: active.length || s.counts.downloading ? 'downloading' : queued ? 'queued' : ready ? 'available' : s.counts.failed ? 'failed' : 'waiting',
+        state: s.expiredAt ? 'expired' : active.length || s.counts.downloading ? 'downloading' : queued ? 'queued' : ready ? 'available' : s.counts.failed ? 'failed' : 'waiting',
         queuePosition: queue.findIndex((q) => q.kind === 'episode' && q.seriesId === s.id),
       }
     }),
@@ -40,7 +40,7 @@ const pending = (m: OverviewTitle) => m.state === 'queued' || m.state === 'searc
 const rank = (m: OverviewTitle) => m.download || m.state === 'downloading' ? 0 : pending(m) ? 1 : 2
 
 export function recentlyDownloaded(titles: OverviewTitle[]): OverviewTitle[] {
-  return titles.filter((m) => m.state !== 'deleted' && (rank(m) < 2 || m.ready)).sort((a, b) => {
+  return titles.filter((m) => m.state !== 'deleted' && m.state !== 'expired' && (rank(m) < 2 || m.ready)).sort((a, b) => {
     const group = rank(a) - rank(b)
     if (group) return group
     if (rank(a) === 1) {

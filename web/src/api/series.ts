@@ -61,6 +61,9 @@ export type SeriesRequest = {
 
 export const useRequestSeries = () => useSeriesMutation((v: SeriesRequest) => api<Series>('/series', { method: 'POST', body: v }))
 
+/** Downloads an expired series again from where the viewer stopped. */
+export const useRestoreSeries = () => useSeriesMutation((tmdbId: number) => api<Series>('/series', { method: 'POST', body: { tmdbId } }))
+
 export const useUpdateSeries = () =>
   useSeriesMutation((v: { id: number; settings: SeriesSettings }) => api<SeriesDetail>(`/series/${v.id}`, { method: 'PUT', body: v.settings }))
 

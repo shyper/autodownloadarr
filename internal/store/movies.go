@@ -19,8 +19,13 @@ const (
 	MovieAvailable   = "available"   // in the library
 	MovieWatched     = "watched"     // watched; deleted at DeleteAt
 	MovieDeleted     = "deleted"     // files removed
+	MovieExpired     = "expired"     // files removed automatically before it was watched
 	MovieFailed      = "failed"      // needs the user (no source left, configuration error)
 )
+
+// MovieFilesRemoved reports whether the movie is only kept as a record and
+// can be downloaded again.
+func MovieFilesRemoved(state string) bool { return state == MovieDeleted || state == MovieExpired }
 
 // Movie is a requested movie.
 type Movie struct {

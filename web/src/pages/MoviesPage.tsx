@@ -95,7 +95,7 @@ function SearchResults({ q }: { q: string }) {
 
 function SearchCard({ result, busy, onRequest }: { result: SearchResult; busy: boolean; onRequest: () => void }) {
   const { t } = useTranslation()
-  const requested = result.movieId && result.state !== 'deleted'
+  const requested = result.movieId && result.state !== 'deleted' && result.state !== 'expired'
   return (
     <Card className="flex flex-col gap-3 p-3">
       <Poster url={result.posterUrl} title={result.title} />
@@ -126,7 +126,7 @@ function MovieCard({ movie }: { movie: Movie }) {
     <Link to={`/movies/${movie.id}`} className="group rounded-2xl focus-visible:outline-2 focus-visible:outline-accent">
       <Card className="flex h-full flex-col gap-2 p-3 transition-colors group-hover:border-accent/50">
         <div className="relative overflow-hidden rounded-lg">
-          <Poster url={movie.posterUrl} title={movie.title} className={movie.state === 'deleted' ? 'opacity-40' : ''} />
+          <Poster url={movie.posterUrl} title={movie.title} className={movie.state === 'deleted' || movie.state === 'expired' ? 'grayscale opacity-70' : ''} />
           {movie.progress > 0 && movie.progress < 1 && (
             <div className="absolute inset-x-0 bottom-0 h-1 bg-black/40" aria-label={t('movies.watchedPercent', { percent: Math.round(movie.progress * 100) })}>
               <div className="h-full bg-accent" style={{ width: `${movie.progress * 100}%` }} />

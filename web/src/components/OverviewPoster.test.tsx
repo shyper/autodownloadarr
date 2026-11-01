@@ -32,3 +32,10 @@ it('shows queued covers in grayscale with an empty progress bar and a translated
   expect(pending).toContain('aria-valuenow="0"')
   expect(pending).not.toContain('title="Jetzt schon anschaubar"')
 })
+
+it('shows expired movies in grayscale with their status and without progress', () => {
+  const expired = render({ state: 'expired' })
+  expect(expired).toContain('grayscale')
+  expect(expired).toContain('Abgelaufen')
+  expect(expired).not.toContain('role="progressbar"')
+})

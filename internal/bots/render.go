@@ -252,7 +252,7 @@ func (s *Service) catalog(ctx context.Context, in Inbound, u auth.User, kind str
 			if err := s.add(ctx, in, &msg, text(in.Language, "Anforderung öffnen", "Open request"), Action{Op: "show_movie", ID: old.ID}); err != nil {
 				return Message{}, err
 			}
-			if old.State != store.MovieDeleted {
+			if !store.MovieFilesRemoved(old.State) {
 				return msg, nil
 			}
 		}
@@ -344,7 +344,7 @@ func (s *Service) catalog(ctx context.Context, in Inbound, u auth.User, kind str
 	return msg, err
 }
 func state(lang, value string) string {
-	names := map[string][2]string{"available": {"Bereit zum Schauen", "Ready to watch"}, "downloading": {"Wird geladen", "Downloading"}, "queued": {"In Warteschlange", "Queued"}, "searching": {"Suche läuft", "Searching"}, "waiting": {"Wartet auf Quelle", "Waiting for a source"}, "watched": {"Gesehen", "Watched"}, "deleted": {"Gelöscht", "Deleted"}, "failed": {"Fehlgeschlagen", "Failed"}, "pending": {"Ausstehend", "Pending"}, "skipped": {"Übersprungen", "Skipped"}}
+	names := map[string][2]string{"available": {"Bereit zum Schauen", "Ready to watch"}, "downloading": {"Wird geladen", "Downloading"}, "queued": {"In Warteschlange", "Queued"}, "searching": {"Suche läuft", "Searching"}, "waiting": {"Wartet auf Quelle", "Waiting for a source"}, "watched": {"Gesehen", "Watched"}, "deleted": {"Gelöscht", "Deleted"}, "expired": {"Abgelaufen", "Expired"}, "failed": {"Fehlgeschlagen", "Failed"}, "pending": {"Ausstehend", "Pending"}, "skipped": {"Übersprungen", "Skipped"}}
 	if v, ok := names[value]; ok {
 		return text(lang, v[0], v[1])
 	}

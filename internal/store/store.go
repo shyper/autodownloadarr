@@ -73,7 +73,8 @@ type General struct {
 	DeleteAfterHours int `json:"deleteAfterHours"`
 	// StartedExpiryDays deletes started movies after first playback (0: never).
 	StartedExpiryDays int `json:"startedExpiryDays"`
-	// UnwatchedExpiryDays deletes movies nobody watched (0: never).
+	// UnwatchedExpiryDays deletes movies nobody watched and the files of
+	// series nobody watches any more (0: never).
 	UnwatchedExpiryDays int `json:"unwatchedExpiryDays"`
 	// MaxSources is how many releases are tried before giving up.
 	MaxSources int `json:"maxSources"`

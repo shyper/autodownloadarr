@@ -29,6 +29,7 @@ const (
 	taskSearch  = "episode.search"
 	taskRefresh = "series.refresh"
 	taskCheck   = "series.check"
+	taskExpire  = "series.expire"
 )
 
 // Events published on the bus.
@@ -98,6 +99,7 @@ func NewManager(st *store.Store, svc *movies.Services, sched *scheduler.Schedule
 	sched.Handle(taskSearch, m.handleSearch)
 	sched.Handle(taskRefresh, m.handleRefresh)
 	sched.Handle(taskCheck, m.handleCheck)
+	sched.Handle(taskExpire, m.handleExpire)
 	sched.Every("media-episode-poll", time.Minute, m.pollWatched)
 	sched.Handle(taskSpace, func(ctx context.Context, _ scheduler.Task) error {
 		m.startQueued() // episodes that waited for space
@@ -139,9 +141,13 @@ type RequestOptions struct {
 	TriggerValue  int    `json:"triggerValue,omitempty"`
 }
 
-// Request adds a series by its TMDB ID.
+// Request adds a series by its TMDB ID. An expired series is downloaded
+// again instead.
 func (m *Manager) Request(ctx context.Context, tmdbID int, userID int64, opts RequestOptions) (store.Series, error) {
 	if existing, err := m.store.SeriesByTMDB(ctx, tmdbID); err == nil {
+		if existing.ExpiredAt != nil {
+			return m.Restore(ctx, existing.ID)
+		}
 		return existing, ErrAlreadyRequested
 	} else if !errors.Is(err, store.ErrNotFound) {
 		return store.Series{}, err
@@ -372,6 +378,7 @@ func (m *Manager) Delete(ctx context.Context, id int64) error {
 	}
 	_ = m.sched.Cancel(ctx, refreshKey(id))
 	_ = m.sched.Cancel(ctx, checkKey(id))
+	_ = m.sched.Cancel(ctx, expireKey(id))
 	if err := m.store.DeleteSeries(ctx, id); err != nil {
 		return err
 	}
@@ -476,6 +483,7 @@ type idPayload struct {
 func searchKey(id int64) string  { return "episode:" + strconv.FormatInt(id, 10) + ":search" }
 func refreshKey(id int64) string { return "series:" + strconv.FormatInt(id, 10) + ":refresh" }
 func checkKey(id int64) string   { return "series:" + strconv.FormatInt(id, 10) + ":check" }
+func expireKey(id int64) string  { return "series:" + strconv.FormatInt(id, 10) + ":expire" }
 
 func (m *Manager) scheduleSearch(ctx context.Context, id int64, round int, at time.Time) error {
 	_, err := m.sched.Schedule(ctx, scheduler.Spec{Type: taskSearch, Key: searchKey(id), RunAt: at,

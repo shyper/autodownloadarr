@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/shyper/autodownloadarr/internal/access"
 	"github.com/shyper/autodownloadarr/internal/metadata/tmdb"
 	"github.com/shyper/autodownloadarr/internal/series"
 	"github.com/shyper/autodownloadarr/internal/store"
@@ -138,6 +139,10 @@ func (s *server) handleRequestSeries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user, _, _ := currentUser(r.Context())
+	if existing, err := s.Store.SeriesByTMDB(r.Context(), req.TMDBID); err == nil && existing.ExpiredAt != nil && !access.CanManage(user, existing.RequestedBy) {
+		writeError(w, http.StatusForbidden, "forbidden", "only the request owner or an administrator may restore this item")
+		return
+	}
 	se, err := s.Series.Request(r.Context(), req.TMDBID, user.ID, req.RequestOptions)
 	if errors.Is(err, series.ErrAlreadyRequested) {
 		v, _, _ := s.seriesView(r, se)

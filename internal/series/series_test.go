@@ -815,3 +815,113 @@ func TestWindowAdvancesPastExternallyDeletedEpisodes(t *testing.T) {
 		t.Fatalf("unwatched deletion starts at %d, want 2", got)
 	}
 }
+
+func TestExpiryAt(t *testing.T) {
+	now := time.Date(2026, 1, 20, 12, 0, 0, 0, time.UTC)
+	g := store.DefaultGeneral()
+	days := time.Duration(g.UnwatchedExpiryDays) * 24 * time.Hour
+	old, recent := now.Add(-30*24*time.Hour), now.Add(-2*24*time.Hour)
+	se := store.Series{}
+	eps := []store.Episode{{State: store.MovieDeleted, WatchedAt: &old}, {State: store.MovieAvailable, AvailableAt: &old}}
+	if got := expiryAt(se, g, eps); !got.Equal(old.Add(days)) {
+		t.Errorf("unwatched series expires at %v, want %v", got, old.Add(days))
+	}
+	eps[1].StartedAt = &recent
+	if got := expiryAt(se, g, eps); !got.Equal(recent.Add(days)) {
+		t.Errorf("playback did not restart the clock: %v", got)
+	}
+	// A new season after a long break gets the full time.
+	eps[1] = store.Episode{State: store.MovieAvailable, AvailableAt: &recent}
+	if got := expiryAt(se, g, eps); !got.Equal(recent.Add(days)) {
+		t.Errorf("new episode expires at %v, want %v", got, recent.Add(days))
+	}
+	if got := expiryAt(se, g, eps[:1]); !got.IsZero() {
+		t.Error("series without ready episodes expires")
+	}
+	if got := expiryAt(store.Series{Keep: true}, g, eps); !got.IsZero() {
+		t.Error("kept series expires")
+	}
+	g.UnwatchedExpiryDays = 0
+	if got := expiryAt(se, g, eps); !got.IsZero() {
+		t.Error("disabled expiry still applies")
+	}
+}
+
+// An expired series loses its files but stays listed; restoring it starts
+// again at the episode the viewer stopped at.
+func TestExpiredSeriesRestoresFromLastPosition(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w := newWorld(t)
+	m, st, root := setup(ctx, t, w, nil)
+
+	se, err := st.CreateSeries(ctx, store.Series{TMDBID: 7, TVDBID: 99, Title: "Show", Year: 2020,
+		WindowSize: 2, DeleteTrigger: store.TriggerProgress, TriggerValue: 10}, 0)
+	must(t, err)
+	var list []store.Episode
+	for ep := 1; ep <= 9; ep++ {
+		list = append(list, store.Episode{Season: 1, Episode: ep, Title: fmt.Sprintf("Folge %d", ep)})
+	}
+	must(t, st.UpsertEpisodes(ctx, se.ID, list))
+	eps, err := st.Episodes(ctx, se.ID)
+	must(t, err)
+	old := m.now().Add(-20 * 24 * time.Hour)
+	file := filepath.Join(root, SeriesFolder(se), "Season 01", "e08.mkv")
+	must(t, os.MkdirAll(filepath.Dir(file), 0o755))
+	must(t, os.WriteFile(file, []byte("video"), 0o600))
+	for i := range eps {
+		e := &eps[i]
+		switch {
+		case e.Episode <= 6:
+			e.State, e.WatchedAt, e.Progress = store.MovieDeleted, &old, 1
+		case e.Episode == 7:
+			e.State, e.AvailableAt, e.StartedAt, e.Progress = store.MovieAvailable, &old, &old, 0.3
+		case e.Episode == 8:
+			e.State, e.AvailableAt, e.File = store.MovieAvailable, &old, file
+			must(t, st.TrackFileOf(ctx, store.ForEpisode(e.ID), file, 5))
+		}
+		must(t, st.UpdateEpisode(ctx, *e))
+	}
+
+	must(t, m.Expire(ctx, se.ID))
+	se, err = st.Series(ctx, se.ID)
+	must(t, err)
+	if se.ExpiredAt == nil {
+		t.Fatal("series not marked as expired")
+	}
+	if _, err := os.Stat(file); !os.IsNotExist(err) {
+		t.Error("episode file still exists")
+	}
+	states := func() map[int]string {
+		eps, err := st.Episodes(ctx, se.ID)
+		must(t, err)
+		out := map[int]string{}
+		for _, e := range eps {
+			out[e.Episode] = e.State
+		}
+		return out
+	}
+	if got := states(); got[7] != store.MovieExpired || got[8] != store.MovieExpired || got[9] != store.EpisodePending {
+		t.Fatalf("states after expiry: %v", got)
+	}
+
+	se, err = m.Restore(ctx, se.ID)
+	must(t, err)
+	if se.ExpiredAt != nil {
+		t.Error("series still expired")
+	}
+	got := states()
+	for ep := 1; ep <= 6; ep++ {
+		if got[ep] != store.MovieDeleted {
+			t.Errorf("episode %d is %s, want it left deleted", ep, got[ep])
+		}
+	}
+	for _, ep := range []int{7, 8} {
+		if got[ep] == store.EpisodePending || got[ep] == store.MovieExpired {
+			t.Errorf("episode %d is %s, want it in the window", ep, got[ep])
+		}
+	}
+	if got[9] != store.EpisodePending {
+		t.Errorf("episode 9 is %s, want it outside the window", got[9])
+	}
+}

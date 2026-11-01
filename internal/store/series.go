@@ -53,7 +53,10 @@ type Series struct {
 	Paused          bool       `json:"paused"`
 	Folder          string     `json:"folder"`
 	RefreshedAt     *time.Time `json:"refreshedAt,omitempty"`
-	CreatedAt       time.Time  `json:"createdAt"`
+	// ExpiredAt is set when the files were removed because nobody watched
+	// the series; it can be downloaded again from the last position.
+	ExpiredAt *time.Time `json:"expiredAt,omitempty"`
+	CreatedAt time.Time  `json:"createdAt"`
 }
 
 // Wants reports whether a season is part of the selection.
@@ -116,16 +119,16 @@ func (e Episode) Before(o Episode) bool {
 const seriesColumns = `id, tmdb_id, tvdb_id, imdb_id, title, original_title, year, overview, poster_path, status, runtime, genres, alt_titles,
 	COALESCE(profile_id, 0), COALESCE(requested_by, 0), COALESCE((SELECT username FROM users WHERE id = series.requested_by), ''),
 	seasons, future_seasons, known_seasons, start_season, start_episode, window_size, delete_trigger, trigger_value, keep, paused,
-	folder, refreshed_at, created_at`
+	folder, refreshed_at, expired_at, created_at`
 
 func scanSeries(row interface{ Scan(...any) error }) (Series, error) {
 	var s Series
 	var alt, seasons, genres string
-	var refreshed sql.NullInt64
+	var refreshed, expired sql.NullInt64
 	var created int64
 	err := row.Scan(&s.ID, &s.TMDBID, &s.TVDBID, &s.IMDbID, &s.Title, &s.OriginalTitle, &s.Year, &s.Overview, &s.PosterPath,
 		&s.Status, &s.Runtime, &genres, &alt, &s.ProfileID, &s.RequestedBy, &s.RequestedByName, &seasons, &s.FutureSeasons, &s.KnownSeasons, &s.StartSeason, &s.StartEpisode, &s.WindowSize, &s.DeleteTrigger,
-		&s.TriggerValue, &s.Keep, &s.Paused, &s.Folder, &refreshed, &created)
+		&s.TriggerValue, &s.Keep, &s.Paused, &s.Folder, &refreshed, &expired, &created)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Series{}, ErrNotFound
 	}
@@ -142,6 +145,7 @@ func scanSeries(row interface{ Scan(...any) error }) (Series, error) {
 		s.Seasons = []int{}
 	}
 	s.RefreshedAt = nullTime(refreshed)
+	s.ExpiredAt = nullTime(expired)
 	s.CreatedAt = time.UnixMilli(created)
 	return s, nil
 }
@@ -216,11 +220,11 @@ func (s *Store) UpdateSeries(ctx context.Context, se Series) error {
 	return affected(s.db.ExecContext(ctx, `
 		UPDATE series SET tvdb_id = ?, imdb_id = ?, title = ?, original_title = ?, overview = ?, poster_path = ?, status = ?,
 			runtime = ?, genres = ?, alt_titles = ?, seasons = ?, future_seasons = ?, known_seasons = ?, start_season = ?, start_episode = ?, window_size = ?, delete_trigger = ?,
-			trigger_value = ?, keep = ?, paused = ?, folder = ?, refreshed_at = ?, updated_at = ?
+			trigger_value = ?, keep = ?, paused = ?, folder = ?, refreshed_at = ?, expired_at = ?, updated_at = ?
 		WHERE id = ?`,
 		se.TVDBID, se.IMDbID, se.Title, se.OriginalTitle, se.Overview, se.PosterPath, se.Status, se.Runtime, string(genres), string(alt),
 		string(seasons), se.FutureSeasons, se.KnownSeasons, se.StartSeason, se.StartEpisode, se.WindowSize, se.DeleteTrigger, se.TriggerValue, se.Keep, se.Paused,
-		se.Folder, timeArg(se.RefreshedAt), s.ms(), se.ID))
+		se.Folder, timeArg(se.RefreshedAt), timeArg(se.ExpiredAt), s.ms(), se.ID))
 }
 
 // DeleteSeries removes a series with its episodes and history.

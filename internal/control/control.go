@@ -105,7 +105,7 @@ func (s *Service) Execute(ctx context.Context, u auth.User, name string, in Inpu
 		if in.TMDBID <= 0 {
 			return nil, store.ErrInvalid
 		}
-		if old, err := s.Store.MovieByTMDB(ctx, in.TMDBID); err == nil && old.State == store.MovieDeleted && !access.CanManage(u, old.RequestedBy) {
+		if old, err := s.Store.MovieByTMDB(ctx, in.TMDBID); err == nil && store.MovieFilesRemoved(old.State) && !access.CanManage(u, old.RequestedBy) {
 			return nil, access.ErrForbidden
 		}
 		mv, err := s.Movies.Request(ctx, in.TMDBID, u.ID, in.Options.ProfileID)
@@ -116,6 +116,9 @@ func (s *Service) Execute(ctx context.Context, u auth.User, name string, in Inpu
 	case "request_series":
 		if in.TMDBID <= 0 {
 			return nil, store.ErrInvalid
+		}
+		if old, err := s.Store.SeriesByTMDB(ctx, in.TMDBID); err == nil && old.ExpiredAt != nil && !access.CanManage(u, old.RequestedBy) {
+			return nil, access.ErrForbidden
 		}
 		se, err := s.Series.Request(ctx, in.TMDBID, u.ID, in.Options)
 		if errors.Is(err, series.ErrAlreadyRequested) {

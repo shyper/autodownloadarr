@@ -163,6 +163,7 @@
       "available": "Bereit zum Schauen",
       "watched": "Gesehen",
       "deleted": "Gelöscht",
+      "expired": "Abgelaufen",
       "failed": "Braucht Aufmerksamkeit",
       "pending": "Noch nicht dran",
       "skipped": "Übersprungen"
@@ -171,6 +172,7 @@
       "keep": "Behalten",
       "unkeep": "Nicht mehr behalten",
       "search": "Erneut suchen",
+      "redownload": "Erneut laden",
       "skip": "Nächstes Release versuchen",
       "delete": "Dateien löschen",
       "forget": "Entfernen"
@@ -292,8 +294,8 @@
       "moviesPathHint": "Pfad im Container. Lege denselben Ordner in Plex als eigene Bibliothek an.",
       "deleteAfterHours": "Nach dem Schauen löschen nach (Stunden)",
       "deleteAfterHoursHint": "0 löscht direkt nach dem Schauen.",
-      "unwatchedExpiryDays": "Ungesehene Filme löschen nach (Tagen)",
-      "unwatchedExpiryDaysHint": "0 behält ungesehene Filme.",
+      "unwatchedExpiryDays": "Ungesehene Filme und Serien löschen nach (Tagen)",
+      "unwatchedExpiryDaysHint": "Bei Serien zählt die letzte geschaute Folge. Abgelaufene Titel bleiben in der Liste und lassen sich erneut laden. 0 behält sie.",
       "maxSources": "Zu versuchende Releases",
       "maxSourcesHint": "Nach so vielen fehlgeschlagenen Releases braucht der Film deine Aufmerksamkeit.",
       "parallelDownloads": "Parallele Downloads (Filme und Episoden zusammen)",

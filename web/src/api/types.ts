@@ -135,6 +135,7 @@ export type MovieState =
   | 'available'
   | 'watched'
   | 'deleted'
+  | 'expired'
   | 'failed'
 
 export type Movie = {
@@ -275,6 +276,8 @@ export type Series = {
   triggerValue: number
   keep: boolean
   paused: boolean
+  /** Set when the files were removed because nobody watched the series. */
+  expiredAt?: string
   counts: Partial<Record<EpisodeState, number>>
   /** The episode being watched or next up. */
   current?: EpisodeRef

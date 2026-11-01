@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 )
 
 func TestUserQuotas(t *testing.T) {
@@ -54,5 +55,29 @@ func TestUserQuotas(t *testing.T) {
 	}
 	if err := s.CheckUserQuota(ctx, userID); err != nil {
 		t.Errorf("deleted movie still counts: %v", err)
+	}
+	m.State = MovieExpired
+	if err := s.UpdateMovie(ctx, m); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CheckUserQuota(ctx, userID); err != nil {
+		t.Errorf("expired movie still counts: %v", err)
+	}
+
+	// So does an expired series, until it is downloaded again.
+	se, err := s.CreateSeries(ctx, Series{TMDBID: 2, Title: "Show"}, userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CheckUserQuota(ctx, userID); !errors.Is(err, ErrQuotaExceeded) {
+		t.Errorf("series does not count: %v", err)
+	}
+	now := time.Now()
+	se.ExpiredAt = &now
+	if err := s.UpdateSeries(ctx, se); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CheckUserQuota(ctx, userID); err != nil {
+		t.Errorf("expired series still counts: %v", err)
 	}
 }

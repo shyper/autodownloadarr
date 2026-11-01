@@ -32,6 +32,20 @@ func (m *Manager) Reconcile(ctx context.Context, id int64) error {
 		return err
 	}
 	now := m.now()
+	if se.ExpiredAt != nil {
+		m.bus.Publish(EventSeriesUpdated, se)
+		return nil // nothing to keep ready until it is restored
+	}
+	var nextCheck time.Time
+	if at := expiryAt(se, g, all); !at.IsZero() {
+		if !now.Before(at) {
+			// Expire waits for running downloads, which reconcile when they
+			// end, so it runs as its own task.
+			_, err := m.sched.Schedule(ctx, scheduler.Spec{Type: taskExpire, Key: expireKey(id), Payload: idPayload{ID: id}})
+			return err
+		}
+		nextCheck = at
+	}
 	var list []store.Episode
 	for _, e := range all {
 		if se.Wants(e.Season) && e.State != store.EpisodeSkipped {
@@ -40,7 +54,6 @@ func (m *Manager) Reconcile(ctx context.Context, id int64) error {
 	}
 
 	// 1. Delete consumed episodes whose trigger fired.
-	var nextCheck time.Time
 	for i := range list {
 		e := &list[i]
 		if (e.State != store.MovieAvailable && e.State != store.MovieWatched) || se.Keep {
