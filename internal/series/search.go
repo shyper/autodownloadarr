@@ -298,7 +298,7 @@ func (m *Manager) fail(ctx context.Context, e store.Episode, code, detail string
 	if se, err := m.store.Series(ctx, e.SeriesID); err == nil {
 		title = fmt.Sprintf("%s S%02dE%02d failed", se.Title, e.Season, e.Episode)
 	}
-	m.notify(events.Notification{Event: "episode.failed", Title: title, Body: e.LastError})
+	m.notify(events.Notification{Event: events.NotifyEpisodeFailed, Title: title, Body: e.LastError})
 	m.startQueued() // later episodes no longer wait for this one
 	return nil
 }

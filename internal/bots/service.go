@@ -19,6 +19,7 @@ import (
 
 	"github.com/shyper/autodownloadarr/internal/auth"
 	"github.com/shyper/autodownloadarr/internal/control"
+	"github.com/shyper/autodownloadarr/internal/metadata/tmdb"
 	"github.com/shyper/autodownloadarr/internal/scheduler"
 	"github.com/shyper/autodownloadarr/internal/store"
 )
@@ -140,11 +141,11 @@ func (s *Service) HandleTask(ctx context.Context, task scheduler.Task) error {
 			if e != nil || link.ID != in.Notice.LinkID || !link.Notifications {
 				return s.Store.FinishBotUpdate(ctx, job.Provider, job.ID)
 			}
-			state := text(link.Language, "Bereit zum Schauen", "Ready to watch")
+			state := "✅ " + text(link.Language, "Bereit zum Schauen", "Ready to watch")
 			if in.Notice.State == "failed" {
-				state = text(link.Language, "Download fehlgeschlagen", "Download failed")
+				state = "⚠️ " + text(link.Language, "Download fehlgeschlagen", "Download failed")
 			}
-			msg = Message{Title: state, Text: in.Notice.Title, Buttons: []Button{{Label: text(link.Language, "Details öffnen", "Open details"), URL: s.PublicURL + "/" + map[string]string{"movie": "movies", "series": "series"}[in.Notice.Kind] + "/" + strconv.FormatInt(in.Notice.ID, 10)}}}
+			msg = Message{Title: state, Text: in.Notice.Title, Poster: tmdb.PosterURL(in.Notice.PosterPath, "w342"), Buttons: []Button{{Label: text(link.Language, "Details öffnen", "Open details"), URL: s.PublicURL + "/" + map[string]string{"movie": "movies", "series": "series"}[in.Notice.Kind] + "/" + strconv.FormatInt(in.Notice.ID, 10)}}}
 		} else {
 			msg, err = s.Render(ctx, in)
 			if err != nil {

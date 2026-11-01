@@ -415,3 +415,49 @@ func TestExpiredDiscordInteractionFallsBackToDM(t *testing.T) {
 		t.Fatal("late response not delivered as DM")
 	}
 }
+
+func TestTelegramNoticeShowsPosterAndFormattedTitle(t *testing.T) {
+	s, d := testService(t)
+	ctx := t.Context()
+	now := time.Now()
+	mv, err := s.Store.CreateMovie(ctx, store.Movie{TMDBID: 321, Title: "Tom & Jerry", PosterPath: "/poster.jpg", State: store.MovieAvailable}, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mv.AvailableAt = &now
+	if err = s.Store.UpdateMovie(ctx, mv); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.PollNotices(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var id string
+	if err = d.QueryRowContext(ctx, `SELECT id FROM bot_updates WHERE id LIKE 'notice:%'`).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	var path string
+	var got map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path = r.URL.Path
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		fmt.Fprint(w, `{"ok":true,"result":{}}`)
+	}))
+	defer srv.Close()
+	s.TelegramURL = srv.URL
+	if err = s.HandleTask(ctx, task(id)); err != nil {
+		t.Fatal(err)
+	}
+	if path != "/bot123:secret/sendPhoto" || got["parse_mode"] != "HTML" || !strings.HasSuffix(fmt.Sprint(got["photo"]), "/w342/poster.jpg") {
+		t.Fatalf("request = %s %+v", path, got)
+	}
+	if want := "<b>✅ Bereit zum Schauen</b>\n\nTom &amp; Jerry"; got["caption"] != want {
+		t.Errorf("caption = %q, want %q", got["caption"], want)
+	}
+}
+
+func TestTelegramHTMLClipsBeforeEscaping(t *testing.T) {
+	got := telegramHTML(Message{Title: "A<B", Text: strings.Repeat("&", 50)}, 20)
+	if want := "<b>A&lt;B</b>\n\n" + strings.Repeat("&amp;", 14) + "…"; got != want {
+		t.Errorf("telegramHTML = %q, want %q", got, want)
+	}
+}

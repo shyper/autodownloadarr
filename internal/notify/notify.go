@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -63,10 +64,10 @@ func (s *Service) Start(ctx context.Context, bus *events.Bus) {
 }
 
 // Send forwards a message to the configured channel. A disabled or
-// unconfigured channel does nothing.
+// unconfigured channel, or a kind the user switched off, does nothing.
 func (s *Service) Send(ctx context.Context, msg events.Notification) error {
 	n, err := s.Store.Notification(ctx)
-	if err != nil || !n.Enabled || n.Provider == "" {
+	if err != nil || !n.Enabled || n.Provider == "" || !n.Wants(msg.Event) {
 		return err
 	}
 	return s.SendTo(ctx, n, msg)
@@ -99,11 +100,40 @@ func (s *Service) SendTo(ctx context.Context, n store.Notification, msg events.N
 		}
 		u := strings.TrimRight(base, "/") + "/bot" + n.Token + "/sendMessage"
 		body, _ := json.Marshal(map[string]any{
-			"chat_id": n.ChatID, "text": text, "disable_web_page_preview": true,
+			"chat_id": n.ChatID, "text": telegramText(msg), "parse_mode": "HTML",
+			"link_preview_options": map[string]bool{"is_disabled": true},
 		})
 		return s.post(ctx, u, "application/json", body)
 	}
 	return fmt.Errorf("notify: unknown provider %q", n.Provider)
+}
+
+// icons mark the notification kinds in Telegram messages.
+var icons = map[string]string{
+	events.NotifyMovieAvailable:   "🎬",
+	events.NotifyEpisodeAvailable: "📺",
+	events.NotifyMovieFailed:      "⚠️",
+	events.NotifyEpisodeFailed:    "⚠️",
+	events.NotifyMovieDeleted:     "🗑️",
+	events.NotifySeriesDeleted:    "🗑️",
+}
+
+// telegramText formats a message as Telegram HTML: an icon and the title in
+// bold, then the body. The release name of a finished download is set as code.
+func telegramText(msg events.Notification) string {
+	icon, ok := icons[msg.Event]
+	if !ok {
+		icon = "🔔"
+	}
+	text := icon + " <b>" + html.EscapeString(msg.Title) + "</b>"
+	switch {
+	case msg.Body == "":
+	case msg.Event == events.NotifyMovieAvailable || msg.Event == events.NotifyEpisodeAvailable:
+		text += "\n\n<code>" + html.EscapeString(msg.Body) + "</code>"
+	default:
+		text += "\n\n" + html.EscapeString(msg.Body)
+	}
+	return text
 }
 
 // post sends one HTTP request. header is an optional key/value pair.

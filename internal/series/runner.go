@@ -281,7 +281,7 @@ func (m *Manager) finishPack(ctx, dctx context.Context, se store.Series, e store
 		m.log.Info("episode available from season pack", "series", se.Title, "season", ep.Season, "episode", ep.Episode, "file", final)
 		m.publishEpisode(*ep)
 		m.notify(events.Notification{
-			Event: "episode.available",
+			Event: events.NotifyEpisodeAvailable,
 			Title: fmt.Sprintf("%s S%02dE%02d is ready", se.Title, ep.Season, ep.Episode),
 			Body:  rel.Title,
 		})
@@ -372,7 +372,7 @@ func (m *Manager) finish(ctx, dctx context.Context, se store.Series, e store.Epi
 		m.log.Info("episode available", "series", se.Title, "file", path)
 		m.publishEpisode(e)
 		m.notify(events.Notification{
-			Event: "episode.available",
+			Event: events.NotifyEpisodeAvailable,
 			Title: fmt.Sprintf("%s S%02dE%02d is ready", se.Title, e.Season, e.Episode),
 			Body:  rel.Title,
 		})

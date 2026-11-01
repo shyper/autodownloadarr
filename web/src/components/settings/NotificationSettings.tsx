@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNotification, useSaveNotification, useTestNotification } from '../../api/config'
-import type { NotificationSettings as Settings } from '../../api/types'
-import { notificationDraft, notificationUrlLabel } from '../../notifications'
+import { notificationEvents, type NotificationSettings as Settings } from '../../api/types'
+import { notificationDraft, notificationUrlLabel, toggleNotificationEvent } from '../../notifications'
 import { errorMessage } from '../../i18n'
 import { Alert, Button, Checkbox, Field, Input, SectionTitle, Select } from '../ui'
 
@@ -92,6 +92,22 @@ function NotificationForm({ initial, provider }: { initial: Settings; provider?:
           />
         </Field>
       )}
+
+      <fieldset className="space-y-3">
+        <legend className="text-sm font-medium text-fg">{t('settings.notifications.events.title')}</legend>
+        <p className="text-xs text-muted">{t('settings.notifications.events.hint')}</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {notificationEvents.map((event) => (
+            <Checkbox
+              key={event}
+              label={t(`settings.notifications.events.${event}`)}
+              checked={!n.disabledEvents.includes(event)}
+              disabled={!n.enabled}
+              onChange={(e) => set('disabledEvents', toggleNotificationEvent(n.disabledEvents, event, e.target.checked))}
+            />
+          ))}
+        </div>
+      </fieldset>
 
       <div className="flex flex-wrap justify-end gap-2">
         <Button type="button" variant="secondary" onClick={sendTest} disabled={!canSave} loading={test.isPending}>

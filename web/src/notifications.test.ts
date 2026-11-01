@@ -3,9 +3,9 @@ import { expect, it } from 'vitest'
 import type { NotificationSettings } from './api/types'
 import de from './i18n/locales/de.json'
 import en from './i18n/locales/en.json'
-import { notificationDraft, notificationUrlLabel } from './notifications'
+import { notificationDraft, notificationUrlLabel, toggleNotificationEvent } from './notifications'
 
-const empty: NotificationSettings = { enabled: false, provider: '', url: '', chatId: '', hasToken: false, useBotToken: false }
+const empty: NotificationSettings = { enabled: false, provider: '', url: '', chatId: '', hasToken: false, useBotToken: false, disabledEvents: [] }
 
 it.each(['de', 'en'])('renders a translated URL label for unconfigured notifications in %s', async (lng) => {
   const instance = i18next.createInstance()
@@ -29,4 +29,19 @@ it('starts Telegram setup with the shared bot token and without enabling or inhe
 it('preserves existing Telegram settings and the selected credential source', () => {
   const existing: NotificationSettings = { ...empty, enabled: true, provider: 'telegram', chatId: '42', hasToken: true }
   expect(notificationDraft(existing, 'telegram')).toEqual(existing)
+})
+
+it('keeps the disabled notification kinds and toggles one at a time', () => {
+  const existing: NotificationSettings = { ...empty, provider: 'discord', disabledEvents: ['movie.deleted'] }
+  expect(notificationDraft(existing).disabledEvents).toEqual(['movie.deleted'])
+  expect(notificationDraft(existing, 'telegram').disabledEvents).toEqual(['movie.deleted'])
+  // A server that predates the field sends no list.
+  const legacy = { ...existing, disabledEvents: undefined } as unknown as NotificationSettings
+  expect(notificationDraft(legacy).disabledEvents).toEqual([])
+
+  let disabled = toggleNotificationEvent(existing.disabledEvents, 'series.deleted', false)
+  expect(disabled).toEqual(['movie.deleted', 'series.deleted'])
+  disabled = toggleNotificationEvent(disabled, 'movie.deleted', true)
+  expect(disabled).toEqual(['series.deleted'])
+  expect(toggleNotificationEvent(disabled, 'series.deleted', false)).toEqual(['series.deleted'])
 })

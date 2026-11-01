@@ -457,7 +457,23 @@
       "chatIdHint": "Der Chat oder Kanal, der die Meldungen erhält.",
       "sendTest": "Test senden",
       "testSent": "Testbenachrichtigung gesendet.",
-      "urlLabel": "Adresse"
+      "urlLabel": "Adresse",
+      "events": {
+        "title": "Benachrichtigen bei",
+        "hint": "Die Testnachricht wird immer gesendet.",
+        "movie": {
+          "available": "Film bereit",
+          "failed": "Film fehlgeschlagen",
+          "deleted": "Film gelöscht"
+        },
+        "episode": {
+          "available": "Folge bereit",
+          "failed": "Folge fehlgeschlagen"
+        },
+        "series": {
+          "deleted": "Serie gelöscht"
+        }
+      }
     },
     "mediaServer": {
       "title": "Medienserver",

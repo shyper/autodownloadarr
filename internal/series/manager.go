@@ -385,7 +385,7 @@ func (m *Manager) Delete(ctx context.Context, id int64) error {
 	m.cleanupFolder(ctx, se)
 	removed = true
 	m.bus.Publish(EventSeriesRemoved, map[string]int64{"id": id})
-	m.notify(events.Notification{Event: "series.deleted", Title: "Series deleted: " + se.Title})
+	m.notify(events.Notification{Event: events.NotifySeriesDeleted, Title: "Series deleted: " + se.Title})
 	return nil
 }
 

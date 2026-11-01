@@ -33,7 +33,20 @@ export type NotificationSettings = {
   chatId: string
   /** A token is stored; the token itself is never sent to the browser. */
   hasToken: boolean
+  /** Notification kinds that are not sent; kinds not listed are sent. */
+  disabledEvents: NotificationEvent[]
 }
+
+export const notificationEvents = [
+  'movie.available',
+  'movie.failed',
+  'movie.deleted',
+  'episode.available',
+  'episode.failed',
+  'series.deleted',
+] as const
+
+export type NotificationEvent = (typeof notificationEvents)[number]
 
 export type UsenetServer = {
   id: number

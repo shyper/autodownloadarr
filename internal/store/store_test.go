@@ -409,6 +409,32 @@ func TestNotification(t *testing.T) {
 	}
 }
 
+func TestNotificationDisabledEvents(t *testing.T) {
+	s, ctx := newStore(t), context.Background()
+	if n, err := s.Notification(ctx); err != nil || n.DisabledEvents == nil || !n.Wants("movie.available") {
+		t.Fatalf("default = %+v, %v", n, err)
+	}
+	n := Notification{Enabled: true, Provider: "webhook", URL: "https://example.com/hook",
+		DisabledEvents: []string{"movie.deleted", "series.deleted", "movie.deleted"}}
+	if err := s.SetNotification(ctx, n); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Notification(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(got.DisabledEvents, " ") != "movie.deleted series.deleted" {
+		t.Errorf("disabled = %v", got.DisabledEvents)
+	}
+	if got.Wants("movie.deleted") || !got.Wants("movie.available") || !got.Wants("test") {
+		t.Errorf("wants = %v", got.DisabledEvents)
+	}
+	n.DisabledEvents = []string{"movie.exploded"}
+	if err := s.SetNotification(ctx, n); !errors.Is(err, ErrInvalid) {
+		t.Errorf("unknown event error = %v", err)
+	}
+}
+
 func TestReleaseIdentitySurvivesSearchReplacement(t *testing.T) {
 	st, ctx := newStore(t), t.Context()
 	mv, err := st.CreateMovie(ctx, Movie{TMDBID: 321, Title: "Movie", State: MovieAvailable}, 0)

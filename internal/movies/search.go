@@ -250,7 +250,7 @@ func (m *Manager) fail(ctx context.Context, mv store.Movie, code, detail string)
 	}
 	m.log.Warn("movie needs attention", "movie", mv.Title, "reason", mv.LastError)
 	m.publish(mv)
-	m.notify(events.Notification{Event: "movie.failed", Title: "Movie failed: " + mv.Title, Body: mv.LastError})
+	m.notify(events.Notification{Event: events.NotifyMovieFailed, Title: "Movie failed: " + mv.Title, Body: mv.LastError})
 	return nil
 }
 

@@ -9,9 +9,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
+	"github.com/shyper/autodownloadarr/internal/events"
 	"github.com/shyper/autodownloadarr/internal/secrets"
 )
 
@@ -157,6 +159,14 @@ type Notification struct {
 	// before sending the configuration to the UI.
 	Token    string `json:"token,omitempty"`
 	HasToken bool   `json:"hasToken"`
+	// DisabledEvents are the notification kinds (events.NotificationEvents)
+	// that are not sent. Kinds not listed are sent, so new kinds start on.
+	DisabledEvents []string `json:"disabledEvents"`
+}
+
+// Wants reports whether a notification of this kind is sent.
+func (n Notification) Wants(event string) bool {
+	return !slices.Contains(n.DisabledEvents, event)
 }
 
 // notificationConfig is how the channel is stored: the token is encrypted
@@ -168,6 +178,9 @@ type notificationConfig struct {
 	URL         string `json:"url"`
 	ChatID      string `json:"chatId"`
 	TokenEnc    string `json:"tokenEnc,omitempty"`
+	// DisabledEvents is an opt-out list, so channels stored before it existed
+	// keep every kind.
+	DisabledEvents []string `json:"disabledEvents,omitempty"`
 }
 
 // Validate checks the fields of a notification channel. An empty token is
@@ -176,6 +189,16 @@ func (n *Notification) Validate() error {
 	n.Provider = strings.TrimSpace(n.Provider)
 	n.URL = strings.TrimSpace(n.URL)
 	n.ChatID = strings.TrimSpace(n.ChatID)
+	disabled := []string{}
+	for _, e := range n.DisabledEvents {
+		if !slices.Contains(events.NotificationEvents, e) {
+			return fmt.Errorf("%w: unknown notification event %q", ErrInvalid, e)
+		}
+		if !slices.Contains(disabled, e) {
+			disabled = append(disabled, e)
+		}
+	}
+	n.DisabledEvents = disabled
 	switch n.Provider {
 	case "webhook", "discord", "ntfy":
 		if !strings.HasPrefix(n.URL, "http://") && !strings.HasPrefix(n.URL, "https://") {
@@ -200,7 +223,10 @@ func (s *Store) Notification(ctx context.Context) (Notification, error) {
 	if _, err := s.getSetting(ctx, keyNotifications, &c); err != nil {
 		return Notification{}, err
 	}
-	n := Notification{Enabled: c.Enabled, Provider: c.Provider, URL: c.URL, ChatID: c.ChatID, UseBotToken: c.UseBotToken}
+	n := Notification{Enabled: c.Enabled, Provider: c.Provider, URL: c.URL, ChatID: c.ChatID, UseBotToken: c.UseBotToken, DisabledEvents: c.DisabledEvents}
+	if n.DisabledEvents == nil {
+		n.DisabledEvents = []string{}
+	}
 	n.Token = s.decrypt(c.TokenEnc)
 	if n.Provider == "telegram" && n.UseBotToken {
 		bots, err := s.BotConfig(ctx)
@@ -242,7 +268,7 @@ func (s *Store) SetNotification(ctx context.Context, n Notification) error {
 	if n.Provider == "telegram" && !n.UseBotToken && token == "" {
 		return fmt.Errorf("%w: bot token is required", ErrInvalid)
 	}
-	c := notificationConfig{Enabled: n.Enabled, Provider: n.Provider, URL: n.URL, ChatID: n.ChatID, UseBotToken: n.UseBotToken}
+	c := notificationConfig{Enabled: n.Enabled, Provider: n.Provider, URL: n.URL, ChatID: n.ChatID, UseBotToken: n.UseBotToken, DisabledEvents: n.DisabledEvents}
 	if token != "" {
 		if c.TokenEnc, err = s.encrypt(token); err != nil {
 			return err

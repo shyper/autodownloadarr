@@ -357,7 +357,7 @@ func (m *Manager) Delete(ctx context.Context, id int64, forget bool) error {
 		}
 		removed = true
 		m.bus.Publish(EventMovieRemoved, map[string]int64{"id": id})
-		m.notify(events.Notification{Event: "movie.deleted", Title: "Movie deleted: " + mv.Title})
+		m.notify(events.Notification{Event: events.NotifyMovieDeleted, Title: "Movie deleted: " + mv.Title})
 		return nil
 	}
 	mv.State = store.MovieDeleted
@@ -367,7 +367,7 @@ func (m *Manager) Delete(ctx context.Context, id int64, forget bool) error {
 	}
 	removed = true
 	m.publish(mv)
-	m.notify(events.Notification{Event: "movie.deleted", Title: "Movie deleted: " + mv.Title})
+	m.notify(events.Notification{Event: events.NotifyMovieDeleted, Title: "Movie deleted: " + mv.Title})
 	return nil
 }
 

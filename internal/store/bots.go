@@ -233,16 +233,16 @@ func (s *Store) SetTelegramOffset(ctx context.Context, n int64) error {
 }
 
 type BotNotice struct {
-	Provider, ExternalID, ChatID, Language, Kind, Title, State, Generation string
-	ID                                                                     int64
-	LinkID                                                                 int64
+	Provider, ExternalID, ChatID, Language, Kind, Title, State, Generation, PosterPath string
+	ID                                                                                 int64
+	LinkID                                                                             int64
 }
 
 func (s *Store) BotNotices(ctx context.Context) ([]BotNotice, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT l.provider,l.external_id,l.chat_id,l.language,'movie',m.title,m.state,CAST(COALESCE(m.available_at,0) AS TEXT),m.id,l.id
+	rows, err := s.db.QueryContext(ctx, `SELECT l.provider,l.external_id,l.chat_id,l.language,'movie',m.title,m.state,CAST(COALESCE(m.available_at,0) AS TEXT),m.poster_path,m.id,l.id
  FROM movies m JOIN bot_links l ON l.user_id=m.requested_by WHERE l.notifications=1 AND m.state IN ('available','failed') AND m.updated_at>=l.created_at
  UNION ALL
- SELECT l.provider,l.external_id,l.chat_id,l.language,'series',se.title || ' · S' || printf('%02d',e.season) || 'E' || printf('%02d',e.episode),e.state,CAST(COALESCE(e.available_at,0) AS TEXT) || ':' || CAST(e.id AS TEXT),se.id,l.id
+ SELECT l.provider,l.external_id,l.chat_id,l.language,'series',se.title || ' · S' || printf('%02d',e.season) || 'E' || printf('%02d',e.episode),e.state,CAST(COALESCE(e.available_at,0) AS TEXT) || ':' || CAST(e.id AS TEXT),se.poster_path,se.id,l.id
  FROM episodes e JOIN series se ON se.id=e.series_id JOIN bot_links l ON l.user_id=se.requested_by WHERE l.notifications=1 AND e.state IN ('available','failed') AND e.updated_at>=l.created_at`)
 	if err != nil {
 		return nil, err
@@ -251,7 +251,7 @@ func (s *Store) BotNotices(ctx context.Context) ([]BotNotice, error) {
 	out := []BotNotice{}
 	for rows.Next() {
 		var n BotNotice
-		if err := rows.Scan(&n.Provider, &n.ExternalID, &n.ChatID, &n.Language, &n.Kind, &n.Title, &n.State, &n.Generation, &n.ID, &n.LinkID); err != nil {
+		if err := rows.Scan(&n.Provider, &n.ExternalID, &n.ChatID, &n.Language, &n.Kind, &n.Title, &n.State, &n.Generation, &n.PosterPath, &n.ID, &n.LinkID); err != nil {
 			return nil, err
 		}
 		out = append(out, n)

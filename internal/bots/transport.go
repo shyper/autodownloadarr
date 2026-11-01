@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"html"
 	"net/http"
 	"strconv"
 	"strings"
@@ -89,30 +90,38 @@ func (s *Service) sendTelegram(ctx context.Context, c store.BotConfig, in Inboun
 		rows = append(rows, []any{button})
 	}
 	markup := map[string]any{"inline_keyboard": rows}
-	body := map[string]any{"chat_id": in.Chat, "reply_markup": markup}
-	content := msg.Title + "\n\n" + msg.Text
+	body := map[string]any{"chat_id": in.Chat, "reply_markup": markup, "parse_mode": "HTML"}
 	if in.MessageID > 0 {
 		body["message_id"] = in.MessageID
 		if in.Photo {
 			if msg.Poster != "" {
-				body["media"] = map[string]any{"type": "photo", "media": msg.Poster, "caption": clip(content, 1024)}
+				body["media"] = map[string]any{"type": "photo", "media": msg.Poster, "caption": telegramHTML(msg, 1024), "parse_mode": "HTML"}
 				return s.telegram(ctx, c, "editMessageMedia", body, nil)
 			}
-			body["caption"] = clip(content, 1024)
+			body["caption"] = telegramHTML(msg, 1024)
 			return s.telegram(ctx, c, "editMessageCaption", body, nil)
 		}
-		body["text"] = clip(content, 4096)
+		body["text"] = telegramHTML(msg, 4096)
 		body["link_preview_options"] = map[string]bool{"is_disabled": true}
 		return s.telegram(ctx, c, "editMessageText", body, nil)
 	}
 	if msg.Poster != "" {
 		body["photo"] = msg.Poster
-		body["caption"] = clip(content, 1024)
+		body["caption"] = telegramHTML(msg, 1024)
 		return s.telegram(ctx, c, "sendPhoto", body, nil)
 	}
-	body["text"] = clip(content, 4096)
+	body["text"] = telegramHTML(msg, 4096)
 	body["link_preview_options"] = map[string]bool{"is_disabled": true}
 	return s.telegram(ctx, c, "sendMessage", body, nil)
+}
+
+// telegramHTML formats a message as Telegram HTML with the title in bold.
+// Telegram counts the limit after parsing, so the plain text is clipped
+// before it is escaped.
+func telegramHTML(msg Message, limit int) string {
+	title := clip(msg.Title, 200)
+	text := clip(msg.Text, max(limit-len([]rune(title))-2, 1))
+	return "<b>" + html.EscapeString(title) + "</b>\n\n" + html.EscapeString(text)
 }
 func (s *Service) Test(ctx context.Context, c store.BotConfig) error {
 	if !c.TelegramEnabled && !c.DiscordEnabled {

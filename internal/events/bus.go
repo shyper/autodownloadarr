@@ -32,6 +32,23 @@ type Notification struct {
 	Body  string `json:"body"`
 }
 
+// Kinds of notifications. The user can switch each one off for the
+// notification channel.
+const (
+	NotifyMovieAvailable   = "movie.available"
+	NotifyMovieFailed      = "movie.failed"
+	NotifyMovieDeleted     = "movie.deleted"
+	NotifyEpisodeAvailable = "episode.available"
+	NotifyEpisodeFailed    = "episode.failed"
+	NotifySeriesDeleted    = "series.deleted"
+)
+
+// NotificationEvents lists every notification kind in display order.
+var NotificationEvents = []string{
+	NotifyMovieAvailable, NotifyMovieFailed, NotifyMovieDeleted,
+	NotifyEpisodeAvailable, NotifyEpisodeFailed, NotifySeriesDeleted,
+}
+
 // Notify publishes a notification.
 func (b *Bus) Notify(n Notification) { b.Publish(TypeNotification, n) }
 
