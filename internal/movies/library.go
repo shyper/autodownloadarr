@@ -32,7 +32,7 @@ func (m *Manager) available(ctx context.Context, mv store.Movie, rel store.Relea
 	mv.ReleaseKey, mv.ReleaseTitle = rel.Identity(), rel.Title
 	mv.AvailableAt = &now
 	mv.Attempts, mv.LastError, mv.NextSearchAt = 0, "", nil
-	mv.StartedAt, mv.WatchedAt, mv.DeleteAt = nil, nil, nil
+	mv.StartedAt, mv.WatchedAt, mv.DeleteAt, mv.DeleteNotBefore = nil, nil, nil, nil
 	mv.Progress, mv.Base = 0, store.WatchBase{} // a new file: the next poll takes the baseline
 	if err := m.store.UpdateMovie(ctx, mv); err != nil {
 		return err
@@ -250,26 +250,11 @@ func (m *Manager) PollWatched(ctx context.Context) error {
 		if !ok {
 			continue // not scanned yet
 		}
-		base := mv.Base
-		watched, progress := Observe(&mv.Base, it, m.fileSince(ctx, store.ForMovie(mv.ID), mv.Base))
-		changed := mv.MediaKey != it.Key || mv.Base != base || math.Abs(progress-mv.Progress) >= 0.01 ||
-			(progress != mv.Progress && (progress == 0 || progress == 1))
-		mv.MediaKey, mv.Progress = it.Key, progress
-		if progress > 0 && mv.StartedAt == nil {
-			now := m.now()
-			mv.StartedAt, changed = &now, true
-		}
-		switch {
-		case watched && mv.State == store.MovieAvailable:
-			now := m.now()
-			deleteAt := now.Add(time.Duration(g.DeleteAfterHours) * time.Hour)
-			mv.State, mv.WatchedAt, mv.DeleteAt = store.MovieWatched, &now, &deleteAt
-			m.log.Info("movie watched", "movie", mv.Title, "delete_at", deleteAt)
-			changed = true
-		case !watched && mv.State == store.MovieWatched:
-			// Marked as unwatched in Plex: keep it again.
-			mv.State, mv.WatchedAt, mv.DeleteAt = store.MovieAvailable, nil, nil
-			changed = true
+		previousWatchedAt := mv.WatchedAt
+		changed := observeMovie(&mv, it, m.fileSince(ctx, store.ForMovie(mv.ID), mv.Base), m.now())
+		if mv.WatchedAt != nil && mv.WatchedAt != previousWatchedAt {
+			at, _ := movieDeletion(mv, g)
+			m.log.Info("movie watched", "movie", mv.Title, "delete_at", at)
 		}
 		if !changed {
 			if err := m.scheduleDeletion(ctx, mv); err != nil {
@@ -286,6 +271,45 @@ func (m *Manager) PollWatched(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// observeMovie tracks individual viewing cycles. For watched movies Base.Offset
+// follows the resume position; a nonzero position starting over begins a replay.
+// Series continue to use Observe's file-wide baseline unchanged.
+func observeMovie(mv *store.Movie, it mediaserver.Item, since, now time.Time) bool {
+	before := *mv
+	replay := mv.State == store.MovieWatched && it.ViewCount == mv.Base.Views+1 &&
+		it.ViewOffset > 0 && (mv.Base.Offset == 0 || it.ViewOffset.Milliseconds() < mv.Base.Offset)
+	completedAgain := mv.State == store.MovieWatched && it.ViewCount > mv.Base.Views+1
+	if replay {
+		mv.DeleteNotBefore = mv.DeleteAt
+		mv.State, mv.WatchedAt, mv.StartedAt = store.MovieAvailable, nil, &now
+		mv.Base = store.WatchBase{Set: true, Views: it.ViewCount}
+	}
+	watched, progress := Observe(&mv.Base, it, since)
+	mv.MediaKey, mv.Progress = it.Key, progress
+	if progress > 0 && mv.StartedAt == nil {
+		mv.StartedAt = &now
+	}
+	switch {
+	case watched && (mv.State == store.MovieAvailable || completedAgain):
+		if completedAgain || mv.DeleteNotBefore != nil {
+			mv.DeleteNotBefore = mv.DeleteAt
+		}
+		mv.State, mv.WatchedAt = store.MovieWatched, &now
+		// Keep exactly one completed viewing above the cycle baseline so an
+		// increased play count also detects a replay completed between polls.
+		mv.Base.Views = it.ViewCount - 1
+	case !watched && mv.State == store.MovieWatched:
+		mv.State, mv.WatchedAt = store.MovieAvailable, nil
+	}
+	if mv.State == store.MovieWatched {
+		mv.Base.Offset = it.ViewOffset.Milliseconds()
+	}
+	return before.MediaKey != mv.MediaKey || before.Base != mv.Base || before.State != mv.State ||
+		before.StartedAt != mv.StartedAt || before.WatchedAt != mv.WatchedAt ||
+		math.Abs(before.Progress-mv.Progress) >= 0.01 ||
+		(before.Progress != mv.Progress && (mv.Progress == 0 || mv.Progress == 1))
 }
 
 // FilesMissing only confirms removal when all tracked files are absent and the

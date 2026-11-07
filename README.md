@@ -26,6 +26,10 @@ AutoDownloadarr handles everything you only want to see once.
   forbidden words, e.g. German releases only)
 - Plex, Jellyfin and Emby: new items appear immediately, watched ones are
   removed after a configurable delay (default 48 h)
+- Rewatching a movie starts a new started-movie retention period; completing it
+  starts a fresh watched-movie delay. Repeat viewings never shorten an existing
+  deadline. Detection uses the media server's play count and resume position,
+  checked once a minute
 - Series as a rolling window: only the next *n* episodes are kept; starting the
   next episode removes the watched one and fetches another; future seasons can
   be subscribed. If no single episode release exists, a season pack is used as

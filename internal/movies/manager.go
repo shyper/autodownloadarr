@@ -180,7 +180,7 @@ func (m *Manager) request(ctx context.Context, tmdbID int, userID, profileID int
 		existing.State = store.MovieSearching
 		existing.Attempts, existing.LastError = 0, ""
 		existing.WatchedAt, existing.DeleteAt, existing.AvailableAt, existing.NextSearchAt = nil, nil, nil, nil
-		existing.StartedAt = nil
+		existing.StartedAt, existing.DeleteNotBefore = nil, nil
 		existing.MediaKey = ""
 		if err := m.store.UpdateMovie(ctx, existing); err != nil {
 			return store.Movie{}, err
@@ -469,6 +469,14 @@ func decode[T any](t scheduler.Task) (T, error) {
 
 // movieDeletion calculates the deadline from the relevant lifecycle event.
 func movieDeletion(mv store.Movie, g store.General) (time.Time, string) {
+	at, reason := movieDeletionPolicy(mv, g)
+	if !at.IsZero() && mv.DeleteNotBefore != nil && mv.DeleteNotBefore.After(at) {
+		at = *mv.DeleteNotBefore
+	}
+	return at, reason
+}
+
+func movieDeletionPolicy(mv store.Movie, g store.General) (time.Time, string) {
 	if mv.Keep {
 		return time.Time{}, ""
 	}

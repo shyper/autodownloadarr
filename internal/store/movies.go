@@ -56,6 +56,7 @@ type Movie struct {
 	StartedAt       *time.Time `json:"startedAt,omitempty"`
 	WatchedAt       *time.Time `json:"watchedAt,omitempty"`
 	DeleteAt        *time.Time `json:"deleteAt,omitempty"`
+	DeleteNotBefore *time.Time `json:"-"`        // deadline retained across repeat viewings
 	Progress        float64    `json:"progress"` // 0..1, watched since the file is there
 	Base            WatchBase  `json:"-"`
 	CreatedAt       time.Time  `json:"createdAt"`
@@ -64,7 +65,9 @@ type Movie struct {
 
 // WatchBase is the watch state the media server reported when the current
 // file first showed up there. Plex keeps the history of a title across
-// deletions, so only changes against it count as watching.
+// deletions, so only changes against it count as watching. For movies the
+// baseline advances with each viewing cycle; Offset tracks the resume position
+// while watched to detect the start of another cycle.
 type WatchBase struct {
 	Set    bool
 	Views  int
@@ -74,16 +77,16 @@ type WatchBase struct {
 const movieColumns = `id, tmdb_id, imdb_id, title, original_title, year, overview, poster_path, runtime, genres, alt_titles,
 	COALESCE(profile_id, 0), COALESCE(requested_by, 0), COALESCE((SELECT username FROM users WHERE id = movies.requested_by), ''),
 	state, keep, attempts, last_error, next_search_at, release_key, release_title, folder, media_key,
-	available_at, watched_at, delete_at, started_at, progress, base_set, base_views, base_offset, created_at, updated_at`
+	available_at, watched_at, delete_at, started_at, progress, base_set, base_views, base_offset, delete_not_before, created_at, updated_at`
 
 func scanMovie(row interface{ Scan(...any) error }) (Movie, error) {
 	var m Movie
 	var alt, genres string
-	var next, avail, watched, del, started sql.NullInt64
+	var next, avail, watched, del, started, floor sql.NullInt64
 	var created, updated int64
 	err := row.Scan(&m.ID, &m.TMDBID, &m.IMDbID, &m.Title, &m.OriginalTitle, &m.Year, &m.Overview, &m.PosterPath, &m.Runtime, &genres, &alt,
 		&m.ProfileID, &m.RequestedBy, &m.RequestedByName, &m.State, &m.Keep, &m.Attempts, &m.LastError, &next, &m.ReleaseKey, &m.ReleaseTitle, &m.Folder, &m.MediaKey,
-		&avail, &watched, &del, &started, &m.Progress, &m.Base.Set, &m.Base.Views, &m.Base.Offset, &created, &updated)
+		&avail, &watched, &del, &started, &m.Progress, &m.Base.Set, &m.Base.Views, &m.Base.Offset, &floor, &created, &updated)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Movie{}, ErrNotFound
 	}
@@ -97,6 +100,7 @@ func scanMovie(row interface{ Scan(...any) error }) (Movie, error) {
 	}
 	m.NextSearchAt, m.AvailableAt, m.WatchedAt, m.DeleteAt = nullTime(next), nullTime(avail), nullTime(watched), nullTime(del)
 	m.StartedAt = nullTime(started)
+	m.DeleteNotBefore = nullTime(floor)
 	m.CreatedAt, m.UpdatedAt = time.UnixMilli(created), time.UnixMilli(updated)
 	return m, nil
 }
@@ -174,11 +178,11 @@ func (s *Store) UpdateMovie(ctx context.Context, m Movie) error {
 	return affected(s.db.ExecContext(ctx, `
 		UPDATE movies SET state = ?, keep = ?, attempts = ?, last_error = ?, next_search_at = ?, release_key = ?, release_title = ?,
 			folder = ?, media_key = ?, available_at = ?, watched_at = ?, delete_at = ?, started_at = ?, progress = ?, base_set = ?, base_views = ?,
-			base_offset = ?, updated_at = ?
+			base_offset = ?, delete_not_before = ?, updated_at = ?
 		WHERE id = ?`,
 		m.State, m.Keep, m.Attempts, m.LastError, timeArg(m.NextSearchAt), m.ReleaseKey, m.ReleaseTitle,
 		m.Folder, m.MediaKey, timeArg(m.AvailableAt), timeArg(m.WatchedAt), timeArg(m.DeleteAt), timeArg(m.StartedAt), m.Progress, m.Base.Set,
-		m.Base.Views, m.Base.Offset, s.ms(), m.ID))
+		m.Base.Views, m.Base.Offset, timeArg(m.DeleteNotBefore), s.ms(), m.ID))
 }
 
 // DeleteMovie removes a movie and its history.
