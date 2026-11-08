@@ -184,6 +184,30 @@ details, releases, downloads, queue/history, keep/pause/window settings, retries
 release selection and deletion. The endpoint uses the official Go MCP SDK and
 stateless Streamable HTTP. It does not expose provider credentials or configuration.
 
+### Notifications
+
+Settings → Notifications supports Webhook (JSON), Discord, ntfy, Telegram and
+Pushover, with event filters and a test button. For Pushover, create an application
+at https://pushover.net/apps/build, enter its application/API token and your
+user/group key, and optionally choose a device. Both credentials are encrypted
+and are never returned to the browser; leave their fields empty to keep them.
+Pushover uses normal priority and your account's default notification sound.
+
+Movie notifications include the title, year and poster. Episode notifications
+include the series, season/episode number and episode title. Artwork is selected
+in this order: **episode still → season poster → series poster → text only**.
+Episode/season artwork is saved during the regular TMDB metadata refresh; existing
+series acquire it on their next daily refresh. Personal Telegram/Discord notices
+use the same image preference. Availability notices retain the release name;
+failure notices include a readable reason and diagnostic details.
+
+Telegram sends a photo with an HTML caption; Discord uses an embed; ntfy receives
+an attachment URL; Pushover receives an uploaded image (up to 2.5 MiB). Missing or
+unusable Pushover images fall back to text. Telegram retries as text when its API
+rejects a photo. Provider length limits are respected by shortening displayed
+text. Generic webhooks keep `event`, `title`, `message` and `time`, and add
+`subtitle` and `imageUrl` when available.
+
 ### Interactive Telegram and Discord bots
 
 Bots are configured independently of the existing notification destinations under

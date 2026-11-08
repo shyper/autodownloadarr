@@ -13,6 +13,7 @@ import (
 	"github.com/shyper/autodownloadarr/internal/events"
 	"github.com/shyper/autodownloadarr/internal/fetch"
 	"github.com/shyper/autodownloadarr/internal/mediaserver"
+	"github.com/shyper/autodownloadarr/internal/notify"
 	"github.com/shyper/autodownloadarr/internal/scheduler"
 	"github.com/shyper/autodownloadarr/internal/store"
 )
@@ -39,7 +40,7 @@ func (m *Manager) available(ctx context.Context, mv store.Movie, rel store.Relea
 	}
 	m.log.Info("movie available", "movie", mv.Title, "file", video)
 	m.publish(mv)
-	m.notify(events.Notification{Event: events.NotifyMovieAvailable, Title: "Movie ready: " + mv.Title, Body: rel.Title})
+	m.notify(notify.MovieMessage(events.NotifyMovieAvailable, mv, rel.Title))
 	m.scan(ctx, mv.Folder)
 	return m.scheduleDeletion(ctx, mv)
 }

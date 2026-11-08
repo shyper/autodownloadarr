@@ -20,9 +20,12 @@ import (
 	"github.com/shyper/autodownloadarr/internal/auth"
 	"github.com/shyper/autodownloadarr/internal/control"
 	"github.com/shyper/autodownloadarr/internal/metadata/tmdb"
+	"github.com/shyper/autodownloadarr/internal/notify"
 	"github.com/shyper/autodownloadarr/internal/scheduler"
 	"github.com/shyper/autodownloadarr/internal/store"
 )
+
+var errBadRequest = errors.New("bot API rejected request (HTTP 400)")
 
 type Service struct {
 	rateMu                  sync.Mutex
@@ -145,7 +148,15 @@ func (s *Service) HandleTask(ctx context.Context, task scheduler.Task) error {
 			if in.Notice.State == "failed" {
 				state = "⚠️ " + text(link.Language, "Download fehlgeschlagen", "Download failed")
 			}
-			msg = Message{Title: state, Text: in.Notice.Title, Poster: tmdb.PosterURL(in.Notice.PosterPath, "w342"), Buttons: []Button{{Label: text(link.Language, "Details öffnen", "Open details"), URL: s.PublicURL + "/" + map[string]string{"movie": "movies", "series": "series"}[in.Notice.Kind] + "/" + strconv.FormatInt(in.Notice.ID, 10)}}}
+			detail := in.Notice.Detail
+			if in.Notice.State == "failed" {
+				detail = notify.FailureReason(detail)
+			}
+			noticeText := in.Notice.Title
+			if detail != "" {
+				noticeText += "\n\n" + detail
+			}
+			msg = Message{Title: state, Text: noticeText, Poster: tmdb.PosterURL(in.Notice.PosterPath, "w342"), Buttons: []Button{{Label: text(link.Language, "Details öffnen", "Open details"), URL: s.PublicURL + "/" + map[string]string{"movie": "movies", "series": "series"}[in.Notice.Kind] + "/" + strconv.FormatInt(in.Notice.ID, 10)}}}
 		} else {
 			msg, err = s.Render(ctx, in)
 			if err != nil {
@@ -264,6 +275,9 @@ func (s *Service) request(ctx context.Context, method, endpoint, token string, b
 		s.rateUntil[provider] = time.Now().Add(delay)
 		s.rateMu.Unlock()
 		return scheduler.RetryAfter(errors.New("bot API rate limited"), delay)
+	}
+	if resp.StatusCode == http.StatusBadRequest {
+		return errBadRequest
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("bot API status %d", resp.StatusCode)

@@ -17,3 +17,15 @@ export function toggleNotificationEvent(disabled: NotificationEvent[], event: No
 export function notificationUrlLabel(t: TFunction, provider: NotificationSettings['provider']) {
   return t([`settings.notifications.url.${provider}`, 'settings.notifications.urlLabel'])
 }
+
+/** Never carry credentials between providers; saved credentials remain usable when switching back. */
+export function notificationProviderDraft(initial: NotificationSettings, current: NotificationSettings & { token?: string }, provider: NotificationSettings['provider']) {
+  const saved = provider === initial.provider
+  return {
+    ...current, provider, token: '', userKey: '',
+    hasToken: saved && initial.hasToken,
+    hasUserKey: saved && !!initial.hasUserKey,
+    useBotToken: saved && provider === 'telegram' && initial.useBotToken,
+    device: saved ? initial.device : '',
+  }
+}

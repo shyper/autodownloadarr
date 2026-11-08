@@ -3,7 +3,7 @@ import { expect, it } from 'vitest'
 import type { NotificationSettings } from './api/types'
 import de from './i18n/locales/de.json'
 import en from './i18n/locales/en.json'
-import { notificationDraft, notificationUrlLabel, toggleNotificationEvent } from './notifications'
+import { notificationDraft, notificationProviderDraft, notificationUrlLabel, toggleNotificationEvent } from './notifications'
 
 const empty: NotificationSettings = { enabled: false, provider: '', url: '', chatId: '', hasToken: false, useBotToken: false, disabledEvents: [] }
 
@@ -44,4 +44,13 @@ it('keeps the disabled notification kinds and toggles one at a time', () => {
   disabled = toggleNotificationEvent(disabled, 'movie.deleted', true)
   expect(disabled).toEqual(['series.deleted'])
   expect(toggleNotificationEvent(disabled, 'series.deleted', false)).toEqual(['series.deleted'])
+})
+
+it('clears credentials when changing provider and restores saved placeholders when switching back', () => {
+  const initial: NotificationSettings = { ...empty, provider: 'pushover', hasToken: true, hasUserKey: true, device: 'phone' }
+  const editing = { ...initial, token: 'new-app-secret', userKey: 'new-user-secret' }
+  const telegram = notificationProviderDraft(initial, editing, 'telegram')
+  expect(telegram).toMatchObject({ provider: 'telegram', token: '', userKey: '', hasToken: false, hasUserKey: false, useBotToken: false, device: '' })
+  const restored = notificationProviderDraft(initial, telegram, 'pushover')
+  expect(restored).toMatchObject({ provider: 'pushover', token: '', userKey: '', hasToken: true, hasUserKey: true, device: 'phone' })
 })

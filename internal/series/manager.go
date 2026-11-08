@@ -19,6 +19,7 @@ import (
 	"github.com/shyper/autodownloadarr/internal/fetch"
 	"github.com/shyper/autodownloadarr/internal/metadata/tmdb"
 	"github.com/shyper/autodownloadarr/internal/movies"
+	"github.com/shyper/autodownloadarr/internal/notify"
 	"github.com/shyper/autodownloadarr/internal/scheduler"
 	"github.com/shyper/autodownloadarr/internal/store"
 	"github.com/shyper/autodownloadarr/internal/usenet/download"
@@ -253,7 +254,10 @@ func (m *Manager) loadEpisodes(ctx context.Context, client *tmdb.Client, se *sto
 			return err
 		}
 		for _, e := range list {
-			ep := store.Episode{Season: e.Season, Episode: e.Number, Title: e.Title, AirDate: e.AirDate, Runtime: e.Runtime}
+			ep := store.Episode{Season: e.Season, Episode: e.Number, Title: e.Title, AirDate: e.AirDate, Runtime: e.Runtime, StillPath: e.StillPath, SeasonPosterPath: e.SeasonPosterPath}
+			if ep.SeasonPosterPath == "" {
+				ep.SeasonPosterPath = season.PosterPath
+			}
 			if ep.Season < se.StartSeason || (ep.Season == se.StartSeason && ep.Episode < se.StartEpisode) {
 				ep.State = store.EpisodeSkipped
 			}
@@ -385,7 +389,7 @@ func (m *Manager) Delete(ctx context.Context, id int64) error {
 	m.cleanupFolder(ctx, se)
 	removed = true
 	m.bus.Publish(EventSeriesRemoved, map[string]int64{"id": id})
-	m.notify(events.Notification{Event: events.NotifySeriesDeleted, Title: "Series deleted: " + se.Title})
+	m.notify(notify.SeriesMessage(se))
 	return nil
 }
 

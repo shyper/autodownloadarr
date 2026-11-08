@@ -48,3 +48,45 @@ func TestTelegramNotificationUsesBotCredentialsWithoutExposingThem(t *testing.T)
 		t.Fatal("test notification not sent")
 	}
 }
+
+func TestPushoverSecretsAreWriteOnlyAndTestUsesSavedCredentials(t *testing.T) {
+	calls := 0
+	e := newEnvWith(t, func(svc *movies.Services) {
+		svc.HTTP = &http.Client{Transport: notificationTransport(func(r *http.Request) (*http.Response, error) {
+			calls++
+			if r.URL.String() != "https://api.pushover.net/1/messages.json" {
+				t.Errorf("unexpected Pushover URL: %s", r.URL)
+			}
+			if err := r.ParseForm(); err != nil {
+				t.Error(err)
+			}
+			if r.Form.Get("token") != "private-app" || r.Form.Get("user") != "private-user" || r.Form.Get("device") != "phone" {
+				t.Error("test did not use stored credentials")
+			}
+			return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"status":1}`)), Request: r}, nil
+		})}
+	})
+	client := e.client(t)
+	e.completeSetup(t, client)
+	settings := map[string]any{"enabled": true, "provider": "pushover", "token": "private-app", "userKey": "private-user", "device": "phone"}
+	res, body := e.do(t, client, "PUT", "/api/v1/notifications", settings)
+	if res.StatusCode != 200 || body["hasToken"] != true || body["hasUserKey"] != true {
+		t.Fatalf("save: %d %v", res.StatusCode, body)
+	}
+	for _, key := range []string{"token", "userKey"} {
+		if _, ok := body[key]; ok {
+			t.Fatalf("secret %s returned to browser", key)
+		}
+	}
+	delete(settings, "token")
+	delete(settings, "userKey")
+	res, body = e.do(t, client, "POST", "/api/v1/notifications/test", settings)
+	if res.StatusCode != 200 || calls != 1 {
+		t.Fatalf("test: %d %v, calls=%d", res.StatusCode, body, calls)
+	}
+	// An unrelated provider must never inherit stored Pushover credentials.
+	res, _ = e.do(t, client, "POST", "/api/v1/notifications/test", map[string]any{"provider": "telegram", "chatId": "42"})
+	if res.StatusCode == 200 || calls != 1 {
+		t.Fatal("provider switch reused credentials")
+	}
+}

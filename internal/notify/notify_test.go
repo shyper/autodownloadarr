@@ -39,7 +39,7 @@ func TestSendWebhook(t *testing.T) {
 }
 
 func TestSendDiscord(t *testing.T) {
-	var got map[string]string
+	var got map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&got)
 	}))
@@ -50,8 +50,9 @@ func TestSendDiscord(t *testing.T) {
 		events.Notification{Title: "Title", Body: "Body"}); err != nil {
 		t.Fatal(err)
 	}
-	if got["content"] != "Title\nBody" {
-		t.Errorf("content = %q", got["content"])
+	embed := got["embeds"].([]any)[0].(map[string]any)
+	if embed["title"] != "🔔 Title" || embed["description"] != "Body" {
+		t.Errorf("embed = %+v", embed)
 	}
 }
 
@@ -68,7 +69,7 @@ func TestSendNtfy(t *testing.T) {
 		events.Notification{Title: "Title", Body: "Body"}); err != nil {
 		t.Fatal(err)
 	}
-	if body != "Title\nBody" || title != "Title" {
+	if body != "🔔 Title\n\nBody" || title != "Title" {
 		t.Errorf("body = %q, title = %q", body, title)
 	}
 }

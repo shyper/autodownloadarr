@@ -439,7 +439,8 @@
         "webhook": "Webhook (JSON)",
         "discord": "Discord",
         "ntfy": "ntfy",
-        "telegram": "Telegram"
+        "telegram": "Telegram",
+        "pushover": "Pushover"
       },
       "url": {
         "webhook": "Webhook URL",
@@ -450,6 +451,14 @@
         "webhook": "Receives a POST with event, title, message and time.",
         "discord": "Server settings → Integrations → Webhooks.",
         "ntfy": "For example https://ntfy.sh/your-topic."
+      },
+      "pushover": {
+        "token": "Application/API token",
+        "tokenHint": "Create an application at pushover.net. Stored encrypted.",
+        "userKey": "User/group key",
+        "userKeyHint": "From your Pushover dashboard. Stored encrypted.",
+        "device": "Device (optional)",
+        "deviceHint": "Leave empty to notify all devices. Uses normal priority."
       },
       "token": "Bot token",
       "tokenHint": "From @BotFather; stored encrypted.",

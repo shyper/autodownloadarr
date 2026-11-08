@@ -11,6 +11,7 @@ import (
 	"github.com/shyper/autodownloadarr/internal/events"
 	"github.com/shyper/autodownloadarr/internal/indexer/newznab"
 	"github.com/shyper/autodownloadarr/internal/movies"
+	"github.com/shyper/autodownloadarr/internal/notify"
 	"github.com/shyper/autodownloadarr/internal/release"
 	"github.com/shyper/autodownloadarr/internal/scheduler"
 	"github.com/shyper/autodownloadarr/internal/store"
@@ -294,11 +295,11 @@ func (m *Manager) fail(ctx context.Context, e store.Episode, code, detail string
 	}
 	m.log.Warn("episode needs attention", "episode", e.ID, "reason", e.LastError)
 	m.publishEpisode(e)
-	title := fmt.Sprintf("S%02dE%02d failed", e.Season, e.Episode)
-	if se, err := m.store.Series(ctx, e.SeriesID); err == nil {
-		title = fmt.Sprintf("%s S%02dE%02d failed", se.Title, e.Season, e.Episode)
+	se, err := m.store.Series(ctx, e.SeriesID)
+	if err != nil {
+		return err
 	}
-	m.notify(events.Notification{Event: events.NotifyEpisodeFailed, Title: title, Body: e.LastError})
+	m.notify(notify.EpisodeMessage(events.NotifyEpisodeFailed, se, e, e.LastError))
 	m.startQueued() // later episodes no longer wait for this one
 	return nil
 }

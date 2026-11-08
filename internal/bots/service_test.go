@@ -461,3 +461,72 @@ func TestTelegramHTMLClipsBeforeEscaping(t *testing.T) {
 		t.Errorf("telegramHTML = %q, want %q", got, want)
 	}
 }
+
+func TestPersonalEpisodeArtworkPreference(t *testing.T) {
+	s, _ := testService(t)
+	ctx := t.Context()
+	se, err := s.Store.CreateSeries(ctx, store.Series{Title: "Show", TMDBID: 777, PosterPath: "/series.jpg", WindowSize: 2}, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	eps := []store.Episode{
+		{Season: 2, Episode: 1, Title: "First", StillPath: "/episode.jpg", SeasonPosterPath: "/season.jpg"},
+		{Season: 2, Episode: 2, Title: "Second", SeasonPosterPath: "/season.jpg"},
+		{Season: 2, Episode: 3, Title: "Third"},
+	}
+	if err := s.Store.UpsertEpisodes(ctx, se.ID, eps); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := s.Store.Episodes(ctx, se.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ep := range stored {
+		ep.State = store.MovieAvailable
+		ep.ReleaseTitle = "release"
+		if err := s.Store.UpdateEpisode(ctx, ep); err != nil {
+			t.Fatal(err)
+		}
+	}
+	notices, err := s.Store.BotNotices(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := map[string]string{"First": "/episode.jpg", "Second": "/season.jpg", "Third": "/series.jpg"}
+	for _, n := range notices {
+		for title, poster := range expected {
+			if strings.Contains(n.Title, title) {
+				if n.PosterPath != poster || n.Detail != "release" {
+					t.Errorf("notice = %+v", n)
+				}
+				delete(expected, title)
+			}
+		}
+	}
+	if len(expected) != 0 {
+		t.Fatalf("missing episode notices: %v", expected)
+	}
+}
+
+func TestPersonalTelegramPhotoRejectionFallsBackToText(t *testing.T) {
+	s, _ := testService(t)
+	paths := []string{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		if strings.HasSuffix(r.URL.Path, "sendPhoto") {
+			w.WriteHeader(400)
+			fmt.Fprint(w, `{"ok":false}`)
+			return
+		}
+		fmt.Fprint(w, `{"ok":true,"result":{}}`)
+	}))
+	defer srv.Close()
+	s.TelegramURL = srv.URL
+	err := s.Send(t.Context(), store.BotConfig{TelegramToken: "secret"}, Inbound{Provider: "telegram", Chat: "42", Notice: &store.BotNotice{}}, Message{Title: "Ready", Text: "Show", Poster: "https://image.tmdb.org/t/p/w500/missing.jpg"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) != 2 || paths[0] != "/botsecret/sendPhoto" || paths[1] != "/botsecret/sendMessage" {
+		t.Fatalf("paths = %v", paths)
+	}
+}

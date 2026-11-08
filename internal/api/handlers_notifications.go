@@ -17,6 +17,7 @@ func (s *server) handleGetNotification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	n.Token = ""
+	n.UserKey = ""
 	writeJSON(w, http.StatusOK, n)
 }
 
@@ -51,8 +52,13 @@ func (s *server) handleTestNotification(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 	} else if n.Token == "" {
-		if cur, err := s.Store.Notification(r.Context()); err == nil && !cur.UseBotToken {
+		if cur, err := s.Store.Notification(r.Context()); err == nil && n.Provider == cur.Provider && !cur.UseBotToken {
 			n.Token = cur.Token
+		}
+	}
+	if n.Provider == "pushover" && n.UserKey == "" {
+		if cur, err := s.Store.Notification(r.Context()); err == nil && cur.Provider == n.Provider {
+			n.UserKey = cur.UserKey
 		}
 	}
 	svc := notify.New(s.Store, s.Log)

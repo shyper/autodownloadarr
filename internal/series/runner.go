@@ -14,6 +14,7 @@ import (
 	"github.com/shyper/autodownloadarr/internal/fetch"
 	"github.com/shyper/autodownloadarr/internal/httpx"
 	"github.com/shyper/autodownloadarr/internal/movies"
+	"github.com/shyper/autodownloadarr/internal/notify"
 	"github.com/shyper/autodownloadarr/internal/release"
 	"github.com/shyper/autodownloadarr/internal/store"
 	"github.com/shyper/autodownloadarr/internal/usenet/download"
@@ -280,11 +281,7 @@ func (m *Manager) finishPack(ctx, dctx context.Context, se store.Series, e store
 		}
 		m.log.Info("episode available from season pack", "series", se.Title, "season", ep.Season, "episode", ep.Episode, "file", final)
 		m.publishEpisode(*ep)
-		m.notify(events.Notification{
-			Event: events.NotifyEpisodeAvailable,
-			Title: fmt.Sprintf("%s S%02dE%02d is ready", se.Title, ep.Season, ep.Episode),
-			Body:  rel.Title,
-		})
+		m.notify(notify.EpisodeMessage(events.NotifyEpisodeAvailable, se, *ep, rel.Title))
 	}
 	if matched == 0 {
 		return m.finishFailure(ctx, dctx, e, rel, attemptID, fetch.KindNoVideo,
@@ -371,11 +368,7 @@ func (m *Manager) finish(ctx, dctx context.Context, se store.Series, e store.Epi
 		}
 		m.log.Info("episode available", "series", se.Title, "file", path)
 		m.publishEpisode(e)
-		m.notify(events.Notification{
-			Event: events.NotifyEpisodeAvailable,
-			Title: fmt.Sprintf("%s S%02dE%02d is ready", se.Title, e.Season, e.Episode),
-			Body:  rel.Title,
-		})
+		m.notify(notify.EpisodeMessage(events.NotifyEpisodeAvailable, se, e, rel.Title))
 		m.scan(ctx, filepath.Dir(path))
 		return m.Reconcile(ctx, se.ID)
 	}

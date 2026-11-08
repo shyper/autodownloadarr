@@ -21,15 +21,17 @@ type Event struct {
 
 // TypeNotification is the event type of user-facing notifications. The
 // notifier subscribes to it and forwards the message to the configured
-// channel (webhook, Discord, ntfy or Telegram).
+// channel (webhook, Discord, ntfy, Telegram or Pushover).
 const TypeNotification = "notification"
 
 // Notification is a human-readable message for the notification channel.
 type Notification struct {
 	// Event is the machine-readable kind, e.g. "movie.available".
-	Event string `json:"event"`
-	Title string `json:"title"`
-	Body  string `json:"body"`
+	Event    string `json:"event"`
+	Title    string `json:"title"`
+	Body     string `json:"body"`
+	Subtitle string `json:"subtitle,omitempty"`
+	ImageURL string `json:"imageUrl,omitempty"`
 }
 
 // Kinds of notifications. The user can switch each one off for the

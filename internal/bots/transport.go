@@ -108,7 +108,12 @@ func (s *Service) sendTelegram(ctx context.Context, c store.BotConfig, in Inboun
 	if msg.Poster != "" {
 		body["photo"] = msg.Poster
 		body["caption"] = telegramHTML(msg, 1024)
-		return s.telegram(ctx, c, "sendPhoto", body, nil)
+		err := s.telegram(ctx, c, "sendPhoto", body, nil)
+		if err == nil || in.Notice == nil || !errors.Is(err, errBadRequest) {
+			return err
+		}
+		delete(body, "photo")
+		delete(body, "caption")
 	}
 	body["text"] = telegramHTML(msg, 4096)
 	body["link_preview_options"] = map[string]bool{"is_disabled": true}

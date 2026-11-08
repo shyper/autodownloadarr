@@ -27,12 +27,15 @@ export type General = {
 /** The configured notification channel. */
 export type NotificationSettings = {
   enabled: boolean
-  provider: '' | 'webhook' | 'discord' | 'ntfy' | 'telegram'
+  provider: '' | 'webhook' | 'discord' | 'ntfy' | 'telegram' | 'pushover'
   useBotToken: boolean
   url: string
   chatId: string
   /** A token is stored; the token itself is never sent to the browser. */
   hasToken: boolean
+  userKey?: string
+  hasUserKey?: boolean
+  device?: string
   /** Notification kinds that are not sent; kinds not listed are sent. */
   disabledEvents: NotificationEvent[]
 }

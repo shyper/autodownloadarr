@@ -18,7 +18,7 @@ func TestShows(t *testing.T) {
 				{"season_number":1,"name":"Staffel 1","episode_count":10,"air_date":"2011-04-17"}],
 				"external_ids":{"tvdb_id":121361,"imdb_id":"tt0944947"},"alternative_titles":{"results":[{"title":"GoT"}]}}`))
 		case "/tv/1399/season/1":
-			_, _ = w.Write([]byte(`{"episodes":[{"season_number":1,"episode_number":1,"name":"Der Winter naht","air_date":"2011-04-17","runtime":62}]}`))
+			_, _ = w.Write([]byte(`{"poster_path":"/season.jpg","episodes":[{"still_path":"/episode.jpg","season_number":1,"episode_number":1,"name":"Der Winter naht","air_date":"2011-04-17","runtime":62}]}`))
 		}
 	}))
 	defer srv.Close()
@@ -37,7 +37,7 @@ func TestShows(t *testing.T) {
 		t.Fatalf("genres = %v", s.Genres)
 	}
 	eps, err := c.Season(context.Background(), 1399, 1)
-	if err != nil || len(eps) != 1 || eps[0].Title != "Der Winter naht" || eps[0].AirDate != "2011-04-17" {
+	if err != nil || len(eps) != 1 || eps[0].Title != "Der Winter naht" || eps[0].AirDate != "2011-04-17" || eps[0].StillPath != "/episode.jpg" || eps[0].SeasonPosterPath != "/season.jpg" {
 		t.Errorf("season = %+v %v", eps, err)
 	}
 }

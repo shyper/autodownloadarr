@@ -16,6 +16,7 @@ import (
 
 	"github.com/shyper/autodownloadarr/internal/events"
 	"github.com/shyper/autodownloadarr/internal/fetch"
+	"github.com/shyper/autodownloadarr/internal/notify"
 	"github.com/shyper/autodownloadarr/internal/scheduler"
 	"github.com/shyper/autodownloadarr/internal/store"
 	"github.com/shyper/autodownloadarr/internal/usenet/download"
@@ -357,7 +358,7 @@ func (m *Manager) Delete(ctx context.Context, id int64, forget bool) error {
 		}
 		removed = true
 		m.bus.Publish(EventMovieRemoved, map[string]int64{"id": id})
-		m.notify(events.Notification{Event: events.NotifyMovieDeleted, Title: "Movie deleted: " + mv.Title})
+		m.notify(notify.MovieMessage(events.NotifyMovieDeleted, mv, ""))
 		return nil
 	}
 	mv.State = store.MovieDeleted
@@ -367,7 +368,7 @@ func (m *Manager) Delete(ctx context.Context, id int64, forget bool) error {
 	}
 	removed = true
 	m.publish(mv)
-	m.notify(events.Notification{Event: events.NotifyMovieDeleted, Title: "Movie deleted: " + mv.Title})
+	m.notify(notify.MovieMessage(events.NotifyMovieDeleted, mv, ""))
 	return nil
 }
 

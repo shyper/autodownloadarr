@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNotification, useSaveNotification, useTestNotification } from '../../api/config'
 import { notificationEvents, type NotificationSettings as Settings } from '../../api/types'
-import { notificationDraft, notificationUrlLabel, toggleNotificationEvent } from '../../notifications'
+import { notificationDraft, notificationProviderDraft, notificationUrlLabel, toggleNotificationEvent } from '../../notifications'
 import { errorMessage } from '../../i18n'
 import { Alert, Button, Checkbox, Field, Input, SectionTitle, Select } from '../ui'
 
@@ -49,16 +49,29 @@ function NotificationForm({ initial, provider }: { initial: Settings; provider?:
         <Select
           id="notification-provider"
           value={n.provider}
-          onChange={(e) => set('provider', e.target.value as Settings['provider'])}
+          onChange={(e) => setN((prev) => notificationProviderDraft(initial, prev, e.target.value as Settings['provider']))}
         >
           <option value="webhook">{t('settings.notifications.providers.webhook')}</option>
           <option value="discord">{t('settings.notifications.providers.discord')}</option>
           <option value="ntfy">{t('settings.notifications.providers.ntfy')}</option>
+          <option value="pushover">{t('settings.notifications.providers.pushover')}</option>
           <option value="telegram">{t('settings.notifications.providers.telegram')}</option>
         </Select>
       </Field>}
 
-      {n.provider === 'telegram' ? (
+      {n.provider === 'pushover' ? (
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field id="notification-pushover-token" label={t('settings.notifications.pushover.token')} hint={t('settings.notifications.pushover.tokenHint')}>
+            <Input id="notification-pushover-token" type="password" autoComplete="off" required={!n.hasToken} placeholder={n.hasToken ? t('settings.unchanged') : ''} value={n.token ?? ''} onChange={(e) => set('token', e.target.value)} />
+          </Field>
+          <Field id="notification-pushover-user" label={t('settings.notifications.pushover.userKey')} hint={t('settings.notifications.pushover.userKeyHint')}>
+            <Input id="notification-pushover-user" type="password" autoComplete="off" required={!n.hasUserKey} placeholder={n.hasUserKey ? t('settings.unchanged') : ''} value={n.userKey ?? ''} onChange={(e) => set('userKey', e.target.value)} />
+          </Field>
+          <Field id="notification-pushover-device" label={t('settings.notifications.pushover.device')} hint={t('settings.notifications.pushover.deviceHint')}>
+            <Input id="notification-pushover-device" maxLength={25} value={n.device ?? ''} onChange={(e) => set('device', e.target.value)} />
+          </Field>
+        </div>
+      ) : n.provider === 'telegram' ? (
         <div className="grid gap-5 sm:grid-cols-2">
           <div className="space-y-3">
           <Checkbox label={t('bots.useBotToken')} hint={t('bots.useBotTokenHint')} checked={n.useBotToken} onChange={(e) => set('useBotToken', e.target.checked)} />

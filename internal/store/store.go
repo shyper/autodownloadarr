@@ -152,13 +152,16 @@ func (s *Store) SetTMDBKey(ctx context.Context, key string) error {
 type Notification struct {
 	UseBotToken bool   `json:"useBotToken"`
 	Enabled     bool   `json:"enabled"`
-	Provider    string `json:"provider"` // webhook, discord, ntfy or telegram
+	Provider    string `json:"provider"` // webhook, discord, ntfy, telegram or pushover
 	URL         string `json:"url"`
 	ChatID      string `json:"chatId"`
-	// Token is the Telegram bot token. It is write-only: handlers clear it
+	// Token is the Telegram bot token or Pushover application token. It is write-only: handlers clear it
 	// before sending the configuration to the UI.
-	Token    string `json:"token,omitempty"`
-	HasToken bool   `json:"hasToken"`
+	Token      string `json:"token,omitempty"`
+	HasToken   bool   `json:"hasToken"`
+	UserKey    string `json:"userKey,omitempty"`
+	HasUserKey bool   `json:"hasUserKey"`
+	Device     string `json:"device"`
 	// DisabledEvents are the notification kinds (events.NotificationEvents)
 	// that are not sent. Kinds not listed are sent, so new kinds start on.
 	DisabledEvents []string `json:"disabledEvents"`
@@ -178,6 +181,8 @@ type notificationConfig struct {
 	URL         string `json:"url"`
 	ChatID      string `json:"chatId"`
 	TokenEnc    string `json:"tokenEnc,omitempty"`
+	UserKeyEnc  string `json:"userKeyEnc,omitempty"`
+	Device      string `json:"device,omitempty"`
 	// DisabledEvents is an opt-out list, so channels stored before it existed
 	// keep every kind.
 	DisabledEvents []string `json:"disabledEvents,omitempty"`
@@ -189,6 +194,9 @@ func (n *Notification) Validate() error {
 	n.Provider = strings.TrimSpace(n.Provider)
 	n.URL = strings.TrimSpace(n.URL)
 	n.ChatID = strings.TrimSpace(n.ChatID)
+	n.Token = strings.TrimSpace(n.Token)
+	n.UserKey = strings.TrimSpace(n.UserKey)
+	n.Device = strings.TrimSpace(n.Device)
 	disabled := []string{}
 	for _, e := range n.DisabledEvents {
 		if !slices.Contains(events.NotificationEvents, e) {
@@ -203,6 +211,12 @@ func (n *Notification) Validate() error {
 	case "webhook", "discord", "ntfy":
 		if !strings.HasPrefix(n.URL, "http://") && !strings.HasPrefix(n.URL, "https://") {
 			return fmt.Errorf("%w: URL must start with http:// or https://", ErrInvalid)
+		}
+	case "pushover":
+		if len(n.Device) > 25 || strings.IndexFunc(n.Device, func(r rune) bool {
+			return !strings.ContainsRune("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-", r)
+		}) >= 0 {
+			return fmt.Errorf("%w: invalid Pushover device name", ErrInvalid)
 		}
 	case "telegram":
 		if n.ChatID == "" {
@@ -223,7 +237,7 @@ func (s *Store) Notification(ctx context.Context) (Notification, error) {
 	if _, err := s.getSetting(ctx, keyNotifications, &c); err != nil {
 		return Notification{}, err
 	}
-	n := Notification{Enabled: c.Enabled, Provider: c.Provider, URL: c.URL, ChatID: c.ChatID, UseBotToken: c.UseBotToken, DisabledEvents: c.DisabledEvents}
+	n := Notification{Enabled: c.Enabled, Provider: c.Provider, URL: c.URL, ChatID: c.ChatID, UseBotToken: c.UseBotToken, DisabledEvents: c.DisabledEvents, UserKey: s.decrypt(c.UserKeyEnc), Device: c.Device}
 	if n.DisabledEvents == nil {
 		n.DisabledEvents = []string{}
 	}
@@ -236,6 +250,7 @@ func (s *Store) Notification(ctx context.Context) (Notification, error) {
 		n.Token = bots.TelegramToken
 	}
 	n.HasToken = n.Token != ""
+	n.HasUserKey = n.UserKey != ""
 	return n, nil
 }
 
@@ -249,8 +264,19 @@ func (s *Store) SetNotification(ctx context.Context, n Notification) error {
 		return err
 	}
 	token := n.Token
-	if token == "" && !cur.UseBotToken {
+	if token == "" && n.Provider == cur.Provider && !cur.UseBotToken {
 		token = cur.Token
+	}
+	userKey := n.UserKey
+	if userKey == "" && n.Provider == cur.Provider {
+		userKey = cur.UserKey
+	}
+	if n.Provider == "pushover" && (token == "" || userKey == "") {
+		return fmt.Errorf("%w: Pushover application token and user/group key are required", ErrInvalid)
+	}
+	if n.Provider != "pushover" {
+		userKey = ""
+		n.Device = ""
 	}
 	if n.Provider != "telegram" {
 		n.UseBotToken = false
@@ -268,9 +294,14 @@ func (s *Store) SetNotification(ctx context.Context, n Notification) error {
 	if n.Provider == "telegram" && !n.UseBotToken && token == "" {
 		return fmt.Errorf("%w: bot token is required", ErrInvalid)
 	}
-	c := notificationConfig{Enabled: n.Enabled, Provider: n.Provider, URL: n.URL, ChatID: n.ChatID, UseBotToken: n.UseBotToken, DisabledEvents: n.DisabledEvents}
+	c := notificationConfig{Enabled: n.Enabled, Provider: n.Provider, URL: n.URL, ChatID: n.ChatID, UseBotToken: n.UseBotToken, DisabledEvents: n.DisabledEvents, Device: n.Device}
 	if token != "" {
 		if c.TokenEnc, err = s.encrypt(token); err != nil {
+			return err
+		}
+	}
+	if userKey != "" {
+		if c.UserKeyEnc, err = s.encrypt(userKey); err != nil {
 			return err
 		}
 	}

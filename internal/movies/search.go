@@ -10,6 +10,7 @@ import (
 
 	"github.com/shyper/autodownloadarr/internal/events"
 	"github.com/shyper/autodownloadarr/internal/indexer/newznab"
+	"github.com/shyper/autodownloadarr/internal/notify"
 	"github.com/shyper/autodownloadarr/internal/release"
 	"github.com/shyper/autodownloadarr/internal/scheduler"
 	"github.com/shyper/autodownloadarr/internal/store"
@@ -250,7 +251,7 @@ func (m *Manager) fail(ctx context.Context, mv store.Movie, code, detail string)
 	}
 	m.log.Warn("movie needs attention", "movie", mv.Title, "reason", mv.LastError)
 	m.publish(mv)
-	m.notify(events.Notification{Event: events.NotifyMovieFailed, Title: "Movie failed: " + mv.Title, Body: mv.LastError})
+	m.notify(notify.MovieMessage(events.NotifyMovieFailed, mv, mv.LastError))
 	return nil
 }
 

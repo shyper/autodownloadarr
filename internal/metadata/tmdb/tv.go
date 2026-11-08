@@ -26,6 +26,7 @@ type Show struct {
 
 // SeasonInfo summarises a season.
 type SeasonInfo struct {
+	PosterPath   string `json:"posterPath,omitempty"`
 	Number       int    `json:"number"`
 	Name         string `json:"name"`
 	EpisodeCount int    `json:"episodeCount"`
@@ -34,11 +35,13 @@ type SeasonInfo struct {
 
 // Episode is one episode of a season.
 type Episode struct {
-	Season  int    `json:"season"`
-	Number  int    `json:"number"`
-	Title   string `json:"title"`
-	AirDate string `json:"airDate,omitempty"` // YYYY-MM-DD, empty if unknown
-	Runtime int    `json:"runtime,omitempty"`
+	StillPath        string `json:"stillPath,omitempty"`
+	SeasonPosterPath string `json:"seasonPosterPath,omitempty"`
+	Season           int    `json:"season"`
+	Number           int    `json:"number"`
+	Title            string `json:"title"`
+	AirDate          string `json:"airDate,omitempty"` // YYYY-MM-DD, empty if unknown
+	Runtime          int    `json:"runtime,omitempty"`
 }
 
 type apiShow struct {
@@ -54,6 +57,7 @@ type apiShow struct {
 	Status         string `json:"status"`
 	EpisodeRuntime []int  `json:"episode_run_time"`
 	Seasons        []struct {
+		PosterPath   string `json:"poster_path"`
 		SeasonNumber int    `json:"season_number"`
 		Name         string `json:"name"`
 		EpisodeCount int    `json:"episode_count"`
@@ -99,7 +103,7 @@ func (s apiShow) convert() Show {
 		}
 	}
 	for _, se := range s.Seasons {
-		out.Seasons = append(out.Seasons, SeasonInfo{Number: se.SeasonNumber, Name: se.Name, EpisodeCount: se.EpisodeCount, AirDate: se.AirDate})
+		out.Seasons = append(out.Seasons, SeasonInfo{PosterPath: se.PosterPath, Number: se.SeasonNumber, Name: se.Name, EpisodeCount: se.EpisodeCount, AirDate: se.AirDate})
 	}
 	return out
 }
@@ -131,7 +135,9 @@ func (c *Client) Show(ctx context.Context, id int) (Show, error) {
 // Season returns the episodes of a season.
 func (c *Client) Season(ctx context.Context, showID, season int) ([]Episode, error) {
 	var res struct {
-		Episodes []struct {
+		PosterPath string `json:"poster_path"`
+		Episodes   []struct {
+			StillPath     string `json:"still_path"`
 			SeasonNumber  int    `json:"season_number"`
 			EpisodeNumber int    `json:"episode_number"`
 			Name          string `json:"name"`
@@ -144,7 +150,7 @@ func (c *Client) Season(ctx context.Context, showID, season int) ([]Episode, err
 	}
 	out := make([]Episode, 0, len(res.Episodes))
 	for _, e := range res.Episodes {
-		out = append(out, Episode{Season: e.SeasonNumber, Number: e.EpisodeNumber, Title: e.Name, AirDate: e.AirDate, Runtime: e.Runtime})
+		out = append(out, Episode{StillPath: e.StillPath, SeasonPosterPath: res.PosterPath, Season: e.SeasonNumber, Number: e.EpisodeNumber, Title: e.Name, AirDate: e.AirDate, Runtime: e.Runtime})
 	}
 	return out, nil
 }

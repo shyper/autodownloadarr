@@ -78,27 +78,29 @@ func containsInt(list []int, v int) bool {
 
 // Episode is one episode of a series.
 type Episode struct {
-	ID           int64      `json:"id"`
-	SeriesID     int64      `json:"seriesId"`
-	Season       int        `json:"season"`
-	Episode      int        `json:"episode"`
-	Title        string     `json:"title"`
-	AirDate      string     `json:"airDate"`
-	Runtime      int        `json:"runtime"`
-	State        string     `json:"state"`
-	Attempts     int        `json:"attempts"`
-	LastError    string     `json:"lastError"`
-	NextSearchAt *time.Time `json:"nextSearchAt,omitempty"`
-	ReleaseKey   string     `json:"releaseKey"`
-	ReleaseTitle string     `json:"releaseTitle"`
-	File         string     `json:"file"`
-	MediaKey     string     `json:"mediaKey"`
-	Progress     float64    `json:"progress"` // 0..1
-	StartedAt    *time.Time `json:"startedAt,omitempty"`
-	AvailableAt  *time.Time `json:"availableAt,omitempty"`
-	WatchedAt    *time.Time `json:"watchedAt,omitempty"`
-	DeleteAt     *time.Time `json:"deleteAt,omitempty"`
-	Base         WatchBase  `json:"-"`
+	StillPath        string     `json:"stillPath,omitempty"`
+	SeasonPosterPath string     `json:"seasonPosterPath,omitempty"`
+	ID               int64      `json:"id"`
+	SeriesID         int64      `json:"seriesId"`
+	Season           int        `json:"season"`
+	Episode          int        `json:"episode"`
+	Title            string     `json:"title"`
+	AirDate          string     `json:"airDate"`
+	Runtime          int        `json:"runtime"`
+	State            string     `json:"state"`
+	Attempts         int        `json:"attempts"`
+	LastError        string     `json:"lastError"`
+	NextSearchAt     *time.Time `json:"nextSearchAt,omitempty"`
+	ReleaseKey       string     `json:"releaseKey"`
+	ReleaseTitle     string     `json:"releaseTitle"`
+	File             string     `json:"file"`
+	MediaKey         string     `json:"mediaKey"`
+	Progress         float64    `json:"progress"` // 0..1
+	StartedAt        *time.Time `json:"startedAt,omitempty"`
+	AvailableAt      *time.Time `json:"availableAt,omitempty"`
+	WatchedAt        *time.Time `json:"watchedAt,omitempty"`
+	DeleteAt         *time.Time `json:"deleteAt,omitempty"`
+	Base             WatchBase  `json:"-"`
 }
 
 // Aired reports whether the episode has been broadcast by now (unknown
@@ -247,11 +249,11 @@ func (s *Store) UpsertEpisodes(ctx context.Context, seriesID int64, eps []Episod
 			state = EpisodePending
 		}
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO episodes (series_id, season, episode, title, air_date, runtime, state, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			INSERT INTO episodes (series_id, season, episode, title, air_date, runtime, state, created_at, updated_at, still_path, season_poster_path)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT (series_id, season, episode) DO UPDATE SET
-				title = excluded.title, air_date = excluded.air_date, runtime = excluded.runtime, updated_at = excluded.updated_at`,
-			seriesID, e.Season, e.Episode, e.Title, e.AirDate, e.Runtime, state, now, now); err != nil {
+				title = excluded.title, air_date = excluded.air_date, runtime = excluded.runtime, updated_at = excluded.updated_at, still_path = excluded.still_path, season_poster_path = excluded.season_poster_path`,
+			seriesID, e.Season, e.Episode, e.Title, e.AirDate, e.Runtime, state, now, now, e.StillPath, e.SeasonPosterPath); err != nil {
 			return err
 		}
 	}
@@ -259,14 +261,14 @@ func (s *Store) UpsertEpisodes(ctx context.Context, seriesID int64, eps []Episod
 }
 
 const episodeColumns = `id, series_id, season, episode, title, air_date, runtime, state, attempts, last_error, next_search_at,
-	release_key, release_title, file, media_key, progress, started_at, available_at, watched_at, delete_at, base_set, base_views, base_offset`
+	release_key, release_title, file, media_key, progress, started_at, available_at, watched_at, delete_at, base_set, base_views, base_offset, still_path, season_poster_path`
 
 func scanEpisode(row interface{ Scan(...any) error }) (Episode, error) {
 	var e Episode
 	var next, started, avail, watched, del sql.NullInt64
 	err := row.Scan(&e.ID, &e.SeriesID, &e.Season, &e.Episode, &e.Title, &e.AirDate, &e.Runtime, &e.State, &e.Attempts, &e.LastError,
 		&next, &e.ReleaseKey, &e.ReleaseTitle, &e.File, &e.MediaKey, &e.Progress, &started, &avail, &watched, &del, &e.Base.Set, &e.Base.Views,
-		&e.Base.Offset)
+		&e.Base.Offset, &e.StillPath, &e.SeasonPosterPath)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Episode{}, ErrNotFound
 	}
