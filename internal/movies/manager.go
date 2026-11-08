@@ -168,6 +168,25 @@ func (m *Manager) RequestFromWatchlist(ctx context.Context, tmdbID int) (store.M
 	return m.request(ctx, tmdbID, 0, 0)
 }
 
+// RequestFromList skips existing requests and honours manual removals for automatic imports.
+func (m *Manager) RequestFromList(ctx context.Context, tmdbID int, userID int64) (store.Movie, error) {
+	m.requestMu.Lock()
+	defer m.requestMu.Unlock()
+	excluded, err := m.store.AutomaticImportExcluded(ctx, "movie", tmdbID)
+	if err != nil {
+		return store.Movie{}, err
+	}
+	if excluded {
+		return store.Movie{}, ErrWatchlistExcluded
+	}
+	if mv, err := m.store.MovieByTMDB(ctx, tmdbID); err == nil {
+		return mv, ErrAlreadyRequested
+	} else if !errors.Is(err, store.ErrNotFound) {
+		return store.Movie{}, err
+	}
+	return m.request(ctx, tmdbID, userID, 0)
+}
+
 func (m *Manager) request(ctx context.Context, tmdbID int, userID, profileID int64) (store.Movie, error) {
 	existing, err := m.store.MovieByTMDB(ctx, tmdbID)
 	switch {

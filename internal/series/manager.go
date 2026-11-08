@@ -65,9 +65,10 @@ type Manager struct {
 	now     func() time.Time
 	ctx     context.Context
 
-	mu     sync.Mutex
-	active map[int64]*activeDownload // episode → running download
-	forced map[int64]int64           // episode → release chosen by the user
+	requestMu sync.Mutex
+	mu        sync.Mutex
+	active    map[int64]*activeDownload // episode → running download
+	forced    map[int64]int64           // episode → release chosen by the user
 	// deleting holds the series that are being removed. No new downloads
 	// start for them and Delete waits for the running ones.
 	deleting map[int64]bool
@@ -145,6 +146,31 @@ type RequestOptions struct {
 // Request adds a series by its TMDB ID. An expired series is downloaded
 // again instead.
 func (m *Manager) Request(ctx context.Context, tmdbID int, userID int64, opts RequestOptions) (store.Series, error) {
+	m.requestMu.Lock()
+	defer m.requestMu.Unlock()
+	return m.request(ctx, tmdbID, userID, opts)
+}
+
+// RequestFromList never restores existing requests and honours manual removals.
+func (m *Manager) RequestFromList(ctx context.Context, tmdbID int, userID int64) (store.Series, error) {
+	m.requestMu.Lock()
+	defer m.requestMu.Unlock()
+	excluded, err := m.store.AutomaticImportExcluded(ctx, "show", tmdbID)
+	if err != nil {
+		return store.Series{}, err
+	}
+	if excluded {
+		return store.Series{}, movies.ErrWatchlistExcluded
+	}
+	if se, err := m.store.SeriesByTMDB(ctx, tmdbID); err == nil {
+		return se, ErrAlreadyRequested
+	} else if !errors.Is(err, store.ErrNotFound) {
+		return store.Series{}, err
+	}
+	return m.request(ctx, tmdbID, userID, RequestOptions{})
+}
+
+func (m *Manager) request(ctx context.Context, tmdbID int, userID int64, opts RequestOptions) (store.Series, error) {
 	if existing, err := m.store.SeriesByTMDB(ctx, tmdbID); err == nil {
 		if existing.ExpiredAt != nil {
 			return m.Restore(ctx, existing.ID)
@@ -327,6 +353,8 @@ func (m *Manager) Update(ctx context.Context, id int64, st Settings) (store.Seri
 
 // Delete removes a series with all its files.
 func (m *Manager) Delete(ctx context.Context, id int64) error {
+	m.requestMu.Lock()
+	defer m.requestMu.Unlock()
 	eps, err := m.store.Episodes(ctx, id)
 	if err != nil {
 		return err

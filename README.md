@@ -184,6 +184,38 @@ details, releases, downloads, queue/history, keep/pause/window settings, retries
 release selection and deletion. The endpoint uses the official Go MCP SDK and
 stateless Streamable HTTP. It does not expose provider credentials or configuration.
 
+### Trakt watchlist and personal lists
+
+An administrator first registers a Trakt application and enters its **Client ID**
+under **Settings → Trakt**. Set `AUTODOWNLOADARR_PUBLIC_URL` to this installation's
+public HTTPS origin and register the exact redirect URI shown in the form:
+`https://your-host/api/v1/trakt/callback`. Sign-in uses OAuth with PKCE; no client
+secret or Trakt password is needed. See the [official Trakt app setup](https://developer.trakt.tv/docs/create-an-app).
+
+Each user connects their own Trakt account under **Account → Trakt**, enables their
+watchlist and/or selects their own personal lists, then saves. Imports start only
+after sources are selected. The interval is configurable per connection from one
+minute to seven days, with a 30-minute default. **Sync now** queues an import without
+waiting for that interval. The page shows whether work is queued/running and the
+last attempt's requested, skipped and failed counts. Automatic imports can be paused.
+
+Only movie and show entries with a TMDB ID are imported. Existing requests are
+skipped without changing their owner, restoring expired files or changing their
+settings. New requests belong to the connected AutoDownloadarr user, respect that
+user's quotas and use the existing default quality profile and series settings.
+Duplicate entries across sources are imported once. Manual movie and series
+removals are remembered across restarts and suppress subsequent automatic imports;
+explicit manual requests remain possible. Removing a title from a Trakt list or
+disabling a source never deletes requests or media. Trakt lists and watched history
+are not modified.
+
+Tokens are encrypted, never returned by the API, and refreshed automatically. Sync
+jobs and per-user deadlines survive restarts, and transient failures are retried by
+the scheduler with rate-limit backoff. Changing the application's Client ID requires
+users to reconnect. Disconnecting cancels queued work, deletes local credentials
+and attempts to revoke the Trakt authorization. Deleting a user also removes their
+connection. Trakt's own account/app access limits still apply.
+
 ### Notifications
 
 Settings → Notifications supports Webhook (JSON), Discord, ntfy, Telegram and

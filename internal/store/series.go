@@ -231,7 +231,18 @@ func (s *Store) UpdateSeries(ctx context.Context, se Series) error {
 
 // DeleteSeries removes a series with its episodes and history.
 func (s *Store) DeleteSeries(ctx context.Context, id int64) error {
-	return affected(s.db.ExecContext(ctx, `DELETE FROM series WHERE id = ?`, id))
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err = tx.ExecContext(ctx, `INSERT OR IGNORE INTO automatic_series_exclusions(tmdb_id) SELECT tmdb_id FROM series WHERE id=?`, id); err != nil {
+		return err
+	}
+	if err = affected(tx.ExecContext(ctx, `DELETE FROM series WHERE id=?`, id)); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // UpsertEpisodes adds new episodes and refreshes title, air date and

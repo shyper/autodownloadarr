@@ -31,6 +31,7 @@ import (
 	"github.com/shyper/autodownloadarr/internal/secrets"
 	"github.com/shyper/autodownloadarr/internal/series"
 	"github.com/shyper/autodownloadarr/internal/store"
+	"github.com/shyper/autodownloadarr/internal/trakt"
 	"github.com/shyper/autodownloadarr/internal/watchlist"
 	"github.com/shyper/autodownloadarr/internal/webui"
 )
@@ -141,6 +142,7 @@ func runServer(cfg config.Config, log *slog.Logger) error {
 		return fmt.Errorf("start series manager: %w", err)
 	}
 	botService := bots.New(st, authSvc, &control.Service{Store: st, Services: svc, Movies: manager, Series: seriesManager}, sched, cfg.PublicURL, log)
+	traktService := trakt.New(st, manager, seriesManager, sched, cfg.PublicURL, log)
 	watchlistManager := watchlist.NewManager(st, svc, manager, seriesManager, log)
 	sched.Every("plex-watchlist", time.Minute, watchlistManager.Poll)
 
@@ -158,6 +160,7 @@ func runServer(cfg config.Config, log *slog.Logger) error {
 	srv := &http.Server{
 		Addr: cfg.ListenAddr,
 		Handler: api.New(api.Options{
+			Trakt:      traktService,
 			PublicURL:  cfg.PublicURL,
 			Bots:       botService,
 			Log:        log,

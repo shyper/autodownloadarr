@@ -1,3 +1,4 @@
+import { TraktConnection } from '../components/TraktConnection'
 import { BotLinks } from '../components/BotLinks'
 import { ConnectedApps } from '../components/ConnectedApps'
 import { useState, type FormEvent } from 'react'
@@ -30,6 +31,7 @@ export function AccountPage() {
       </Card>
       <ConnectedApps />
       <BotLinks />
+      <TraktConnection />
       <ChangePasswordCard />
     </div>
   )

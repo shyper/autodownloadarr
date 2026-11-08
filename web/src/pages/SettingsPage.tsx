@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { Navigate, NavLink, useParams } from 'react-router'
 import { McpSettings } from '../components/settings/McpSettings'
+import { TraktAppSettings } from '../components/settings/TraktAppSettings'
 import { BotSettings } from '../components/settings/BotSettings'
 import { GeneralForm } from '../components/settings/GeneralForm'
 import { IndexerSettings } from '../components/settings/IndexerSettings'
@@ -14,7 +15,7 @@ import { UserSettings } from '../components/settings/UserSettings'
 import { useMe, useSystemStatus } from '../api/hooks'
 import { Card, SectionTitle } from '../components/ui'
 
-const tabs = ['general', 'users', 'usenet', 'indexers', 'plex', 'notifications', 'bots', 'mcp', 'profile', 'passwords'] as const
+const tabs = ['general', 'users', 'usenet', 'indexers', 'plex', 'notifications', 'bots', 'trakt', 'mcp', 'profile', 'passwords'] as const
 type Tab = (typeof tabs)[number]
 
 export function SettingsPage() {
@@ -80,6 +81,7 @@ export function SettingsPage() {
               <NotificationSettings />
             </Card>
           )}
+          {tab === 'trakt' && <Card><TraktAppSettings /></Card>}
           {tab === 'mcp' && <McpSettings />}
           {tab === 'bots' && <Card><BotSettings /></Card>}
           {tab === 'profile' && (

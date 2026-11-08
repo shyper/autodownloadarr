@@ -20,12 +20,15 @@ import (
 	"github.com/shyper/autodownloadarr/internal/events"
 	"github.com/shyper/autodownloadarr/internal/movies"
 	"github.com/shyper/autodownloadarr/internal/oauth"
+	"github.com/shyper/autodownloadarr/internal/scheduler"
 	"github.com/shyper/autodownloadarr/internal/series"
 	"github.com/shyper/autodownloadarr/internal/store"
+	"github.com/shyper/autodownloadarr/internal/trakt"
 )
 
 // Options are the dependencies of the HTTP handler.
 type Options struct {
+	Trakt     *trakt.Service
 	PublicURL string
 	Bots      *bots.Service
 	Log       *slog.Logger
@@ -62,6 +65,12 @@ type server struct {
 func New(opts Options) http.Handler {
 	if opts.Heartbeat == 0 {
 		opts.Heartbeat = 25 * time.Second
+	}
+	if opts.Trakt == nil {
+		opts.Trakt = trakt.New(opts.Store, opts.Movies, opts.Series, scheduler.New(opts.DB, opts.Log), opts.PublicURL, opts.Log)
+		if opts.Services != nil {
+			opts.Trakt.HTTP = opts.Services.HTTP
+		}
 	}
 	s := &server{Options: opts}
 	s.oauth = oauth.New(opts.DB, opts.PublicURL)
@@ -106,6 +115,13 @@ func New(opts Options) http.Handler {
 			r.Put("/bots/links", s.handleUpdateBotLink)
 			r.Delete("/bots/links/{id}", s.handleDeleteBotLink)
 			r.Post("/oauth/grants/revoke", s.handleRevokeGrant)
+			r.Get("/trakt", s.handleTraktStatus)
+			r.Post("/trakt/connect", s.handleTraktConnect)
+			r.Get("/trakt/callback", s.handleTraktCallback)
+			r.Get("/trakt/lists", s.handleTraktLists)
+			r.Put("/trakt", s.handleSaveTrakt)
+			r.Post("/trakt/sync", s.handleSyncTrakt)
+			r.Delete("/trakt", s.handleDisconnectTrakt)
 			r.Get("/auth/me", s.handleMe)
 			r.Post("/auth/password", s.handleChangePassword)
 			r.Get("/events", s.handleEvents)
@@ -143,6 +159,8 @@ func New(opts Options) http.Handler {
 		// Configuration is reserved for administrators.
 		r.Group(func(r chi.Router) {
 			r.Use(s.requireUser, s.requireAdmin)
+			r.Get("/trakt/config", s.handleTraktConfig)
+			r.Put("/trakt/config", s.handleSaveTraktConfig)
 			r.Get("/settings/general", s.handleGetGeneral)
 			r.Put("/settings/general", s.handlePutGeneral)
 			r.Get("/settings/tmdb", s.handleGetTMDB)
