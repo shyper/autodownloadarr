@@ -122,6 +122,11 @@ func (m *Manager) download(ctx context.Context, mv store.Movie, rel store.Releas
 	case err != nil:
 		return outcome{kind: kindNZBUnavailable, err: err}
 	}
+	if g.SaveNZBs {
+		if err := m.svc.SaveNZB(rel, nzbName, data); err != nil {
+			return outcome{kind: CodeDiskError, err: err}
+		}
+	}
 	list, err := m.store.ArchivePasswords(ctx)
 	if err != nil {
 		return outcome{kind: CodeDiskError, err: err}

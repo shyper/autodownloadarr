@@ -305,6 +305,8 @@
       "unwatchedExpiryDaysHint": "Bei Serien zählt die letzte geschaute Folge. Abgelaufene Titel bleiben in der Liste und lassen sich erneut laden. 0 behält sie.",
       "maxSources": "Zu versuchende Releases",
       "maxSourcesHint": "Nach so vielen fehlgeschlagenen Releases braucht der Film deine Aufmerksamkeit.",
+      "saveNZBs": "NZBs speichern",
+      "saveNZBsHint": "Bewahrt die abgerufenen NZBs im Konfigurationsordner unter nzbs/ auf, auch bei fehlgeschlagenen Downloads. Bereits gespeicherte NZBs bleiben beim Ausschalten und beim Löschen von Medien erhalten.",
       "parallelDownloads": "Parallele Downloads (Filme und Episoden zusammen)",
       "watchPollMinutes": "Gesehen-Status prüfen alle (Minuten)",
       "watchPollMinutesHint": "Wie oft Plex gefragt wird, was geschaut wurde.",

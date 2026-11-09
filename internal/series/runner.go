@@ -180,6 +180,11 @@ func (m *Manager) fetchRelease(ctx context.Context, g store.General, se store.Se
 	case err != nil:
 		return fetch.Result{}, kindNZBUnavailable, err
 	}
+	if g.SaveNZBs {
+		if err := m.svc.SaveNZB(rel, nzbName, data); err != nil {
+			return fetch.Result{}, fetch.KindDiskError, err
+		}
+	}
 	list, err := m.store.ArchivePasswords(ctx)
 	if err != nil {
 		return fetch.Result{}, fetch.KindDiskError, err

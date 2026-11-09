@@ -19,7 +19,7 @@ func TestGeneralSettings(t *testing.T) {
 	e.completeSetup(t, c)
 
 	_, body := e.do(t, c, "GET", "/api/v1/settings/general", nil)
-	if body["deleteAfterHours"] != float64(48) {
+	if body["deleteAfterHours"] != float64(48) || body["saveNZBs"] != false {
 		t.Errorf("defaults = %v", body)
 	}
 	g := store.DefaultGeneral()
@@ -29,8 +29,13 @@ func TestGeneralSettings(t *testing.T) {
 		t.Errorf("relative path: %d %v", resp.StatusCode, body)
 	}
 	g.MoviesPath = t.TempDir() + "/movies"
-	if resp, body := e.do(t, c, "PUT", "/api/v1/settings/general", g); resp.StatusCode != http.StatusOK {
+	g.SaveNZBs = true
+	if resp, body := e.do(t, c, "PUT", "/api/v1/settings/general", g); resp.StatusCode != http.StatusOK || body["saveNZBs"] != true {
 		t.Errorf("valid path: %d %v", resp.StatusCode, body)
+	}
+	_, saved := e.do(t, c, "GET", "/api/v1/settings/general", nil)
+	if saved["saveNZBs"] != true {
+		t.Fatalf("NZB setting not retained: %v", saved)
 	}
 }
 

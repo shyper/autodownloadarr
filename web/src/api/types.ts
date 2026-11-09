@@ -11,6 +11,7 @@ export type General = {
   unwatchedExpiryDays: number
   maxSources: number
   parallelDownloads: number
+  saveNZBs: boolean
   watchPollMinutes: number
   /** Import the Plex account's watchlist. */
   watchlist: boolean

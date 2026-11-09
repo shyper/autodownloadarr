@@ -131,7 +131,7 @@ func runServer(cfg config.Config, log *slog.Logger) error {
 		return nil
 	})
 
-	svc := &movies.Services{Store: st, Log: log, TMDBBaseURL: cfg.TMDBURL}
+	svc := &movies.Services{Store: st, Log: log, TMDBBaseURL: cfg.TMDBURL, NZBDir: filepath.Join(cfg.ConfigDir, "nzbs")}
 	defer svc.Close()
 	manager := movies.NewManager(st, svc, sched, bus, log)
 	if err := manager.Start(ctx); err != nil {

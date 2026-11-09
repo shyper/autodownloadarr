@@ -29,8 +29,9 @@ var ErrNotConfigured = errors.New("not configured")
 // configuration. Clients are created per use, so configuration changes
 // apply immediately; the NNTP pool is reused while its servers stay the same.
 type Services struct {
-	Store *store.Store
-	Log   *slog.Logger
+	Store  *store.Store
+	Log    *slog.Logger
+	NZBDir string // persistent archive below the application config directory
 	// HTTP, TMDBBaseURL and PlexTVURL can be overridden in tests.
 	HTTP            *http.Client
 	TMDBBaseURL     string

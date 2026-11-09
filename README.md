@@ -113,6 +113,14 @@ autodownloadarr download-nzb -connections 30 -out ./downloads release.nzb
 Run `autodownloadarr download-nzb -h` for all options (archive password,
 keeping archives, PAR2 recovery volumes, …).
 
+The optional **Save NZBs** checkbox in general settings keeps fetched NZB
+files in `nzbs/` below the configuration directory (`/config/nzbs` in Docker).
+It is off by default and applies to movies, episodes and season packs, including
+attempts that later fail. Original NZB contents and source filenames (including
+password hints) are retained with a release identifier to avoid collisions.
+Saved NZBs are not removed when media is deleted or the option is disabled;
+remove archive files manually when they are no longer needed.
+
 ## Development
 
 Requirements: Go 1.26+, Node.js 24+, and for the repair and extraction

@@ -305,6 +305,8 @@
       "unwatchedExpiryDaysHint": "For series, the last watched episode counts. Expired titles stay listed and can be downloaded again. 0 keeps them.",
       "maxSources": "Releases to try",
       "maxSourcesHint": "After this many failed releases the movie needs your attention.",
+      "saveNZBs": "Save NZBs",
+      "saveNZBsHint": "Keeps fetched NZBs in nzbs/ inside the configuration folder, including failed downloads. Turning this off or deleting media does not remove previously saved NZBs.",
       "parallelDownloads": "Parallel downloads (movies and episodes combined)",
       "watchPollMinutes": "Check watch state every (minutes)",
       "watchPollMinutesHint": "How often Plex is asked what was watched.",

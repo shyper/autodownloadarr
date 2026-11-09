@@ -82,6 +82,8 @@ type General struct {
 	MaxSources int `json:"maxSources"`
 	// ParallelDownloads is the total number of movies and episodes downloaded at once.
 	ParallelDownloads int `json:"parallelDownloads"`
+	// SaveNZBs archives fetched NZB documents, including failed download attempts.
+	SaveNZBs bool `json:"saveNZBs"`
 	// WatchPollMinutes is how often the media server is asked for the
 	// watch state.
 	WatchPollMinutes int `json:"watchPollMinutes"`

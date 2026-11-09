@@ -4,7 +4,7 @@ import { useGeneral, useSaveGeneral } from '../../api/config'
 import type { General } from '../../api/types'
 import { errorMessage } from '../../i18n'
 import { TriggerFields } from '../TriggerFields'
-import { Alert, Button, Field, Input, SectionTitle, Select } from '../ui'
+import { Alert, Button, Checkbox, Field, Input, SectionTitle, Select } from '../ui'
 
 type Props = {
   /** "library" shows only the movies folder (setup wizard). */
@@ -85,6 +85,12 @@ function GeneralFormInner({ initial, fields, onSaved }: Props & { initial: Gener
             <Field id="parallel" label={t('settings.general.parallelDownloads')}>
               <Input id="parallel" type="number" min={1} max={5} value={g.parallelDownloads} onChange={num('parallelDownloads')} />
             </Field>
+            <Checkbox
+              label={t('settings.general.saveNZBs')}
+              hint={t('settings.general.saveNZBsHint')}
+              checked={g.saveNZBs ?? false}
+              onChange={(e) => set('saveNZBs', e.target.checked)}
+            />
             <Field id="poll" label={t('settings.general.watchPollMinutes')} hint={t('settings.general.watchPollMinutesHint')}>
               <Input id="poll" type="number" min={1} value={g.watchPollMinutes} onChange={num('watchPollMinutes')} />
             </Field>
