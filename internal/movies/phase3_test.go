@@ -97,6 +97,7 @@ func newHarness(t *testing.T, world *fakeWorld) *harness {
 	sched := scheduler.New(sqldb, log, scheduler.WithPollInterval(20*time.Millisecond))
 	svc := &Services{Store: st, Log: log, TMDBBaseURL: srv.URL + "/tmdb"}
 	m := NewManager(st, svc, sched, events.New(log), log)
+	m.fetcher.Probe = func(context.Context, string) error { return nil }
 	must(t, m.Start(ctx))
 	done := make(chan struct{})
 	go func() { _ = sched.Run(ctx); close(done) }()

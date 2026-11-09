@@ -79,3 +79,43 @@ func TestLegacyRequestOwnershipMigration(t *testing.T) {
 		}
 	}
 }
+
+func TestReleaseFingerprintMigration(t *testing.T) {
+	ctx := t.Context()
+	d, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "fingerprints.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	fsys, err := fs.Sub(migrations, "migrations")
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider, err := goose.NewProvider(goose.DialectSQLite3, d, fsys)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = provider.UpTo(ctx, 20); err != nil {
+		t.Fatal(err)
+	}
+	for _, stmt := range []string{
+		`INSERT INTO movies(id,tmdb_id,title,state,release_key,created_at,updated_at) VALUES(1,1,'Movie','available','0:guid:movie-upload',0,0)`,
+		`INSERT INTO series(id,tmdb_id,title,created_at,updated_at) VALUES(1,2,'Show',0,0)`,
+		`INSERT INTO episodes(id,series_id,season,episode,state,release_key,created_at,updated_at) VALUES(1,1,1,1,'available','0:fp:episode-fingerprint',0,0)`,
+		`INSERT INTO releases(movie_id,title,guid,fingerprint,size,nzb_url,searched_at) VALUES(1,'Movie','movie-upload','movie-fingerprint',1,'',0)`,
+		`INSERT INTO releases(episode_id,title,guid,fingerprint,size,nzb_url,searched_at) VALUES(1,'Episode','','episode-fingerprint',1,'',0)`,
+	} {
+		if _, err = d.ExecContext(ctx, stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err = migrate(ctx, d); err != nil {
+		t.Fatal(err)
+	}
+	for table, want := range map[string]string{"movies": "movie-fingerprint", "episodes": "episode-fingerprint"} {
+		var got string
+		if err = d.QueryRowContext(ctx, "SELECT release_fingerprint FROM "+table+" WHERE id=1").Scan(&got); err != nil || got != want {
+			t.Fatalf("%s fingerprint %q, want %q: %v", table, got, want, err)
+		}
+	}
+}

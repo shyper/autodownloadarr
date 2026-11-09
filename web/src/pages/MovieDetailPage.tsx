@@ -11,6 +11,7 @@ import {
   useRemoveBlocklist,
   useSearchAgain,
   useSkipRelease,
+  useReportMovieRelease,
 } from '../api/movies'
 import type { MovieDetail } from '../api/types'
 import { DownloadProgress, Poster, Problem, ReleaseStatus, StateBadge, WatchProgress } from '../components/MovieBits'
@@ -38,13 +39,14 @@ function Detail({ m }: { m: MovieDetail }) {
   const { data: user } = useMe()
   const canManage = user?.role === 'admin' || (!!user && user.id === m.requestedBy)
   const skip = useSkipRelease()
+  const report = useReportMovieRelease()
   const remove = useDeleteMovie()
   const pick = useDownloadRelease()
   const unblock = useRemoveBlocklist()
   const restore = useRequestMovie()
   const removed = m.state === 'deleted' || m.state === 'expired'
   const dl = downloads.data?.find((d) => d.movieId === m.id)
-  const error = keep.error ?? search.error ?? skip.error ?? remove.error ?? pick.error ?? unblock.error ?? restore.error
+  const error = report.error ?? keep.error ?? search.error ?? skip.error ?? remove.error ?? pick.error ?? unblock.error ?? restore.error
 
   const confirmDelete = (forget: boolean) => {
     if (!window.confirm(t(forget ? 'movies.confirmForget' : 'movies.confirmDelete', { title: m.title }))) return
@@ -136,6 +138,11 @@ function Detail({ m }: { m: MovieDetail }) {
             {(m.state === 'waiting' || m.state === 'failed') && (
               <Button loading={search.isPending} onClick={() => search.mutate(m.id)}>
                 {t('movies.actions.search')}
+              </Button>
+            )}
+            {m.releaseKey && ['downloading', 'available', 'watched'].includes(m.state) && (
+              <Button variant="secondary" loading={report.isPending} title={t('movies.actions.reportBadHint')} disabled={pick.isPending || skip.isPending} onClick={() => report.mutate({ id: m.id, releaseKey: m.releaseKey })}>
+                {t('movies.actions.reportBad')}
               </Button>
             )}
             {m.state === 'downloading' && (

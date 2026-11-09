@@ -41,6 +41,8 @@ func TestSharedLibraryOwnership(t *testing.T) {
 		method, path string
 		body         any
 	}{
+		{"POST", fmt.Sprintf("/api/v1/movies/%d/report", mv.ID), map[string]string{"releaseKey": "old"}},
+		{"POST", fmt.Sprintf("/api/v1/episodes/%d/report", eps[0].ID), map[string]string{"releaseKey": "old"}},
 		{"POST", fmt.Sprintf("/api/v1/movies/%d/keep", mv.ID), map[string]bool{"keep": true}},
 		{"DELETE", fmt.Sprintf("/api/v1/movies/%d?forget=1", mv.ID), nil},
 		{"POST", "/api/v1/movies", map[string]int{"tmdbId": 123}},

@@ -79,7 +79,7 @@ func (e *Error) Unwrap() error { return e.Err }
 // should be blocklisted.
 func IsReleaseProblem(kind string) bool {
 	switch kind {
-	case KindIncomplete, KindPassword, KindUnpack, KindNoVideo, KindInvalidNZB, KindSpam:
+	case KindIncomplete, KindPassword, KindUnpack, KindNoVideo, KindInvalidNZB, KindSpam, KindInvalidVideo:
 		return true
 	}
 	return false
@@ -121,7 +121,9 @@ type Result struct {
 
 // Fetcher runs downloads.
 type Fetcher struct {
-	Log *slog.Logger
+	// Probe defaults to ValidateVideo; tests may isolate extraction from media probing.
+	Probe func(context.Context, string) error
+	Log   *slog.Logger
 }
 
 // Fetch downloads and extracts a release. On failure everything it created
@@ -350,6 +352,19 @@ func (f *Fetcher) Fetch(ctx context.Context, req Request) (Result, error) {
 	}
 	if len(videos) == 0 {
 		return failed(KindNoVideo, errors.New("the release contains no video file"))
+	}
+	probe := f.Probe
+	if probe == nil {
+		probe = ValidateVideo
+	}
+	for _, video := range videos {
+		if err := probe(ctx, video); err != nil {
+			var failure *Error
+			if errors.As(err, &failure) {
+				return failed(failure.Kind, failure.Err)
+			}
+			return failed(KindVideoProbe, err)
+		}
 	}
 	_ = os.RemoveAll(req.WorkDir)
 	return Result{Videos: videos, Password: password}, nil

@@ -116,7 +116,16 @@ keeping archives, PAR2 recovery volumes, …).
 ## Development
 
 Requirements: Go 1.26+, Node.js 24+, and for the repair and extraction
-tests `par2` (par2cmdline) and 7-Zip (`7zz`, `7z` or `7za`).
+tests `par2` (par2cmdline), 7-Zip (`7zz`, `7z` or `7za`) and FFmpeg
+(`ffmpeg` and `ffprobe`). FFprobe is also required for normal downloads when
+running outside Docker; the Docker image includes it. Completed videos are
+checked for a readable video stream, known codec and valid dimensions before
+being marked available. This checks container metadata, not every encoded frame.
+
+A faulty current release can be reported from movie or episode details. Its
+managed files are removed, the release is blocklisted, and an alternative is
+requested automatically. Manually choosing another release also removes the
+previous managed files before downloading. Replacement stops if cleanup fails.
 
 ```bash
 make web        # build the web UI (embedded into the binary)

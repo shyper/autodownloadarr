@@ -2,6 +2,7 @@ package series
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -22,6 +23,8 @@ func (m *Manager) pollWatched(ctx context.Context) error {
 
 // PollWatched compares the episodes on disk with the media server now.
 func (m *Manager) PollWatched(ctx context.Context) error {
+	m.requestMu.Lock()
+	defer m.requestMu.Unlock()
 	target, err := m.svc.MediaTV(ctx)
 	if err != nil || target == nil {
 		return err
@@ -128,8 +131,7 @@ func (m *Manager) removeFiles(ctx context.Context, se store.Series, e *store.Epi
 	root := g.SeriesPath
 	for _, f := range files {
 		if root == "" || !within(root, f) {
-			m.log.Error("refusing to delete a file outside the series folder", "file", f, "root", root)
-			continue
+			return fmt.Errorf("refusing to delete tracked file outside the library: %s", f)
 		}
 		if err := os.Remove(f); err != nil && !os.IsNotExist(err) {
 			return err

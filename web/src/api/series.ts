@@ -83,3 +83,5 @@ export const useDownloadEpisodeRelease = () =>
   useSeriesMutation((v: { id: number; releaseId: number }) =>
     api<Episode>(`/episodes/${v.id}/releases/${v.releaseId}/download`, { method: 'POST' }),
   )
+
+export const useReportEpisodeRelease = () => useSeriesMutation((v: { id: number; releaseKey: string }) => api<Episode>(`/episodes/${v.id}/report`, { method: 'POST', body: { releaseKey: v.releaseKey } }))

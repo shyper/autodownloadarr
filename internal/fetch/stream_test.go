@@ -76,7 +76,7 @@ func TestFetchStreamsObfuscatedRAR(t *testing.T) {
 	root := t.TempDir()
 	folder := filepath.Join(root, "Film (2024) {tmdb-42}")
 	videoName := "Film (2024) {tmdb-42}"
-	f := &Fetcher{Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	f := &Fetcher{Probe: func(context.Context, string) error { return nil }, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	type visibleFile struct {
 		path string
 		size int64
@@ -175,7 +175,7 @@ func TestFetchStreamsDirectVideo(t *testing.T) {
 	root := t.TempDir()
 	folder := filepath.Join(root, "Film (2024) {tmdb-42}")
 	videoName := "Film (2024) {tmdb-42}"
-	f := &Fetcher{Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	f := &Fetcher{Probe: func(context.Context, string) error { return nil }, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
 	type visibleFile struct {
 		path string
 		size int64

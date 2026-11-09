@@ -287,3 +287,20 @@ func (s *server) handleEpisodeDownloadRelease(w http.ResponseWriter, r *http.Req
 func (s *server) handleEpisodeDownloads(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, s.Series.Downloads())
 }
+
+// handleEpisodeReport rejects a faulty release and requests its replacement.
+func (s *server) handleEpisodeReport(w http.ResponseWriter, r *http.Request) {
+	id, _ := idParam(r, "id")
+	var req struct {
+		ReleaseKey string `json:"releaseKey"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	item, err := s.Series.ReportRelease(r.Context(), id, req.ReleaseKey)
+	if err != nil {
+		s.writeStoreError(w, "report episode release", err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, item)
+}

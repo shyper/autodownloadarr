@@ -68,3 +68,5 @@ export function useDeleteMovie() {
 }
 
 export const useRemoveBlocklist = () => useMovieMutation((id: number) => api<void>(`/blocklist/${id}`, { method: 'DELETE' }))
+
+export const useReportMovieRelease = () => useMovieMutation((v: { id: number; releaseKey: string }) => api<Movie>(`/movies/${v.id}/report`, { method: 'POST', body: { releaseKey: v.releaseKey } }))

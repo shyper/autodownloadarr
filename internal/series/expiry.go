@@ -51,6 +51,8 @@ func (m *Manager) handleExpire(ctx context.Context, t scheduler.Task) error {
 // Expire removes all files of a series whose expiry date has passed. The
 // series stays listed and can be downloaded again with Restore.
 func (m *Manager) Expire(ctx context.Context, id int64) error {
+	m.requestMu.Lock()
+	defer m.requestMu.Unlock()
 	due, err := m.expiryDue(ctx, id)
 	if err != nil || !due {
 		return err

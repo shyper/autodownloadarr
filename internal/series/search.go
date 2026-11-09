@@ -26,6 +26,8 @@ const (
 var searchDelays = []time.Duration{time.Hour, 6 * time.Hour, 24 * time.Hour}
 
 func (m *Manager) handleSearch(ctx context.Context, t scheduler.Task) error {
+	m.requestMu.Lock()
+	defer m.requestMu.Unlock()
 	p, err := decode[searchPayload](t)
 	if err != nil {
 		return err
@@ -385,8 +387,12 @@ func (m *Manager) startQueued() {
 	budget := m.svc.SpaceBudget(g, g.SeriesPath)
 	retryScheduled := false
 	for _, e := range queued {
-		if m.deleting[e.SeriesID] {
+		if m.deleting[e.SeriesID] || m.replacing[e.ID] {
 			continue // the series is being removed
+		}
+		e, err := m.store.Episode(ctx, e.ID)
+		if err != nil || e.State != store.MovieQueued {
+			continue
 		}
 		if len(m.active) >= max(g.ParallelDownloads, 1) {
 			return

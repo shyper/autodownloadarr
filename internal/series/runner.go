@@ -52,12 +52,27 @@ func (m *Manager) runDownload(ctx context.Context, e store.Episode, rel store.Re
 		m.log.Error("read series", "err", err)
 		return
 	}
+	// Every queued path must remove tracked leftovers before fetching, even
+	// when a user retries a search after an earlier replacement cleanup failed.
+	files, err := m.store.FilesOf(bg, store.ForEpisode(e.ID))
+	if err != nil {
+		m.log.Error("read previous download files", "err", err)
+		return
+	}
+	if len(files) > 0 {
+		if err := m.removeFiles(bg, se, &e); err != nil {
+			if saveErr := m.fail(bg, e, "release_cleanup_failed", err.Error()); saveErr != nil {
+				m.log.Error("record cleanup failure", "err", saveErr)
+			}
+			return
+		}
+	}
 	attemptID, err := m.store.StartAttemptOf(bg, store.ForEpisode(e.ID), rel)
 	if err != nil {
 		m.log.Error("record attempt", "err", err)
 		return
 	}
-	e.ReleaseKey = rel.Identity()
+	e.ReleaseKey, e.ReleaseFingerprint = rel.Identity(), rel.Fingerprint
 	e.State, e.ReleaseTitle = store.MovieDownloading, rel.Title
 	if err := m.store.UpdateEpisode(bg, e); err != nil {
 		m.log.Error("update episode", "err", err)
@@ -274,7 +289,7 @@ func (m *Manager) finishPack(ctx, dctx context.Context, se store.Series, e store
 		used[key] = true
 		matched++
 		ep.State, ep.File, ep.AvailableAt, ep.Attempts, ep.LastError = store.MovieAvailable, final, &now, 0, ""
-		ep.ReleaseKey, ep.ReleaseTitle = rel.Identity(), rel.Title
+		ep.ReleaseKey, ep.ReleaseTitle, ep.ReleaseFingerprint = rel.Identity(), rel.Title, rel.Fingerprint
 		ep.Progress, ep.StartedAt, ep.WatchedAt, ep.DeleteAt, ep.Base = 0, nil, nil, nil, store.WatchBase{}
 		if err := m.store.UpdateEpisode(ctx, *ep); err != nil {
 			return err
@@ -383,7 +398,7 @@ func (m *Manager) finishFailure(ctx, dctx context.Context, e store.Episode, rel 
 	case kind == fetch.KindCancelled && !errors.Is(context.Cause(dctx), errSkipped):
 		return m.store.FinishAttempt(ctx, attemptID, "cancelled", kind, msg)
 
-	case kind == CodeNoSeriesPath || kind == CodeNoUsenet || kind == fetch.KindUsenetAuth || kind == fetch.KindDiskError:
+	case kind == CodeNoSeriesPath || kind == CodeNoUsenet || kind == fetch.KindUsenetAuth || kind == fetch.KindDiskError || kind == fetch.KindVideoProbe:
 		if err := m.store.FinishAttempt(ctx, attemptID, "failed", kind, msg); err != nil {
 			return err
 		}

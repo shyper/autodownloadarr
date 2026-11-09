@@ -29,38 +29,39 @@ func MovieFilesRemoved(state string) bool { return state == MovieDeleted || stat
 
 // Movie is a requested movie.
 type Movie struct {
-	Genres          []string   `json:"genres"`
-	ID              int64      `json:"id"`
-	TMDBID          int        `json:"tmdbId"`
-	IMDbID          string     `json:"imdbId"`
-	Title           string     `json:"title"`
-	OriginalTitle   string     `json:"originalTitle"`
-	Year            int        `json:"year"`
-	Overview        string     `json:"overview"`
-	PosterPath      string     `json:"posterPath"`
-	Runtime         int        `json:"runtime"`
-	AltTitles       []string   `json:"altTitles"`
-	ProfileID       int64      `json:"profileId"`
-	RequestedBy     int64      `json:"requestedBy"`
-	RequestedByName string     `json:"requestedByName,omitempty"`
-	State           string     `json:"state"`
-	Keep            bool       `json:"keep"`
-	Attempts        int        `json:"attempts"`
-	LastError       string     `json:"lastError"`
-	NextSearchAt    *time.Time `json:"nextSearchAt,omitempty"`
-	ReleaseKey      string     `json:"releaseKey"`
-	ReleaseTitle    string     `json:"releaseTitle"`
-	Folder          string     `json:"folder"`
-	MediaKey        string     `json:"mediaKey"`
-	AvailableAt     *time.Time `json:"availableAt,omitempty"`
-	StartedAt       *time.Time `json:"startedAt,omitempty"`
-	WatchedAt       *time.Time `json:"watchedAt,omitempty"`
-	DeleteAt        *time.Time `json:"deleteAt,omitempty"`
-	DeleteNotBefore *time.Time `json:"-"`        // deadline retained across repeat viewings
-	Progress        float64    `json:"progress"` // 0..1, watched since the file is there
-	Base            WatchBase  `json:"-"`
-	CreatedAt       time.Time  `json:"createdAt"`
-	UpdatedAt       time.Time  `json:"updatedAt"`
+	Genres             []string   `json:"genres"`
+	ID                 int64      `json:"id"`
+	TMDBID             int        `json:"tmdbId"`
+	IMDbID             string     `json:"imdbId"`
+	Title              string     `json:"title"`
+	OriginalTitle      string     `json:"originalTitle"`
+	Year               int        `json:"year"`
+	Overview           string     `json:"overview"`
+	PosterPath         string     `json:"posterPath"`
+	Runtime            int        `json:"runtime"`
+	AltTitles          []string   `json:"altTitles"`
+	ProfileID          int64      `json:"profileId"`
+	RequestedBy        int64      `json:"requestedBy"`
+	RequestedByName    string     `json:"requestedByName,omitempty"`
+	State              string     `json:"state"`
+	Keep               bool       `json:"keep"`
+	Attempts           int        `json:"attempts"`
+	LastError          string     `json:"lastError"`
+	NextSearchAt       *time.Time `json:"nextSearchAt,omitempty"`
+	ReleaseFingerprint string     `json:"-"`
+	ReleaseKey         string     `json:"releaseKey"`
+	ReleaseTitle       string     `json:"releaseTitle"`
+	Folder             string     `json:"folder"`
+	MediaKey           string     `json:"mediaKey"`
+	AvailableAt        *time.Time `json:"availableAt,omitempty"`
+	StartedAt          *time.Time `json:"startedAt,omitempty"`
+	WatchedAt          *time.Time `json:"watchedAt,omitempty"`
+	DeleteAt           *time.Time `json:"deleteAt,omitempty"`
+	DeleteNotBefore    *time.Time `json:"-"`        // deadline retained across repeat viewings
+	Progress           float64    `json:"progress"` // 0..1, watched since the file is there
+	Base               WatchBase  `json:"-"`
+	CreatedAt          time.Time  `json:"createdAt"`
+	UpdatedAt          time.Time  `json:"updatedAt"`
 }
 
 // WatchBase is the watch state the media server reported when the current
@@ -76,7 +77,7 @@ type WatchBase struct {
 
 const movieColumns = `id, tmdb_id, imdb_id, title, original_title, year, overview, poster_path, runtime, genres, alt_titles,
 	COALESCE(profile_id, 0), COALESCE(requested_by, 0), COALESCE((SELECT username FROM users WHERE id = movies.requested_by), ''),
-	state, keep, attempts, last_error, next_search_at, release_key, release_title, folder, media_key,
+	state, keep, attempts, last_error, next_search_at, release_key, release_fingerprint, release_title, folder, media_key,
 	available_at, watched_at, delete_at, started_at, progress, base_set, base_views, base_offset, delete_not_before, created_at, updated_at`
 
 func scanMovie(row interface{ Scan(...any) error }) (Movie, error) {
@@ -85,7 +86,7 @@ func scanMovie(row interface{ Scan(...any) error }) (Movie, error) {
 	var next, avail, watched, del, started, floor sql.NullInt64
 	var created, updated int64
 	err := row.Scan(&m.ID, &m.TMDBID, &m.IMDbID, &m.Title, &m.OriginalTitle, &m.Year, &m.Overview, &m.PosterPath, &m.Runtime, &genres, &alt,
-		&m.ProfileID, &m.RequestedBy, &m.RequestedByName, &m.State, &m.Keep, &m.Attempts, &m.LastError, &next, &m.ReleaseKey, &m.ReleaseTitle, &m.Folder, &m.MediaKey,
+		&m.ProfileID, &m.RequestedBy, &m.RequestedByName, &m.State, &m.Keep, &m.Attempts, &m.LastError, &next, &m.ReleaseKey, &m.ReleaseFingerprint, &m.ReleaseTitle, &m.Folder, &m.MediaKey,
 		&avail, &watched, &del, &started, &m.Progress, &m.Base.Set, &m.Base.Views, &m.Base.Offset, &floor, &created, &updated)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Movie{}, ErrNotFound
@@ -176,11 +177,11 @@ func (s *Store) Movies(ctx context.Context, states ...string) ([]Movie, error) {
 // UpdateMovie writes the mutable fields of m.
 func (s *Store) UpdateMovie(ctx context.Context, m Movie) error {
 	return affected(s.db.ExecContext(ctx, `
-		UPDATE movies SET state = ?, keep = ?, attempts = ?, last_error = ?, next_search_at = ?, release_key = ?, release_title = ?,
+		UPDATE movies SET state = ?, keep = ?, attempts = ?, last_error = ?, next_search_at = ?, release_key = ?, release_fingerprint = ?, release_title = ?,
 			folder = ?, media_key = ?, available_at = ?, watched_at = ?, delete_at = ?, started_at = ?, progress = ?, base_set = ?, base_views = ?,
 			base_offset = ?, delete_not_before = ?, updated_at = ?
 		WHERE id = ?`,
-		m.State, m.Keep, m.Attempts, m.LastError, timeArg(m.NextSearchAt), m.ReleaseKey, m.ReleaseTitle,
+		m.State, m.Keep, m.Attempts, m.LastError, timeArg(m.NextSearchAt), m.ReleaseKey, m.ReleaseFingerprint, m.ReleaseTitle,
 		m.Folder, m.MediaKey, timeArg(m.AvailableAt), timeArg(m.WatchedAt), timeArg(m.DeleteAt), timeArg(m.StartedAt), m.Progress, m.Base.Set,
 		m.Base.Views, m.Base.Offset, timeArg(m.DeleteNotBefore), s.ms(), m.ID))
 }

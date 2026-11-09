@@ -27,7 +27,7 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath \
 # --- Runtime -----------------------------------------------------------------
 FROM alpine:3.22
 # par2cmdline repairs incomplete downloads, 7zip extracts 7z/ZIP archives.
-RUN apk add --no-cache ca-certificates tzdata su-exec par2cmdline 7zip
+RUN apk add --no-cache ca-certificates tzdata su-exec par2cmdline 7zip ffmpeg
 COPY --chmod=0755 docker/entrypoint.sh /entrypoint.sh
 COPY --from=server /out/autodownloadarr /app/autodownloadarr
 

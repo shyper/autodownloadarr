@@ -3,6 +3,7 @@ package movies
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -30,7 +31,7 @@ func (m *Manager) available(ctx context.Context, mv store.Movie, rel store.Relea
 	now := m.now()
 	mv.State = store.MovieAvailable
 	mv.Folder = filepath.Dir(video)
-	mv.ReleaseKey, mv.ReleaseTitle = rel.Identity(), rel.Title
+	mv.ReleaseKey, mv.ReleaseTitle, mv.ReleaseFingerprint = rel.Identity(), rel.Title, rel.Fingerprint
 	mv.AvailableAt = &now
 	mv.Attempts, mv.LastError, mv.NextSearchAt = 0, "", nil
 	mv.StartedAt, mv.WatchedAt, mv.DeleteAt, mv.DeleteNotBefore = nil, nil, nil, nil
@@ -89,6 +90,8 @@ func FileSince(ctx context.Context, st *store.Store, o store.Owner, base store.W
 func (m *Manager) scan(ctx context.Context, folder string) { m.svc.Scan(ctx, false, folder) }
 
 func (m *Manager) handleDelete(ctx context.Context, t scheduler.Task) error {
+	m.requestMu.Lock()
+	defer m.requestMu.Unlock()
 	p, err := decode[deletePayload](t)
 	if err != nil {
 		return err
@@ -148,8 +151,7 @@ func (m *Manager) removeFiles(ctx context.Context, mv *store.Movie) error {
 	root := g.MoviesPath
 	for _, f := range files {
 		if root == "" || !within(root, f) {
-			m.log.Error("refusing to delete a file outside the movies folder", "file", f, "root", root)
-			continue
+			return fmt.Errorf("refusing to delete tracked file outside the library: %s", f)
 		}
 		if err := os.Remove(f); err != nil && !os.IsNotExist(err) {
 			return err
@@ -193,6 +195,8 @@ func (m *Manager) pollWatched(ctx context.Context) error {
 
 // PollWatched compares the available and watched movies with the media server now.
 func (m *Manager) PollWatched(ctx context.Context) error {
+	m.requestMu.Lock()
+	defer m.requestMu.Unlock()
 	target, err := m.svc.Media(ctx)
 	if err != nil || target == nil {
 		return err

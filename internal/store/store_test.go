@@ -10,6 +10,7 @@ import (
 
 	"github.com/shyper/autodownloadarr/internal/db"
 	"github.com/shyper/autodownloadarr/internal/mediaserver/pathmap"
+	"github.com/shyper/autodownloadarr/internal/release"
 	"github.com/shyper/autodownloadarr/internal/secrets"
 )
 
@@ -534,5 +535,21 @@ func TestTelegramNotificationsShareCurrentBotToken(t *testing.T) {
 	got, err = s.Notification(ctx)
 	if err != nil || got.Token != n.Token || got.UseBotToken {
 		t.Fatal("separate notification token was changed by bot token rotation")
+	}
+}
+
+func TestReportedReleaseRecoversLegacyFingerprint(t *testing.T) {
+	st, ctx := newStore(t), t.Context()
+	mv, err := st.CreateMovie(ctx, Movie{TMDBID: 909, Title: "Legacy", State: MovieAvailable}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rel := Release{Title: "Legacy.2024.German.720p.WEB-GRP", GUID: "old-upload", Size: 123456789}
+	if _, err := st.StartAttempt(ctx, mv.ID, rel); err != nil {
+		t.Fatal(err)
+	}
+	entry, err := st.ReportedRelease(ctx, ForMovie(mv.ID), rel.Identity(), rel.Title, "")
+	if err != nil || entry.Fingerprint != release.Fingerprint(rel.Title, rel.Size) {
+		t.Fatalf("legacy report fingerprint: %+v %v", entry, err)
 	}
 }

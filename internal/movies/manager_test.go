@@ -172,6 +172,7 @@ func TestMovieLifecycle(t *testing.T) {
 	defer svc.Close()
 	bus := events.New(log)
 	m := NewManager(st, svc, sched, bus, log)
+	m.fetcher.Probe = func(context.Context, string) error { return nil }
 	must(t, m.Start(ctx))
 	done := make(chan struct{})
 	go func() { _ = sched.Run(ctx); close(done) }()

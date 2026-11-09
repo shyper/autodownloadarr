@@ -48,6 +48,9 @@ const (
 	CodeDiskError        = "disk_error"
 )
 
+// ErrReleaseCleanup stops replacement when old files could not be removed.
+var ErrReleaseCleanup = errors.New("release cleanup failed")
+
 // ErrAlreadyRequested is returned when a movie is requested twice.
 var ErrAlreadyRequested = errors.New("movie already requested")
 
@@ -272,6 +275,8 @@ func (m *Manager) Search(ctx context.Context, id int64) (store.Movie, error) {
 
 // SetKeep pins a movie (no automatic deletion) or releases it again.
 func (m *Manager) SetKeep(ctx context.Context, id int64, keep bool) (store.Movie, error) {
+	m.requestMu.Lock()
+	defer m.requestMu.Unlock()
 	mv, err := m.store.Movie(ctx, id)
 	if err != nil {
 		return store.Movie{}, err
@@ -292,22 +297,7 @@ func (m *Manager) SetKeep(ctx context.Context, id int64, keep bool) (store.Movie
 // DownloadRelease downloads a specific release chosen by the user, even if
 // the profile rejected it. A running download of the movie is cancelled.
 func (m *Manager) DownloadRelease(ctx context.Context, id, releaseID int64) (store.Movie, error) {
-	rel, err := m.store.Release(ctx, releaseID)
-	if err != nil {
-		return store.Movie{}, err
-	}
-	if rel.MovieID != id {
-		return store.Movie{}, store.ErrNotFound
-	}
-	m.cancelDownload(id, errSuperseded)
-	m.mu.Lock()
-	m.forced[id] = releaseID
-	m.mu.Unlock()
-	mv, err := m.store.Movie(ctx, id)
-	if err != nil {
-		return store.Movie{}, err
-	}
-	return mv, m.enqueue(ctx, mv)
+	return m.replaceRelease(ctx, id, releaseID, "")
 }
 
 // SkipRelease abandons the running download, blocklists its release and

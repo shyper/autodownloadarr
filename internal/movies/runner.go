@@ -58,12 +58,27 @@ func (m *Manager) runDownload(ctx context.Context, mv store.Movie, rel store.Rel
 	}()
 	bg := context.WithoutCancel(ctx)
 
+	// Every queued path must remove tracked leftovers before fetching, even
+	// when a user retries a search after an earlier replacement cleanup failed.
+	files, err := m.store.FilesOf(bg, store.ForMovie(mv.ID))
+	if err != nil {
+		m.log.Error("read previous download files", "err", err)
+		return
+	}
+	if len(files) > 0 {
+		if err := m.removeFiles(bg, &mv); err != nil {
+			if saveErr := m.fail(bg, mv, "release_cleanup_failed", err.Error()); saveErr != nil {
+				m.log.Error("record cleanup failure", "err", saveErr)
+			}
+			return
+		}
+	}
 	attemptID, err := m.store.StartAttempt(bg, mv.ID, rel)
 	if err != nil {
 		m.log.Error("record attempt", "err", err)
 		return
 	}
-	mv.ReleaseKey = rel.Identity()
+	mv.ReleaseKey, mv.ReleaseFingerprint = rel.Identity(), rel.Fingerprint
 	mv.State, mv.ReleaseTitle = store.MovieDownloading, rel.Title
 	if err := m.store.UpdateMovie(bg, mv); err != nil {
 		m.log.Error("update movie", "err", err)
@@ -205,7 +220,7 @@ func (m *Manager) finish(ctx, dctx context.Context, mv store.Movie, rel store.Re
 		}
 		return nil // deleted, superseded or shutting down: the caller takes over
 
-	case CodeNoMoviesPath, CodeNoUsenet, CodeUsenetAuth, CodeDiskError:
+	case CodeNoMoviesPath, CodeNoUsenet, CodeUsenetAuth, CodeDiskError, fetch.KindVideoProbe:
 		if err := m.store.FinishAttempt(ctx, attemptID, "failed", out.kind, msg); err != nil {
 			return err
 		}

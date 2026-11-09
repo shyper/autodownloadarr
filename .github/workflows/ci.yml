@@ -17,8 +17,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: Install par2 and 7-Zip (used by the repair and extraction tests)
-        run: sudo apt-get update && sudo apt-get install -y par2 7zip
+      - name: Install par2, 7-Zip and FFmpeg (used by the repair and extraction tests)
+        run: sudo apt-get update && sudo apt-get install -y par2 7zip ffmpeg
       - run: go vet ./...
       - run: go test -race ./...
       - uses: golangci/golangci-lint-action@v8

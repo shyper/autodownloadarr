@@ -268,6 +268,7 @@ func setup(ctx context.Context, t *testing.T, w *world, tune func(*store.General
 	svc := &movies.Services{Store: st, Log: log, TMDBBaseURL: srv.URL + "/tmdb"}
 	t.Cleanup(svc.Close)
 	m := NewManager(st, svc, sched, events.New(log), log, download.NewRateLimiter(0))
+	m.fetcher.Probe = func(context.Context, string) error { return nil }
 	must(t, m.Start(ctx))
 	sctx, stop := context.WithCancel(ctx)
 	done := make(chan struct{})

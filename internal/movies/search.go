@@ -22,6 +22,8 @@ import (
 var searchDelays = []time.Duration{time.Hour, 6 * time.Hour, 24 * time.Hour}
 
 func (m *Manager) handleSearch(ctx context.Context, t scheduler.Task) error {
+	m.requestMu.Lock()
+	defer m.requestMu.Unlock()
 	p, err := decode[searchPayload](t)
 	if err != nil {
 		return err
@@ -313,6 +315,10 @@ func (m *Manager) startQueued() {
 	for _, mv := range queued {
 		if m.deleting[mv.ID] {
 			continue // the movie is being removed
+		}
+		mv, err := m.store.Movie(ctx, mv.ID)
+		if err != nil || mv.State != store.MovieQueued {
+			continue
 		}
 		if len(m.active) >= max(g.ParallelDownloads, 1) {
 			return

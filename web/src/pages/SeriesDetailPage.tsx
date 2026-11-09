@@ -12,6 +12,7 @@ import {
   useSeries,
   useShow,
   useSkipEpisodeRelease,
+  useReportEpisodeRelease,
   useUpdateSeries,
 } from '../api/series'
 import type { DeleteTrigger, Episode, EpisodeState, SeasonInfo, SeriesDetail } from '../api/types'
@@ -292,18 +293,25 @@ function EpisodeDetails({ e, canManage }: { e: Episode; canManage: boolean }) {
   const ep = useEpisode(e.id, true)
   const search = useSearchEpisode()
   const skip = useSkipEpisodeRelease()
+  const report = useReportEpisodeRelease()
   const pick = useDownloadEpisodeRelease()
+  const canReport = canManage && !!e.releaseKey && ['downloading', 'available', 'watched'].includes(e.state)
   const canSearch = canManage && ['waiting', 'failed', 'deleted', 'pending', 'skipped'].includes(e.state)
-  const error = search.error ?? skip.error ?? pick.error
+  const error = report.error ?? search.error ?? skip.error ?? pick.error
 
   return (
     <div className="space-y-3 rounded-xl bg-surface-2 p-3 text-sm">
       {error && <Alert>{errorMessage(t, error)}</Alert>}
-      {canManage && (canSearch || e.state === 'downloading') && (
+      {canManage && (canSearch || canReport || e.state === 'downloading') && (
         <div className="flex flex-col gap-2 sm:flex-row">
           {canSearch && (
             <Button variant="secondary" className="w-full sm:w-auto" loading={search.isPending} onClick={() => search.mutate(e.id)}>
               {t('series.searchEpisode')}
+            </Button>
+          )}
+          {canReport && (
+            <Button variant="secondary" className="w-full sm:w-auto" loading={report.isPending} title={t('movies.actions.reportBadHint')} disabled={pick.isPending || skip.isPending} onClick={() => report.mutate({ id: e.id, releaseKey: e.releaseKey })}>
+              {t('movies.actions.reportBad')}
             </Button>
           )}
           {e.state === 'downloading' && (

@@ -69,6 +69,7 @@ type Manager struct {
 	mu        sync.Mutex
 	active    map[int64]*activeDownload // episode → running download
 	forced    map[int64]int64           // episode → release chosen by the user
+	replacing map[int64]bool            // episodes being replaced; no new downloads
 	// deleting holds the series that are being removed. No new downloads
 	// start for them and Delete waits for the running ones.
 	deleting map[int64]bool
@@ -451,22 +452,7 @@ func (m *Manager) SkipRelease(_ context.Context, episodeID int64) error {
 
 // DownloadRelease downloads a specific release of an episode.
 func (m *Manager) DownloadRelease(ctx context.Context, episodeID, releaseID int64) (store.Episode, error) {
-	rel, err := m.store.Release(ctx, releaseID)
-	if err != nil {
-		return store.Episode{}, err
-	}
-	if rel.EpisodeID != episodeID {
-		return store.Episode{}, store.ErrNotFound
-	}
-	m.cancelDownload(episodeID, errSuperseded)
-	m.mu.Lock()
-	m.forced[episodeID] = releaseID
-	m.mu.Unlock()
-	e, err := m.store.Episode(ctx, episodeID)
-	if err != nil {
-		return e, err
-	}
-	return e, m.enqueue(ctx, e)
+	return m.replaceRelease(ctx, episodeID, releaseID, "")
 }
 
 // Download is a running episode download for the UI.
