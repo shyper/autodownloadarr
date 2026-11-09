@@ -228,7 +228,7 @@ func TestMovieRequestFlow(t *testing.T) {
 
 func TestJellyfinLibraries(t *testing.T) {
 	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("X-Emby-Token") != "api-key" {
+		if r.Header.Get("Authorization") != `MediaBrowser Token="api-key"` {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}

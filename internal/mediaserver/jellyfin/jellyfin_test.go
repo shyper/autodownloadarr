@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/shyper/autodownloadarr/internal/httpx"
@@ -14,7 +15,7 @@ import (
 func TestServerAPI(t *testing.T) {
 	var scanned string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("X-Emby-Token") != "api-key" {
+		if r.Header.Get("Authorization") != `MediaBrowser Token="api-key"` {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
@@ -43,6 +44,12 @@ func TestServerAPI(t *testing.T) {
 				scanned = body.Updates[0].Path
 			}
 		case "/Items":
+			fields := r.URL.Query().Get("Fields")
+			for _, field := range []string{"UserDataPlayCount", "UserDataLastPlayedDate"} {
+				if !strings.Contains(","+fields+",", ","+field+",") {
+					t.Errorf("missing Emby watch-state field %s in %q", field, fields)
+				}
+			}
 			if r.URL.Query().Get("UserId") != "u1" {
 				t.Errorf("UserId = %q", r.URL.Query().Get("UserId"))
 			}

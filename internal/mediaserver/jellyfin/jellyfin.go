@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -171,7 +172,7 @@ func (c *Client) items(ctx context.Context, libraryKey, typ string) ([]mediaserv
 		"ParentId":            {libraryKey},
 		"Recursive":           {"true"},
 		"IncludeItemTypes":    {typ},
-		"Fields":              {"Path,ProviderIds,MediaSources,UserData,RunTimeTicks"},
+		"Fields":              {"Path,ProviderIds,MediaSources,UserData,RunTimeTicks,UserDataPlayCount,UserDataLastPlayedDate"},
 		"EnableImages":        {"false"},
 		"EnableUserData":      {"true"},
 		"CollapseBoxSetItems": {"false"},
@@ -256,7 +257,9 @@ func (c *Client) do(ctx context.Context, method, path string, q url.Values, body
 		return err
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("X-Emby-Token", c.Token)
+	// Jellyfin no longer accepts the legacy X-Emby-Token header. Both
+	// Jellyfin and Emby support the MediaBrowser authorization scheme.
+	req.Header.Set("Authorization", "MediaBrowser Token="+strconv.Quote(c.Token))
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
