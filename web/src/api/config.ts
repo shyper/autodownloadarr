@@ -5,6 +5,8 @@ import type {
   Caps,
   General,
   Indexer,
+  MediaProfile,
+  MediaProfileChange,
   MediaServer,
   NotificationSettings,
   Onboarding,
@@ -23,6 +25,8 @@ export const configKeys = {
   indexers: ['config', 'indexers'] as const,
   plex: ['config', 'plex'] as const,
   plexLibraries: ['config', 'plex', 'libraries'] as const,
+  mediaProfiles: ['config', 'plex', 'profiles'] as const,
+  myMediaProfile: ['mediaProfile', 'me'] as const,
   profiles: ['config', 'profiles'] as const,
   passwords: ['config', 'passwords'] as const,
   notifications: ['config', 'notifications'] as const,
@@ -157,6 +161,43 @@ export function usePlexLibraries(enabled: boolean) {
     queryKey: configKeys.plexLibraries,
     queryFn: () => api<PlexLibraries>('/plex/libraries'),
     enabled,
+  })
+}
+
+export function useMediaProfiles(enabled = true) {
+  return useQuery({
+    queryKey: configKeys.mediaProfiles,
+    queryFn: ({ signal }) => api<MediaProfile[]>('/mediaserver/profiles', { signal }),
+    enabled,
+  })
+}
+
+export function useRefreshMediaProfiles() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => api<MediaProfile[]>('/mediaserver/profiles/refresh', { method: 'POST' }),
+    onSuccess: (list) => qc.setQueryData(configKeys.mediaProfiles, list),
+  })
+}
+
+export function useUpdateMediaProfile() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }: MediaProfileChange) =>
+      api<MediaProfile>(`/mediaserver/profiles/${id}`, { method: 'PUT', body }),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: configKeys.mediaProfiles })
+      void qc.invalidateQueries({ queryKey: configKeys.myMediaProfile })
+    },
+  })
+}
+
+/** The media profile assigned to the signed-in user. */
+export function useMyMediaProfile() {
+  return useQuery({
+    queryKey: configKeys.myMediaProfile,
+    queryFn: ({ signal }) =>
+      api<{ profile: { name: string; watchlist: boolean } | null }>('/mediaserver/profile', { signal }),
   })
 }
 

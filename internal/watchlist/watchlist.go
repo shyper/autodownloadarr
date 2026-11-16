@@ -1,6 +1,7 @@
-// Package watchlist imports the Plex account's watchlist. Movies and series
-// on it are requested automatically, so adding a title in Plex is enough to
-// get it.
+// Package watchlist imports the Plex watchlists: the signed-in account's and
+// those of Plex Home profiles assigned to users. Movies and series on them
+// are requested automatically for that user, so adding a title in Plex is
+// enough to get it.
 package watchlist
 
 import (
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/shyper/autodownloadarr/internal/mediaserver"
+	"github.com/shyper/autodownloadarr/internal/mediaserver/plex"
 	"github.com/shyper/autodownloadarr/internal/movies"
 	"github.com/shyper/autodownloadarr/internal/series"
 	"github.com/shyper/autodownloadarr/internal/store"
@@ -69,14 +71,67 @@ func (m *Manager) poll(ctx context.Context, force bool) error {
 	if err != nil {
 		return err
 	}
-	if !found || mediaserver.Kind(ms.Kind) != mediaserver.Plex || ms.AccountToken == "" {
+	if !found || mediaserver.Kind(ms.Kind) != mediaserver.Plex {
 		return nil
 	}
 	acc, err := m.svc.PlexAccount(ctx)
 	if err != nil {
 		return err
 	}
-	items, err := acc.Watchlist(ctx, ms.AccountToken)
+	profiles, err := m.store.MediaProfiles(ctx)
+	if err != nil {
+		return err
+	}
+	// The owner's watchlist (the account that signed in) belongs to the user
+	// its profile is assigned to; other profiles only when assigned and
+	// switched on.
+	sources := []source{}
+	if ms.AccountToken != "" {
+		owner := source{token: ms.AccountToken}
+		for _, p := range profiles {
+			if p.Owner {
+				owner.userID = p.UserID
+			}
+		}
+		sources = append(sources, owner)
+	}
+	for _, p := range profiles {
+		if !p.Owner && p.Watchlist && p.UserID > 0 && p.AccountToken != "" {
+			sources = append(sources, source{token: p.AccountToken, userID: p.UserID, profileID: p.ID, account: p.AccountKey()})
+		}
+	}
+	var firstErr error
+	for _, src := range sources {
+		err := m.pollSource(ctx, acc, src)
+		if src.profileID > 0 {
+			msg := ""
+			if err != nil {
+				msg = err.Error()
+			}
+			if serr := m.store.SetMediaProfileError(ctx, src.profileID, msg); serr != nil {
+				return serr
+			}
+		}
+		if err != nil {
+			m.log.Warn("Plex watchlist import failed", "profile", src.profileID, "err", err)
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
+}
+
+// source is one watchlist: the owner's or that of an assigned profile.
+type source struct {
+	token     string
+	userID    int64  // requests are attributed to this user (0: the first user)
+	profileID int64  // 0 for the owner
+	account   string // watch account, see store.WatchBase.Account
+}
+
+func (m *Manager) pollSource(ctx context.Context, acc *plex.Account, src source) error {
+	items, err := acc.Watchlist(ctx, src.token)
 	if err != nil {
 		return err
 	}
@@ -90,6 +145,14 @@ func (m *Manager) poll(ctx context.Context, force bool) error {
 		case "movie":
 			mv, lookupErr := m.store.MovieByTMDB(ctx, id)
 			if lookupErr == nil && mv.WatchedAt != nil {
+				// Only the account whose watch state counted removes it.
+				account, err := m.svc.AccountForUser(ctx, mv.RequestedBy)
+				if err != nil {
+					return err
+				}
+				if account != src.account {
+					continue
+				}
 				key := it.Key
 				if it.PlexGUID != "" {
 					key = it.PlexGUID[strings.LastIndex(it.PlexGUID, "/")+1:]
@@ -97,25 +160,25 @@ func (m *Manager) poll(ctx context.Context, force bool) error {
 				if key == "" {
 					continue
 				}
-				if err := acc.RemoveFromWatchlist(ctx, ms.AccountToken, key); err != nil {
+				if err := acc.RemoveFromWatchlist(ctx, src.token, key); err != nil {
 					return err // the next scheduled poll retries the removal
 				}
-				m.log.Info("watched movie removed from Plex watchlist", "movie", mv.Title)
+				m.log.Info("watched movie removed from Plex watchlist", "movie", mv.Title, "profile", src.profileID)
 				continue
 			}
-			m.requestMovie(ctx, id, it.Title)
+			m.requestMovie(ctx, id, it.Title, src.userID)
 		case "show":
-			m.requestSeries(ctx, id, it.Title)
+			m.requestSeries(ctx, id, it.Title, src.userID)
 		}
 	}
 	return nil
 }
 
-func (m *Manager) requestMovie(ctx context.Context, tmdbID int, title string) {
+func (m *Manager) requestMovie(ctx context.Context, tmdbID int, title string, userID int64) {
 	if _, err := m.store.MovieByTMDB(ctx, tmdbID); err == nil || !errors.Is(err, store.ErrNotFound) {
 		return
 	}
-	mv, err := m.movies.RequestFromWatchlist(ctx, tmdbID)
+	mv, err := m.movies.RequestFromWatchlist(ctx, tmdbID, userID)
 	switch {
 	case err == nil:
 		m.log.Info("movie requested from the Plex watchlist", "movie", mv.Title)
@@ -125,11 +188,11 @@ func (m *Manager) requestMovie(ctx context.Context, tmdbID int, title string) {
 	}
 }
 
-func (m *Manager) requestSeries(ctx context.Context, tmdbID int, title string) {
+func (m *Manager) requestSeries(ctx context.Context, tmdbID int, title string, userID int64) {
 	if _, err := m.store.SeriesByTMDB(ctx, tmdbID); err == nil || !errors.Is(err, store.ErrNotFound) {
 		return
 	}
-	se, err := m.series.Request(ctx, tmdbID, 0, series.RequestOptions{})
+	se, err := m.series.Request(ctx, tmdbID, userID, series.RequestOptions{})
 	switch {
 	case err == nil:
 		m.log.Info("series requested from the Plex watchlist", "series", se.Title)

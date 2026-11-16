@@ -53,6 +53,8 @@ func (m *Manager) available(ctx context.Context, mv store.Movie, rel store.Relea
 // baseline again. It returns whether the file was watched since and how
 // far (0..1).
 func Observe(base *store.WatchBase, it mediaserver.Item, since time.Time) (watched bool, progress float64) {
+	account := base.Account
+	defer func() { base.Account = account }()
 	switch {
 	case !base.Set && !since.IsZero() && !it.LastViewedAt.Before(since.Truncate(time.Second)): // Plex has seconds
 		views := it.ViewCount
@@ -205,18 +207,15 @@ func (m *Manager) PollWatched(ctx context.Context) error {
 	if err != nil || len(list) == 0 {
 		return err
 	}
-	items, err := target.Server.Movies(ctx, target.Library)
-	if err != nil {
-		return err
-	}
 	// Matched by our own file only: another copy of the movie (e.g. from
 	// Radarr) has a watch state of its own.
-	byKey, byDir := map[string]mediaserver.Item{}, map[string]mediaserver.Item{}
-	for _, it := range items {
-		byKey[it.Key] = it
-		for _, f := range it.Files {
-			byDir[filepath.Dir(target.Mapper.ToLocal(f))] = it
-		}
+	libs := NewAccountLibraries(m.svc, target, m.log,
+		func(ctx context.Context, srv mediaserver.Server) ([]mediaserver.Item, error) {
+			return srv.Movies(ctx, target.Library)
+		},
+		func(_ mediaserver.Item, f string) string { return filepath.Dir(target.Mapper.ToLocal(f)) })
+	if _, err := libs.Index(ctx, ""); err != nil {
+		return err
 	}
 	g, err := m.store.General(ctx)
 	if err != nil {
@@ -248,15 +247,25 @@ func (m *Manager) PollWatched(ctx context.Context) error {
 			m.publish(mv)
 			continue
 		}
-		it, ok := byDir[filepath.Clean(mv.Folder)]
-		if !ok {
-			it, ok = byKey[mv.MediaKey]
+		account, err := libs.Account(ctx, mv.RequestedBy)
+		if err != nil {
+			return err
 		}
+		ix, err := libs.Index(ctx, account)
+		if err != nil {
+			return err
+		}
+		if ix == nil {
+			continue // the profile cannot be read right now
+		}
+		it, ok := ix.Lookup(filepath.Clean(mv.Folder), mv.MediaKey)
 		if !ok {
 			continue // not scanned yet
 		}
+		switched := mv.Base.Account != account
+		SwitchAccount(&mv.Base, account, mv.State == store.MovieWatched, it)
 		previousWatchedAt := mv.WatchedAt
-		changed := observeMovie(&mv, it, m.fileSince(ctx, store.ForMovie(mv.ID), mv.Base), m.now())
+		changed := observeMovie(&mv, it, m.fileSince(ctx, store.ForMovie(mv.ID), mv.Base), m.now()) || switched
 		if mv.WatchedAt != nil && mv.WatchedAt != previousWatchedAt {
 			at, _ := movieDeletion(mv, g)
 			m.log.Info("movie watched", "movie", mv.Title, "delete_at", at)
@@ -289,7 +298,7 @@ func observeMovie(mv *store.Movie, it mediaserver.Item, since, now time.Time) bo
 	if replay {
 		mv.DeleteNotBefore = mv.DeleteAt
 		mv.State, mv.WatchedAt, mv.StartedAt = store.MovieAvailable, nil, &now
-		mv.Base = store.WatchBase{Set: true, Views: it.ViewCount}
+		mv.Base = store.WatchBase{Set: true, Views: it.ViewCount, Account: mv.Base.Account}
 	}
 	watched, progress := Observe(&mv.Base, it, since)
 	mv.MediaKey, mv.Progress = it.Key, progress

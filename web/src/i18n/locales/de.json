@@ -292,7 +292,8 @@
       "newPassword": "Neues Passwort",
       "resetDone": "Das Passwort wurde zurückgesetzt und alle Sitzungen des Benutzers beendet.",
       "deleteConfirm": "Konto „{{name}}“ löschen? Die Anfragen bleiben erhalten, sind aber keinem Benutzer mehr zugeordnet.",
-      "cannotDeleteSelf": "Du kannst deinen eigenen Account nicht löschen."
+      "cannotDeleteSelf": "Du kannst deinen eigenen Account nicht löschen.",
+      "mediaProfile": "Medienprofil: {{name}}"
     },
     "general": {
       "title": "Allgemein",
@@ -505,6 +506,23 @@
       "watchlistHint": "Filme und Serien auf deiner Plex-Watchlist werden automatisch angefragt. Dafür muss das Plex-Konto-Token gespeichert sein (Anmeldung über Plex).",
       "watchlistPollMinutes": "Watchlist prüfen alle (Minuten)",
       "watchlistPollMinutesHint": "Wie oft Plex nach neuen Watchlist-Einträgen gefragt wird."
+    },
+    "mediaProfiles": {
+      "title": "Profile",
+      "description": "Ordne die Benutzer des Medienservers AutoDownloadarr-Benutzern zu. Anfragen eines Benutzers gelten dann als gesehen, wenn sein eigenes Profil sie gesehen hat.",
+      "descriptionPlex": "Ordne die Plex-Home-Profile AutoDownloadarr-Benutzern zu. Anfragen eines Benutzers gelten dann als gesehen, wenn sein eigenes Profil sie gesehen hat, und die Watchlist des Profils kann für ihn importiert werden.",
+      "refresh": "Profile einlesen",
+      "empty": "Noch keine Profile eingelesen. Lies sie vom Medienserver ein.",
+      "owner": "Besitzer",
+      "ownerHint": "Das Standardkonto des Servers: Sein Gesehen-Status und seine Watchlist gelten für Benutzer ohne Profil.",
+      "protected": "PIN",
+      "user": "Benutzer",
+      "unassigned": "Nicht zugeordnet",
+      "pin": "Profil-PIN",
+      "pinHint": "Die PIN wird nur einmal zum Verbinden des Profils verwendet und nicht gespeichert.",
+      "watchlist": "Watchlist dieses Profils importieren",
+      "watchlistHint": "Titel auf der Plex-Watchlist des Profils werden für den zugeordneten Benutzer angefragt (erfordert den Watchlist-Import oben).",
+      "lastError": "Letzter Fehler: {{error}}"
     }
   },
   "account": {
@@ -526,7 +544,9 @@
       "confirm": "Neues Passwort wiederholen",
       "submit": "Passwort ändern",
       "success": "Dein Passwort wurde geändert."
-    }
+    },
+    "mediaProfile": "Medienprofil",
+    "noMediaProfile": "Keins (der Gesehen-Status des Server-Besitzers gilt)"
   },
   "notFound": {
     "title": "Seite nicht gefunden",
@@ -558,7 +578,9 @@
     "forbidden": "Das dürfen nur Administratoren.",
     "not_found": "Nicht gefunden.",
     "bot_connection_failed": "Die Bot-Verbindung konnte nicht hergestellt werden. Bitte Einstellungen prüfen.",
-    "self_deletion": "Du kannst deinen eigenen Account nicht löschen."
+    "self_deletion": "Du kannst deinen eigenen Account nicht löschen.",
+    "profile_taken": "Dieser Benutzer hat bereits ein Medienprofil.",
+    "pin_required": "Dieses Profil ist mit einer PIN geschützt."
   },
   "series": {
     "title": "Serien",

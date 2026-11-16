@@ -123,6 +123,7 @@ func New(opts Options) http.Handler {
 			r.Post("/trakt/sync", s.handleSyncTrakt)
 			r.Delete("/trakt", s.handleDisconnectTrakt)
 			r.Get("/auth/me", s.handleMe)
+			r.Get("/mediaserver/profile", s.handleMyMediaProfile)
 			r.Post("/auth/password", s.handleChangePassword)
 			r.Get("/events", s.handleEvents)
 			r.Get("/system/warnings", s.handleWarnings)
@@ -204,6 +205,9 @@ func New(opts Options) http.Handler {
 			r.Post("/plex/connect", s.handlePlexConnect)
 			r.Get("/plex/libraries", s.handlePlexLibraries)
 			r.Post("/plex/poll", s.handlePlexPoll)
+			r.Get("/mediaserver/profiles", s.handleListMediaProfiles)
+			r.Post("/mediaserver/profiles/refresh", s.handleRefreshMediaProfiles)
+			r.Put("/mediaserver/profiles/{id}", s.handleUpdateMediaProfile)
 
 			r.Put("/profiles/{id}", s.handleSaveProfile)
 			r.Get("/archive-passwords", s.handleListPasswords)

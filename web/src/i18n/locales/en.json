@@ -292,7 +292,8 @@
       "newPassword": "New password",
       "resetDone": "The password has been reset and all sessions of the user were signed out.",
       "deleteConfirm": "Delete the account {{name}}? Their requests remain but are no longer assigned to anyone.",
-      "cannotDeleteSelf": "You cannot delete your own account."
+      "cannotDeleteSelf": "You cannot delete your own account.",
+      "mediaProfile": "Media profile: {{name}}"
     },
     "general": {
       "title": "General",
@@ -505,6 +506,23 @@
       "watchlistHint": "Movies and series on your Plex watchlist are requested automatically. The Plex account token must be stored (sign in with Plex).",
       "watchlistPollMinutes": "Check the watchlist every (minutes)",
       "watchlistPollMinutesHint": "How often Plex is asked for new watchlist entries."
+    },
+    "mediaProfiles": {
+      "title": "Profiles",
+      "description": "Assign the users of the media server to AutoDownloadarr users. A user's requests then count as watched when their own profile has watched them.",
+      "descriptionPlex": "Assign the Plex Home profiles to AutoDownloadarr users. A user's requests then count as watched when their own profile has watched them, and their profile's watchlist can be imported for them.",
+      "refresh": "Read profiles",
+      "empty": "No profiles read yet. Read them from the media server.",
+      "owner": "Owner",
+      "ownerHint": "The server's default account: its watch state and watchlist are used for users without a profile.",
+      "protected": "PIN",
+      "user": "User",
+      "unassigned": "Not assigned",
+      "pin": "Profile PIN",
+      "pinHint": "The PIN is only used once to connect the profile and is not stored.",
+      "watchlist": "Import this profile's watchlist",
+      "watchlistHint": "Titles on the profile's Plex watchlist are requested for the assigned user (requires the watchlist import above).",
+      "lastError": "Last error: {{error}}"
     }
   },
   "account": {
@@ -526,7 +544,9 @@
       "confirm": "Repeat new password",
       "submit": "Change password",
       "success": "Your password has been changed."
-    }
+    },
+    "mediaProfile": "Media profile",
+    "noMediaProfile": "None (the server owner's watch state is used)"
   },
   "notFound": {
     "title": "Page not found",
@@ -558,7 +578,9 @@
     "forbidden": "Only administrators can do this.",
     "not_found": "Not found.",
     "bot_connection_failed": "Could not connect to the bot service. Check the configuration.",
-    "self_deletion": "You cannot delete your own account."
+    "self_deletion": "You cannot delete your own account.",
+    "profile_taken": "This user already has a media profile.",
+    "pin_required": "This profile is protected by a PIN."
   },
   "series": {
     "title": "Series",

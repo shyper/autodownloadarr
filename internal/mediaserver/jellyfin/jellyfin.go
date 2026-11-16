@@ -146,17 +146,12 @@ func (c *Client) userID(ctx context.Context) string {
 		return c.UserID
 	}
 	c.userFetched = true
-	var users []struct {
-		ID     string `json:"Id"`
-		Policy struct {
-			Admin bool `json:"IsAdministrator"`
-		} `json:"Policy"`
-	}
-	if err := c.do(ctx, http.MethodGet, "/Users", nil, nil, &users); err != nil {
+	users, err := c.Users(ctx)
+	if err != nil {
 		return ""
 	}
 	for _, u := range users {
-		if u.Policy.Admin {
+		if u.Admin {
 			c.UserID = u.ID
 			return c.UserID
 		}
@@ -165,6 +160,34 @@ func (c *Client) userID(ctx context.Context) string {
 		c.UserID = users[0].ID
 	}
 	return c.UserID
+}
+
+// User is a user of the Jellyfin or Emby server.
+type User struct {
+	ID       string
+	Name     string
+	Admin    bool
+	Disabled bool
+}
+
+// Users lists the users of the server.
+func (c *Client) Users(ctx context.Context) ([]User, error) {
+	var res []struct {
+		ID     string `json:"Id"`
+		Name   string `json:"Name"`
+		Policy struct {
+			Admin    bool `json:"IsAdministrator"`
+			Disabled bool `json:"IsDisabled"`
+		} `json:"Policy"`
+	}
+	if err := c.do(ctx, http.MethodGet, "/Users", nil, nil, &res); err != nil {
+		return nil, err
+	}
+	users := make([]User, 0, len(res))
+	for _, u := range res {
+		users = append(users, User{ID: u.ID, Name: u.Name, Admin: u.Policy.Admin, Disabled: u.Policy.Disabled})
+	}
+	return users, nil
 }
 
 func (c *Client) items(ctx context.Context, libraryKey, typ string) ([]mediaserver.Item, error) {

@@ -8,6 +8,7 @@ import { IndexerSettings } from '../components/settings/IndexerSettings'
 import { NotificationSettings } from '../components/settings/NotificationSettings'
 import { PasswordSettings } from '../components/settings/PasswordSettings'
 import { PlexSettings } from '../components/settings/PlexSettings'
+import { MediaProfiles } from '../components/settings/MediaProfiles'
 import { ProfileSettings } from '../components/settings/ProfileSettings'
 import { TmdbForm } from '../components/settings/TmdbForm'
 import { UsenetSettings } from '../components/settings/UsenetSettings'
@@ -72,9 +73,14 @@ export function SettingsPage() {
             </Card>
           )}
           {tab === 'plex' && (
-            <Card>
-              <PlexSettings />
-            </Card>
+            <>
+              <Card>
+                <PlexSettings />
+              </Card>
+              <Card>
+                <MediaProfiles />
+              </Card>
+            </>
           )}
           {tab === 'notifications' && (
             <Card>

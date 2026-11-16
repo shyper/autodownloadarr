@@ -20,7 +20,8 @@ func MovieMessage(kind string, m store.Movie, body string) events.Notification {
 		title += fmt.Sprintf(" (%d)", m.Year)
 	}
 	status := map[string]string{events.NotifyMovieAvailable: "Movie ready", events.NotifyMovieFailed: "Movie failed", events.NotifyMovieDeleted: "Movie deleted"}[kind]
-	return events.Notification{Event: kind, Title: status + ": " + title, Body: body, ImageURL: tmdb.PosterURL(m.PosterPath, "w500")}
+	return events.Notification{Event: kind, Title: status + ": " + title, Body: body, ImageURL: tmdb.PosterURL(m.PosterPath, "w500"),
+		UserID: m.RequestedBy, UserName: m.RequestedByName}
 }
 
 // EpisodeMessage prefers episode artwork, then the season and series posters.
@@ -39,12 +40,14 @@ func EpisodeMessage(kind string, s store.Series, e store.Episode, body string) e
 	if kind == events.NotifyEpisodeFailed {
 		status = "Episode failed"
 	}
-	return events.Notification{Event: kind, Title: fmt.Sprintf("%s: %s S%02dE%02d", status, s.Title, e.Season, e.Episode), Subtitle: e.Title, Body: body, ImageURL: tmdb.PosterURL(path, "w500")}
+	return events.Notification{Event: kind, Title: fmt.Sprintf("%s: %s S%02dE%02d", status, s.Title, e.Season, e.Episode), Subtitle: e.Title, Body: body, ImageURL: tmdb.PosterURL(path, "w500"),
+		UserID: s.RequestedBy, UserName: s.RequestedByName}
 }
 
 // SeriesMessage captures a series poster before deletion.
 func SeriesMessage(s store.Series) events.Notification {
-	return events.Notification{Event: events.NotifySeriesDeleted, Title: "Series deleted: " + s.Title, ImageURL: tmdb.PosterURL(s.PosterPath, "w500")}
+	return events.Notification{Event: events.NotifySeriesDeleted, Title: "Series deleted: " + s.Title, ImageURL: tmdb.PosterURL(s.PosterPath, "w500"),
+		UserID: s.RequestedBy, UserName: s.RequestedByName}
 }
 
 func clip(s string, limit int) string {
@@ -62,6 +65,9 @@ func messageBody(msg events.Notification) string {
 	}
 	if msg.Body != "" {
 		parts = append(parts, msg.Body)
+	}
+	if msg.UserName != "" {
+		parts = append(parts, "Requested by "+msg.UserName)
 	}
 	return strings.Join(parts, "\n\n")
 }

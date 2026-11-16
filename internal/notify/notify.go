@@ -94,6 +94,9 @@ func (s *Service) SendTo(ctx context.Context, n store.Notification, msg events.N
 		if msg.Subtitle != "" {
 			payload["subtitle"] = msg.Subtitle
 		}
+		if msg.UserName != "" {
+			payload["requestedBy"] = msg.UserName
+		}
 		body, _ := json.Marshal(payload)
 		return s.post(ctx, n.URL, "application/json", body)
 	case "discord":
@@ -164,6 +167,13 @@ func telegramCaption(msg events.Notification, limit int) string {
 		subtitle := clip(msg.Subtitle, min(remaining-2, 200))
 		text += "\n\n" + html.EscapeString(subtitle)
 		remaining -= len([]rune(subtitle)) + 2
+	}
+	if msg.UserName != "" {
+		line := "Requested by " + msg.UserName
+		if n := len([]rune(line)) + 2; remaining > n+2 {
+			text += "\n\n" + html.EscapeString(line)
+			remaining -= n
+		}
 	}
 	if msg.Body != "" && remaining > 2 {
 		body := html.EscapeString(clip(msg.Body, remaining-2))

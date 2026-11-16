@@ -33,17 +33,15 @@ func (m *Manager) PollWatched(ctx context.Context) error {
 	if err != nil || len(eps) == 0 {
 		return err
 	}
-	items, err := target.Server.Episodes(ctx, target.Library)
-	if err != nil {
+	libs := movies.NewAccountLibraries(m.svc, target, m.log,
+		func(ctx context.Context, srv mediaserver.Server) ([]mediaserver.Item, error) {
+			return srv.Episodes(ctx, target.Library)
+		},
+		func(_ mediaserver.Item, f string) string { return filepath.Clean(target.Mapper.ToLocal(f)) })
+	if _, err := libs.Index(ctx, ""); err != nil {
 		return err
 	}
-	byKey, byFile := map[string]mediaserver.Item{}, map[string]mediaserver.Item{}
-	for _, it := range items {
-		byKey[it.Key] = it
-		for _, f := range it.Files {
-			byFile[filepath.Clean(target.Mapper.ToLocal(f))] = it
-		}
-	}
+	requester := map[int64]int64{} // series ID → requesting user
 
 	g, err := m.store.General(ctx)
 	if err != nil {
@@ -74,14 +72,31 @@ func (m *Manager) PollWatched(ctx context.Context) error {
 			changedSeries[e.SeriesID] = true
 			continue
 		}
-		it, ok := byFile[filepath.Clean(e.File)]
+		userID, ok := requester[e.SeriesID]
 		if !ok {
-			it, ok = byKey[e.MediaKey]
+			se, err := m.store.Series(ctx, e.SeriesID)
+			if err != nil {
+				return err
+			}
+			userID, requester[e.SeriesID] = se.RequestedBy, se.RequestedBy
 		}
+		account, err := libs.Account(ctx, userID)
+		if err != nil {
+			return err
+		}
+		ix, err := libs.Index(ctx, account)
+		if err != nil {
+			return err
+		}
+		if ix == nil {
+			continue // the profile cannot be read right now
+		}
+		it, ok := ix.Lookup(filepath.Clean(e.File), e.MediaKey)
 		if !ok {
 			continue // not scanned yet
 		}
 		base := e.Base
+		movies.SwitchAccount(&e.Base, account, e.State == store.MovieWatched, it)
 		watched, progress := movies.Observe(&e.Base, it, movies.FileSince(ctx, m.store, store.ForEpisode(e.ID), e.Base))
 		changed := e.MediaKey != it.Key || e.Base != base
 		e.MediaKey = it.Key

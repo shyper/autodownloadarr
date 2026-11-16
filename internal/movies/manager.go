@@ -157,8 +157,9 @@ func (m *Manager) Request(ctx context.Context, tmdbID int, userID, profileID int
 	return m.request(ctx, tmdbID, userID, profileID)
 }
 
-// RequestFromWatchlist honours manual removals without blocking explicit requests.
-func (m *Manager) RequestFromWatchlist(ctx context.Context, tmdbID int) (store.Movie, error) {
+// RequestFromWatchlist honours manual removals without blocking explicit
+// requests. userID 0 attributes the request to the first user.
+func (m *Manager) RequestFromWatchlist(ctx context.Context, tmdbID int, userID int64) (store.Movie, error) {
 	m.requestMu.Lock()
 	defer m.requestMu.Unlock()
 	excluded, err := m.store.MovieExcludedFromWatchlist(ctx, tmdbID)
@@ -168,7 +169,7 @@ func (m *Manager) RequestFromWatchlist(ctx context.Context, tmdbID int) (store.M
 	if excluded {
 		return store.Movie{}, ErrWatchlistExcluded
 	}
-	return m.request(ctx, tmdbID, 0, 0)
+	return m.request(ctx, tmdbID, userID, 0)
 }
 
 // RequestFromList skips existing requests and honours manual removals for automatic imports.

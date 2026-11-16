@@ -4,12 +4,14 @@ import { ConnectedApps } from '../components/ConnectedApps'
 import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useChangePassword, useMe } from '../api/hooks'
+import { useMyMediaProfile } from '../api/config'
 import { Alert, Button, Card, Field, Input } from '../components/ui'
 import { errorMessage } from '../i18n'
 
 export function AccountPage() {
   const { t, i18n } = useTranslation()
   const { data: user } = useMe()
+  const mediaProfile = useMyMediaProfile()
   if (!user) return null
 
   return (
@@ -25,6 +27,8 @@ export function AccountPage() {
           <dd>{user.quotaRequests > 0 ? user.quotaRequests : t('account.unlimited')}</dd>
           <dt className="text-muted">{t('account.quotaGb')}</dt>
           <dd>{user.quotaGb > 0 ? `${user.quotaGb} GB` : t('account.unlimited')}</dd>
+          <dt className="text-muted">{t('account.mediaProfile')}</dt>
+          <dd>{mediaProfile.data?.profile?.name ?? t('account.noMediaProfile')}</dd>
           <dt className="text-muted">{t('account.memberSince')}</dt>
           <dd>{new Date(user.createdAt).toLocaleDateString(i18n.resolvedLanguage)}</dd>
         </dl>

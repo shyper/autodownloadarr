@@ -337,6 +337,12 @@ func (s *Store) SaveMediaServer(ctx context.Context, m MediaServer) (int64, erro
 		m.Kind, m.Name, m.URL, enc, accountEnc, m.MovieLibrary, m.TVLibrary, m.Enabled, now, id); err != nil {
 		return 0, err
 	}
+	if found && existing.Kind != m.Kind {
+		// Profiles belong to the server software they were read from.
+		if _, err := tx.ExecContext(ctx, `DELETE FROM media_profiles WHERE media_server_id = ?`, id); err != nil {
+			return 0, err
+		}
+	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM path_mappings WHERE media_server_id = ?`, id); err != nil {
 		return 0, err
 	}

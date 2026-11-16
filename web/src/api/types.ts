@@ -110,6 +110,23 @@ export type MediaServer = {
   enabled: boolean
 }
 
+/** A Plex Home profile or Jellyfin/Emby user, assignable to one user. */
+export type MediaProfile = {
+  id: number
+  externalId: string
+  name: string
+  thumb: string
+  owner: boolean
+  protected: boolean
+  userId: number
+  userName: string
+  watchlist: boolean
+  lastError: string
+  hasToken: boolean
+}
+
+export type MediaProfileChange = { id: number; userId: number; watchlist: boolean; pin?: string }
+
 export type PlexConfig = { configured: false } | { configured: true; server: MediaServer }
 
 export type PlexPin = { id: number; code: string; authUrl: string }

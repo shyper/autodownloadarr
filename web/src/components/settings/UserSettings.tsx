@@ -10,6 +10,7 @@ import {
   type Role,
   type User,
 } from '../../api/hooks'
+import { useMediaProfiles } from '../../api/config'
 import { errorMessage } from '../../i18n'
 import { Alert, Button, Field, Input, SectionTitle, Select } from '../ui'
 
@@ -18,6 +19,8 @@ const roleLabel = (t: (key: string) => string, role: Role) => t(`account.roles.$
 export function UserSettings() {
   const { t } = useTranslation()
   const list = useUsers()
+  const mediaProfiles = useMediaProfiles()
+  const profileOf = (id: number) => mediaProfiles.data?.find((p) => p.userId === id)?.name
   const create = useCreateUser()
   const update = useUpdateUser()
   const remove = useDeleteUser()
@@ -113,7 +116,7 @@ export function UserSettings() {
         ) : (
           <ul className="divide-y divide-line rounded-xl border border-line">
             {list.data?.map((u) => (
-              <UserRow key={`${u.id}-${u.role}-${u.quotaRequests}-${u.quotaGb}`} user={u} />
+              <UserRow key={`${u.id}-${u.role}-${u.quotaRequests}-${u.quotaGb}`} user={u} mediaProfile={profileOf(u.id)} />
             ))}
           </ul>
         )}
@@ -122,7 +125,7 @@ export function UserSettings() {
   )
 }
 
-function UserRow({ user }: { user: User }) {
+function UserRow({ user, mediaProfile }: { user: User; mediaProfile?: string }) {
   const { t, i18n } = useTranslation()
   const me = useMe()
   const isSelf = me.data?.id === user.id
@@ -166,6 +169,7 @@ function UserRow({ user }: { user: User }) {
               ? t('settings.users.lastLogin', { date: new Date(user.lastLoginAt).toLocaleString(i18n.resolvedLanguage) })
               : t('settings.users.neverSignedIn')}
           </p>
+          {mediaProfile && <p className="text-xs text-muted">{t('settings.users.mediaProfile', { name: mediaProfile })}</p>}
         </div>
         <div className="w-36">
           <label htmlFor={`role-${user.id}`} className="mb-1 block text-xs text-muted">

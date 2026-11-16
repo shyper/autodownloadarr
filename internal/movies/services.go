@@ -292,6 +292,17 @@ type Target struct {
 	Server  mediaserver.Server
 	Library string
 	Mapper  pathmap.Mapper
+
+	forAccount func(ctx context.Context, key string) (mediaserver.Server, error)
+}
+
+// ForAccount returns a client that reads the watch state of an account key
+// (see store.WatchBase.Account): "" is the server's default account.
+func (t *Target) ForAccount(ctx context.Context, key string) (mediaserver.Server, error) {
+	if key == "" || t.forAccount == nil {
+		return t.Server, nil
+	}
+	return t.forAccount(ctx, key)
 }
 
 // Media returns the movie library, or nil if none is configured.
@@ -323,7 +334,66 @@ func (s *Services) mediaTarget(ctx context.Context, library func(store.MediaServ
 	if err != nil {
 		return nil, err
 	}
-	return &Target{Server: c, Library: library(ms), Mapper: pathmap.New(ms.Mappings)}, nil
+	return &Target{
+		Server: c, Library: library(ms), Mapper: pathmap.New(ms.Mappings),
+		forAccount: func(ctx context.Context, key string) (mediaserver.Server, error) {
+			return s.profileClient(ctx, ms, key)
+		},
+	}, nil
+}
+
+// AccountForUser returns the account key whose watch state counts for the
+// requests of a user: the assigned profile, or "" (the server's default
+// account) when the user has none, it is the owner, or it cannot be used.
+func (s *Services) AccountForUser(ctx context.Context, userID int64) (string, error) {
+	p, err := s.Store.MediaProfileForUser(ctx, userID)
+	if errors.Is(err, store.ErrNotFound) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if p.Owner {
+		return "", nil
+	}
+	ms, found, err := s.Store.MediaServer(ctx)
+	if err != nil || !found {
+		return "", err
+	}
+	if mediaserver.Kind(ms.Kind) == mediaserver.Plex && p.ServerToken == "" {
+		return "", nil
+	}
+	return p.AccountKey(), nil
+}
+
+// profileClient returns a client that reads the watch state of a profile.
+func (s *Services) profileClient(ctx context.Context, ms store.MediaServer, key string) (mediaserver.Server, error) {
+	id := store.ProfileIDFromAccountKey(key)
+	if id == 0 {
+		return nil, fmt.Errorf("unknown media account %q", key)
+	}
+	p, err := s.Store.MediaProfile(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("media profile %d: %w", id, err)
+	}
+	switch mediaserver.Kind(ms.Kind) {
+	case mediaserver.Jellyfin, mediaserver.Emby:
+		c := jellyfin.NewClient(ms.URL, ms.Token)
+		c.HTTP = s.httpClient()
+		c.UserID = p.ExternalID
+		return c, nil
+	default:
+		if p.ServerToken == "" {
+			return nil, fmt.Errorf("media profile %q has no access token", p.Name)
+		}
+		clientID, err := s.Store.PlexClientID(ctx)
+		if err != nil {
+			return nil, err
+		}
+		c := plex.NewClient(ms.URL, p.ServerToken, clientID)
+		c.HTTP = s.httpClient()
+		return c, nil
+	}
 }
 
 func (s *Services) serverClient(ctx context.Context, ms store.MediaServer) (mediaserver.Server, error) {

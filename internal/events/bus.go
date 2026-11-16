@@ -32,6 +32,10 @@ type Notification struct {
 	Body     string `json:"body"`
 	Subtitle string `json:"subtitle,omitempty"`
 	ImageURL string `json:"imageUrl,omitempty"`
+	// UserID and UserName identify who requested the title (0/"" when
+	// unknown). Per-user channels (bots) deliver to that user.
+	UserID   int64  `json:"userId,omitempty"`
+	UserName string `json:"userName,omitempty"`
 }
 
 // Kinds of notifications. The user can switch each one off for the
